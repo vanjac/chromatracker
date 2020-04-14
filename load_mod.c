@@ -79,7 +79,7 @@ void load_mod(char * filename, Song * song) {
     song->num_tracks = song->alloc_tracks = NUM_TRACKS;
     song->tracks = malloc(NUM_TRACKS * sizeof(Track));
 
-    for (int i = 0; i < max_pattern; i++) {
+    for (int i = 0; i < max_pattern + 1; i++) {
         int pattern_pos = 1024 * i + 1084;
         for (int t = 0; t < NUM_TRACKS; t++) {
             SDL_RWseek(file, 1084 + 1024 * i + 4 * t, RW_SEEK_SET);
