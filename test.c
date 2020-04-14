@@ -40,7 +40,7 @@ void process_tick_track(TrackPlayback * track);
 void process_event(Event event, ChannelPlayback * channel, int tick_delay);
 
 #define NUM_TRACKS 4
-TrackPlayback tracks[NUM_TRACKS] = {
+TrackPlayback track_states[NUM_TRACKS] = {
     {&channels[0], NULL, 0, 0},
     {&channels[1], NULL, 0, 0},
     {&channels[2], NULL, 0, 0},
@@ -287,14 +287,14 @@ void process_tick(void) {
         current_page_ticks = 0;
         Page page = pages[current_page];
         for (int i = 0; i < NUM_TRACKS; i++) {
-            tracks[i].pattern = get_pattern(page.patterns[i]);
+            track_states[i].pattern = &(tracks[i].patterns[page.patterns[i]]);
         }
     }
     current_page_ticks++;
 
     // process events
     for (int i = 0; i < NUM_TRACKS; i++)
-        process_tick_track(&tracks[i]);
+        process_tick_track(&track_states[i]);
 
     // process audio
 

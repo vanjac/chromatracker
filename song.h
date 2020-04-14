@@ -10,7 +10,6 @@ typedef struct {
     union {
         void * any;
         InstSample * instrument;
-        Pattern * pattern;
     } pointer;
 } IDEntry;
 
@@ -18,11 +17,12 @@ IDEntry id_table[MAX_ID];
 
 InstSample * get_instrument(ID id);
 void put_instrument(ID id, InstSample * instrument);
-Pattern * get_pattern(ID id);
-void put_pattern(ID id, Pattern * pattern);
 
 void delete_id(ID id);
 
+Track * tracks;
+int num_tracks;
+int alloc_tracks;
 
 Page * pages;
 int num_pages;

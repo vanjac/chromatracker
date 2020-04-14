@@ -22,9 +22,15 @@ typedef struct {
 typedef struct {
     Event * events;
     int num_events;
-    int events_alloc;
+    int alloc_events;
     int length; // ticks
 } Pattern;
+
+#define NUM_TRACK_PATTERNS 99
+
+typedef struct {
+    Pattern patterns[NUM_TRACK_PATTERNS];
+} Track;
 
 typedef struct {
     // TODO!

@@ -22,22 +22,6 @@ void put_instrument(ID id, InstSample * instrument) {
     }
 }
 
-Pattern * get_pattern(ID id) {
-    IDEntry * entry = get_id_entry(id);
-    if (entry && entry->type == ID_PATTERN)
-        return entry->pointer.pattern;
-    else
-        return NULL;
-}
-
-void put_pattern(ID id, Pattern * pattern) {
-    IDEntry * entry = get_id_entry(id);
-    if (entry) {
-        entry->type = ID_PATTERN;
-        entry->pointer.pattern = pattern;
-    }
-}
-
 void delete_id(ID id) {
     IDEntry * entry = get_id_entry(id);
     if (!entry)
@@ -47,9 +31,6 @@ void delete_id(ID id) {
             break;
         case ID_INSTRUMENT:
             delete_inst_sample(entry->pointer.instrument);
-            break;
-        case ID_PATTERN:
-            delete_pattern(entry->pointer.pattern);
             break;
     }
     entry->pointer.any = NULL;

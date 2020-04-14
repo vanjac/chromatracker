@@ -8,7 +8,6 @@
 #define PATTERN_LEN 64
 #define TICKS_PER_ROW 48
 #define NUM_TRACKS 4
-#define PATTERN_ID_START 32
 
 // TODO: other tunings??
 #define NUM_TUNINGS 12*5
@@ -22,7 +21,7 @@ static const Uint16 tuning0_table[NUM_TUNINGS] = {
 
 // return wave end
 static int read_sample(SDL_RWops * file, ID id, int wave_start);
-static void read_pattern(SDL_RWops * file, ID id);
+static Pattern read_pattern(SDL_RWops * file);
 
 Uint8 default_sample_volumes[NUM_SAMPLES + 1];
 
@@ -55,10 +54,10 @@ void load_mod(char * filename) {
             max_pattern = pat_num;
         Page * p = &pages[i];
         p->length = PATTERN_LEN * TICKS_PER_ROW;
-        p->patterns[0] = PATTERN_ID_START + pat_num * 4;
-        p->patterns[1] = PATTERN_ID_START + pat_num * 4 + 1;
-        p->patterns[2] = PATTERN_ID_START + pat_num * 4 + 2;
-        p->patterns[3] = PATTERN_ID_START + pat_num * 4 + 3;
+        p->patterns[0] = pat_num;
+        p->patterns[1] = pat_num;
+        p->patterns[2] = pat_num;
+        p->patterns[3] = pat_num;
     }
     printf("\nMax pattern: %d\n", max_pattern);
 
@@ -69,17 +68,15 @@ void load_mod(char * filename) {
         wave_pos = read_sample(file, i + 1, wave_pos);
     }
 
+    num_tracks = alloc_tracks = 4;
+    tracks = malloc(4 * sizeof(Track));
+
     for (int i = 0; i < max_pattern; i++) {
         int pattern_pos = 1024 * i + 1084;
-        SDL_RWseek(file, pattern_pos, RW_SEEK_SET);
-        // pattern IDs start at 0
-        read_pattern(file, PATTERN_ID_START + i * 4);
-        SDL_RWseek(file, pattern_pos + 4, RW_SEEK_SET);
-        read_pattern(file, PATTERN_ID_START + i * 4 + 1);
-        SDL_RWseek(file, pattern_pos + 8, RW_SEEK_SET);
-        read_pattern(file, PATTERN_ID_START + i * 4 + 2);
-        SDL_RWseek(file, pattern_pos + 12, RW_SEEK_SET);
-        read_pattern(file, PATTERN_ID_START + i * 4 + 3);
+        for (int t = 0; t < num_tracks; t++) {
+            SDL_RWseek(file, 1084 + 1024 * i + 4 * t, RW_SEEK_SET);
+            tracks[t].patterns[i] = read_pattern(file);
+        }
     }
 
     SDL_RWclose(file);
@@ -127,13 +124,11 @@ static int read_sample(SDL_RWops * file, ID id, int wave_start) {
 }
 
 
-static void read_pattern(SDL_RWops * file, ID id) {
-    Pattern * pattern = new_pattern();
-    pattern->length = PATTERN_LEN * TICKS_PER_ROW;
-    Event * events = malloc(PATTERN_LEN * sizeof(Event));
-    pattern->events = events;
-    pattern->events_alloc = PATTERN_LEN;
-    int event_i = 0;
+static Pattern read_pattern(SDL_RWops * file) {
+    Pattern pattern;
+    pattern.length = PATTERN_LEN * TICKS_PER_ROW;
+    pattern.events = malloc(PATTERN_LEN * sizeof(Event));
+    pattern.alloc_events = PATTERN_LEN;
 
     int period_memory = 0;
     int sample_id_memory = 0;
@@ -170,7 +165,7 @@ static void read_pattern(SDL_RWops * file, ID id) {
             note += (NUM_TRACKS - 1) * 12;
 
             Event event = {i * TICKS_PER_ROW, sample_id, note, (Sint8)(vol * 100.0 / 64.0), 0};
-            events[event_i++] = event;
+            pattern.events[pattern.num_events++] = event;
 
             if (period != 0)
                 period_memory = period;
@@ -183,7 +178,5 @@ static void read_pattern(SDL_RWops * file, ID id) {
         SDL_RWseek(file, 12, RW_SEEK_CUR);
     }
 
-    pattern->num_events = event_i;
-
-    put_pattern(id, pattern);
+    return pattern;
 }
