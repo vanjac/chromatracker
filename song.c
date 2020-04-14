@@ -6,8 +6,7 @@ void init_song(Song * song) {
     song->tracks = NULL;
     song->num_tracks = song->alloc_tracks = 0;
 
-    song->pages = NULL;
-    song->num_pages = song->alloc_pages = 0;
+    song->num_pages = 0;
 }
 
 void free_song(Song * song) {
@@ -20,9 +19,6 @@ void free_song(Song * song) {
             free_track(&song->tracks[i]);
         }
         free(song->tracks);
-    }
-    if (song->pages) {
-        free(song->pages);
     }
 }
 

@@ -30,18 +30,15 @@ void init_pattern(Pattern * pattern);
 void free_pattern(Pattern * pattern);
 
 #define NUM_TRACK_PATTERNS 99
+#define MAX_PAGES 256
+#define NO_PATTERN -1
 
 typedef struct {
     Pattern patterns[NUM_TRACK_PATTERNS];
+    Sint8 pages[MAX_PAGES]; // patter number selections
 } Track;
 
 void init_track(Track * track);
 void free_track(Track * track);
-
-typedef struct {
-    // TODO!
-    ID patterns[4];
-    int length;
-} Page;
 
 #endif

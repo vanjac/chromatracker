@@ -20,9 +20,8 @@ typedef struct {
     int num_tracks;
     int alloc_tracks;
 
-    Page * pages;
+    int page_lengths[MAX_PAGES]; // in ticks
     int num_pages;
-    int alloc_pages;
 } Song;
 
 void init_song(Song * song);

@@ -259,15 +259,18 @@ void callback(void * userdata, Uint8 * stream, int len) {
 void process_tick(void) {
     // process page
     if (current_page == -1
-            || current_page_ticks >= song.pages[current_page].length) {
+            || current_page_ticks >= song.page_lengths[current_page]) {
         current_page++;
         if (current_page == song.num_pages)
             current_page = 0;
         printf("Page %d\n", current_page);
         current_page_ticks = 0;
-        Page page = song.pages[current_page];
         for (int i = 0; i < NUM_TRACKS; i++) {
-            track_states[i].pattern = &(song.tracks[i].patterns[page.patterns[i]]);
+            int pattern_num = song.tracks[i].pages[current_page];
+            if (pattern_num == NO_PATTERN)
+                track_states[i].pattern = NULL;
+            else
+                track_states[i].pattern = &(song.tracks[i].patterns[pattern_num]);
         }
     }
     current_page_ticks++;

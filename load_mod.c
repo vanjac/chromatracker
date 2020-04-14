@@ -8,6 +8,7 @@
 #define PATTERN_LEN 64
 #define TICKS_PER_ROW 48
 #define NUM_TRACKS 4
+#define EVENT_SIZE 4
 
 // TODO: other tunings??
 #define NUM_TUNINGS 12*5
@@ -39,14 +40,18 @@ void load_mod(char * filename, Song * song) {
         return;
     }
 
+    song->num_tracks = song->alloc_tracks = NUM_TRACKS;
+    song->tracks = malloc(song->alloc_tracks * sizeof(Track));
+    for (int i = 0; i < NUM_TRACKS; i++)
+        init_track(&song->tracks[i]);
+
     // first find the number of patterns
     // by searching for the highest numbered pattern in the song table
     Uint8 song_length;
     SDL_RWseek(file, 950, RW_SEEK_SET);
     SDL_RWread(file, &song_length, 1, 1);
 
-    song->num_pages = song->alloc_pages = song_length;
-    song->pages = malloc(song->alloc_pages * sizeof(Page));
+    song->num_pages = song_length;
 
     SDL_RWseek(file, 952, RW_SEEK_SET);
     Uint8 song_table[SONG_TABLE_SIZE];
@@ -57,16 +62,15 @@ void load_mod(char * filename, Song * song) {
         printf("%d ", pat_num);
         if (pat_num > max_pattern)
             max_pattern = pat_num;
-        Page * p = &song->pages[i];
-        p->length = PATTERN_LEN * TICKS_PER_ROW;
-        p->patterns[0] = pat_num;
-        p->patterns[1] = pat_num;
-        p->patterns[2] = pat_num;
-        p->patterns[3] = pat_num;
+        song->page_lengths[i] = PATTERN_LEN * TICKS_PER_ROW;
+        for (int t = 0; t < NUM_TRACKS; t++) {
+            song->tracks[t].pages[i] = pat_num;
+        }
     }
-    printf("\nMax pattern: %d\n", max_pattern);
 
-    int wave_pos = 1024 * (max_pattern + 1) + 1084;
+    int pattern_size = NUM_TRACKS * EVENT_SIZE * PATTERN_LEN;
+
+    int wave_pos = pattern_size * (max_pattern + 1) + 1084;
     for (int i = 0; i < NUM_SAMPLES; i++) {
         SDL_RWseek(file, 20 + 30 * i, RW_SEEK_SET);
         InstSample * sample = malloc(sizeof(InstSample));
@@ -76,15 +80,10 @@ void load_mod(char * filename, Song * song) {
         put_instrument(song, i + 1, sample);
     }
 
-    song->num_tracks = song->alloc_tracks = NUM_TRACKS;
-    song->tracks = malloc(NUM_TRACKS * sizeof(Track));
-    for (int i = 0; i < NUM_TRACKS; i++)
-        init_track(&song->tracks[i]);
-
     for (int i = 0; i < max_pattern + 1; i++) {
-        int pattern_pos = 1024 * i + 1084;
+        int pattern_pos = pattern_size * i + 1084;
         for (int t = 0; t < NUM_TRACKS; t++) {
-            SDL_RWseek(file, 1084 + 1024 * i + 4 * t, RW_SEEK_SET);
+            SDL_RWseek(file, 1084 + pattern_size * i + NUM_TRACKS * t, RW_SEEK_SET);
             read_pattern(file, &song->tracks[t].patterns[i]);
         }
     }
@@ -142,8 +141,8 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern) {
     int sample_id_memory = 0;
     int volume_memory = 64;
     for (int i = 0; i < PATTERN_LEN; i++) {
-        Uint8 bytes[4];
-        SDL_RWread(file, bytes, 1, 4);
+        Uint8 bytes[EVENT_SIZE];
+        SDL_RWread(file, bytes, 1, EVENT_SIZE);
         int period = ((bytes[0] & 0x0F) << 8) | bytes[1];
         ID sample_id = (bytes[0] & 0xF0) | (bytes[2] >> 4);
         int effect = bytes[2] & 0x0F;
@@ -170,7 +169,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern) {
                 if (tuning0_table[note] == period)
                     break;
             }
-            note += (NUM_TRACKS - 1) * 12;
+            note += 3 * 12;
 
             Event event = {i * TICKS_PER_ROW, sample_id, note, (Sint8)(vol * 100.0 / 64.0), 0};
             pattern->events[pattern->num_events++] = event;
@@ -183,6 +182,6 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern) {
         }
 
         // skip next 3 rows
-        SDL_RWseek(file, 12, RW_SEEK_CUR);
+        SDL_RWseek(file, (NUM_TRACKS - 1) * EVENT_SIZE, RW_SEEK_CUR);
     }
 }
