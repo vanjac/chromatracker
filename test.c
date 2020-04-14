@@ -298,10 +298,6 @@ void process_tick(void) {
         ChannelPlayback * c = &channels[i];
         if (c->note_state == PLAY_OFF)
             continue;
-        if (c->tick_delay > 0) {
-            c->tick_delay --;
-            continue;
-        }
 
         InstSample * inst = c->instrument;
 
@@ -330,6 +326,23 @@ void process_tick(void) {
             }
             if (loop)
                 c->playback_pos -= (Sint64)(inst->loop_end - inst->loop_start) << 16;
+        }
+
+        // these control commands go after tick (some could go before)
+
+        switch (c->control_command) {
+            case CTL_VEL_UP:
+                // TODO units!
+                c->volume += (5.0 / 6.0 / 64.0 / 8.0) * c->ctl_vel_up;
+                if (c->volume > 1.0)
+                    c->volume = 1.0;
+                break;
+            case CTL_VEL_DOWN:
+                // TODO units!
+                c->volume -= (5.0 / 6.0 / 64.0 / 8.0) * c->ctl_vel_down;
+                if (c->volume < 0.0)
+                    c->volume = 0.0;
+                break;
         }
     }
 }
@@ -363,21 +376,36 @@ void process_tick_track(TrackPlayback * track) {
 
 
 void process_event(Event event, ChannelPlayback * channel, int tick_delay) {
+    // TODO use tick delay!!
     float rate = note_rate(event.pitch);
 
-    int inst_col = event.inst_effect & INST_MASK;
+    int inst_col = event.inst_control & INST_MASK;
     if (inst_col == NOTE_CUT) {
         channel->note_state = PLAY_OFF;
     } else {
-        InstSample * inst = get_instrument(&song, inst_col);
-        if (!inst)
-            return;
-        channel->instrument = inst;
-        channel->playback_rate = calc_playback_rate(OUT_FREQ, inst->c5_freq, rate);
-        channel->playback_pos = 0;
-        channel->note_state = PLAY_ON;
-        if (event.velocity >= 0)
+        if (inst_col != NO_ID) {
+            // note on
+            InstSample * inst = get_instrument(&song, inst_col);
+            if (inst) {
+                channel->instrument = inst;
+                channel->playback_pos = 0;
+                channel->note_state = PLAY_ON;
+            }
+        }
+        
+        if (event.pitch != NO_PITCH && channel->instrument)
+            channel->playback_rate = calc_playback_rate(OUT_FREQ, channel->instrument->c5_freq, rate);
+        if (event.velocity != NO_VELOCITY)
             channel->volume = event.velocity / 100.0;
-        channel->tick_delay = tick_delay;
+
+        channel->control_command = event.inst_control & CONTROL_MASK;
+        switch (channel->control_command & ~CTL_MODULATION) {
+            case CTL_VEL_UP:
+                channel->ctl_vel_up = event.param;
+                break;
+            case CTL_VEL_DOWN:
+                channel->ctl_vel_down = event.param;
+                break;
+        }
     }
 }

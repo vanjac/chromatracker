@@ -22,6 +22,7 @@ static const Uint16 tuning0_table[NUM_TUNINGS] = {
 
 typedef struct {
     Uint8 default_volume;
+    Uint8 finetune;
 } ModSampleInfo;
 
 ModSampleInfo sample_info[NUM_SAMPLES + 1]; // indices start at 1
@@ -29,6 +30,9 @@ ModSampleInfo sample_info[NUM_SAMPLES + 1]; // indices start at 1
 // return wave end
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
 static void read_pattern(SDL_RWops * file, Pattern * pattern);
+static ID sample_num_to_id(int num);
+static int period_to_pitch(int period, int sample_num);
+static Sint8 volume_to_velocity(int volume);
 
 void load_mod(char * filename, Song * song) {
     // http://coppershade.org/articles/More!/Topics/Protracker_File_Format/
@@ -75,9 +79,9 @@ void load_mod(char * filename, Song * song) {
         SDL_RWseek(file, 20 + 30 * i, RW_SEEK_SET);
         InstSample * sample = malloc(sizeof(InstSample));
         init_inst_sample(sample);
-        // sample IDs start at 1
-        wave_pos = read_sample(file, sample, &sample_info[i + 1], wave_pos);
-        put_instrument(song, i + 1, sample);
+        int sample_num = i + 1; // sample numbers start at 1
+        wave_pos = read_sample(file, sample, &sample_info[sample_num], wave_pos);
+        put_instrument(song, sample_num_to_id(sample_num), sample);
     }
 
     for (int i = 0; i < max_pattern + 1; i++) {
@@ -113,6 +117,7 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
         sample->loop_end = sample->loop_start + word_rep_len * 2;
     }
     info->default_volume = volume;
+    info->finetune = finetune;
 
     static Sint8 wave8[65536 * 2];
     SDL_RWseek(file, wave_start, RW_SEEK_SET);
@@ -132,56 +137,111 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
 
 
 static void read_pattern(SDL_RWops * file, Pattern * pattern) {
+    /* from OpenMPT wiki  https://wiki.openmpt.org/Manual:_Patterns
+
+    If there is no instrument number next to a note, the previously used sample
+    or instrument is recalled using the previous volume and panning settings.
+    Lone instrument numbers (without a note) will reset the instrument’s or
+    sample’s properties like volume (this is often used together with the
+    volume slide effect to create a gated sound).
+    */
+
     pattern->length = PATTERN_LEN * TICKS_PER_ROW;
     pattern->events = malloc(PATTERN_LEN * sizeof(Event));
     pattern->alloc_events = PATTERN_LEN;
     pattern->num_events = 0;
 
-    int period_memory = 0;
-    int sample_id_memory = 0;
-    int volume_memory = 64;
+    int prev_effect = -1; // always reset at start
+    int prev_params = -1;
+    int sample_num_memory = 0;
+    int velocity_memory = NO_VELOCITY;
     for (int i = 0; i < PATTERN_LEN; i++) {
         Uint8 bytes[EVENT_SIZE];
         SDL_RWread(file, bytes, 1, EVENT_SIZE);
         int period = ((bytes[0] & 0x0F) << 8) | bytes[1];
-        ID sample_id = (bytes[0] & 0xF0) | (bytes[2] >> 4);
+        int sample_num = (bytes[0] & 0xF0) | (bytes[2] >> 4);
         int effect = bytes[2] & 0x0F;
         int params = bytes[3];
 
-        if (period == 0 && sample_id == 0 && effect == 0) {
-            // empty
-        } else if (period == 0 && sample_id == 0) {
-            // effect only
-        } else {
-            // note on
-            int vol = sample_info[sample_id].default_volume;
-            if (effect == 0xC) // volume
-                vol = params;
-            else if (period == 0) // special case for keeping previous volume
-                vol = volume_memory;
-            
-            if (period == 0)
-                period = period_memory;
+        Event event = {i * TICKS_PER_ROW, 0, NO_PITCH, NO_VELOCITY, 0};
 
-            // TODO binary search + different tunings
-            int note;
-            for (note = 0; note < NUM_TUNINGS; note++) {
-                if (tuning0_table[note] == period)
+        if (effect != prev_effect || params != prev_params) {
+            switch (effect) {
+                case 0x0: // clear
+                    event.inst_control = CTL_VEL_DOWN;
+                    event.param = 0;
+                    break;
+                case 0xA: // volume slide
+                    // TODO units!
+                    if (params & 0xF0) {
+                        event.inst_control = CTL_VEL_UP;
+                        event.param = params >> 4;
+                    } else {
+                        event.inst_control = CTL_VEL_DOWN;
+                        event.param = params & 0x0F;
+                    }
+                    break;
+                case 0xC: // volume set
+                    event.velocity = volume_to_velocity(params);
                     break;
             }
-            note += 3 * 12;
-
-            Event event = {i * TICKS_PER_ROW, sample_id, note, (Sint8)(vol * 100.0 / 64.0), 0};
-            pattern->events[pattern->num_events++] = event;
-
-            if (period != 0)
-                period_memory = period;
-            if (sample_id != 0)
-                sample_id_memory = sample_id;
-            volume_memory = vol;
+            prev_effect = effect;
+            prev_params = params;
         }
 
-        // skip next 3 rows
+        if (period != 0 && (sample_num || sample_num_memory)) {
+            // note on
+            if (!sample_num) {
+                // recall previous settings
+                sample_num = sample_num_memory;
+                if (event.velocity == NO_VELOCITY)
+                    event.velocity = velocity_memory;
+            }
+            if (event.velocity == NO_VELOCITY)
+                event.velocity = volume_to_velocity(sample_info[sample_num].default_volume);
+
+            event.inst_control |= sample_num_to_id(sample_num);
+            event.pitch = period_to_pitch(period, sample_num);
+        } else if (sample_num) {
+            // reset note velocity
+            if (event.velocity == NO_VELOCITY)
+                event.velocity = volume_to_velocity(sample_info[sample_num].default_volume);
+        }
+
+        if (!event_is_empty(event))
+            pattern->events[pattern->num_events++] = event;
+
+        if (sample_num)
+            sample_num_memory = sample_num;
+        if (event.velocity != NO_VELOCITY)
+            velocity_memory = event.velocity;
+
+        // skip other tracks to next row
         SDL_RWseek(file, (NUM_TRACKS - 1) * EVENT_SIZE, RW_SEEK_CUR);
     }
+}
+
+
+
+static ID sample_num_to_id(int num) {
+    if (num == 0)
+        return NO_ID;
+    else
+        return num; // TODO
+}
+
+static int period_to_pitch(int period, int sample_num) {
+    // TODO binary search + different tunings
+    if (period == 0)
+        return NO_PITCH;
+    int pitch = NO_PITCH;
+    for (pitch = 0; pitch < NUM_TUNINGS; pitch++) {
+        if (tuning0_table[pitch] == period)
+            break;
+    }
+    return pitch + 3 * 12;
+}
+
+static Sint8 volume_to_velocity(int volume) {
+    return (Sint8)(volume * 100.0 / 64.0);
 }

@@ -32,11 +32,13 @@
 
 typedef struct {
     Uint16 time; // in ticks
-    Uint16 inst_effect;
+    Uint16 inst_control;
     Sint8 pitch;
     Sint8 velocity; // negative is empty
     Uint16 param;
 } Event;
+
+int event_is_empty(Event event);
 
 typedef struct {
     Event * events;

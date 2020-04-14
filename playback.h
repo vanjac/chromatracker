@@ -13,7 +13,9 @@ typedef struct {
     Sint64 playback_pos; // fp 32.16 sample num
     enum {PLAY_OFF, PLAY_ON, PLAY_RELEASE} note_state;
     float volume;
-    int tick_delay; // tick delay time, for live playing
+
+    Uint16 control_command;
+    Uint8 ctl_vel_up, ctl_vel_down;
 } ChannelPlayback;
 
 typedef struct {

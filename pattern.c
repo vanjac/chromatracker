@@ -1,5 +1,10 @@
 #include "pattern.h"
 
+int event_is_empty(Event event) {
+    return !event.inst_control && event.pitch == NO_PITCH
+        && event.velocity == NO_VELOCITY && !event.param;
+}
+
 void init_pattern(Pattern * pattern) {
     pattern->events = NULL;
     pattern->num_events = 0;
