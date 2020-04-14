@@ -26,6 +26,7 @@ typedef struct {
     int length; // ticks
 } Pattern;
 
+void init_pattern(Pattern * pattern);
 void free_pattern(Pattern * pattern);
 
 #define NUM_TRACK_PATTERNS 99
@@ -34,6 +35,7 @@ typedef struct {
     Pattern patterns[NUM_TRACK_PATTERNS];
 } Track;
 
+void init_track(Track * track);
 void free_track(Track * track);
 
 typedef struct {

@@ -78,6 +78,8 @@ void load_mod(char * filename, Song * song) {
 
     song->num_tracks = song->alloc_tracks = NUM_TRACKS;
     song->tracks = malloc(NUM_TRACKS * sizeof(Track));
+    for (int i = 0; i < NUM_TRACKS; i++)
+        init_track(&song->tracks[i]);
 
     for (int i = 0; i < max_pattern + 1; i++) {
         int pattern_pos = 1024 * i + 1084;
