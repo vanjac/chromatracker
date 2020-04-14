@@ -133,7 +133,7 @@ int main(int argv, char ** argc) {
 
     free_song(&song);
     SDL_DestroyWindow(window);
-    SDL_CloseAudio();
+    SDL_CloseAudioDevice(device);
     SDL_Quit();
     return 0;
 }
