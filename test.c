@@ -128,6 +128,8 @@ int main(int argv, char ** argc) {
         }
     }
     printf("no\n");
+    // stop callbacks
+    SDL_PauseAudioDevice(device, 1);
 
     free_song(&song);
     SDL_DestroyWindow(window);
