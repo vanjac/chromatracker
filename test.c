@@ -12,6 +12,8 @@
 
 #define SAMPLE_MASTER_VOLUME 0.5
 
+Song song;
+
 // 125 bpm
 int tick_len = 120<<16; // fp 16.16 sample length
 int tick_len_error = 0; // fp 16.16 accumulated error in tick length
@@ -30,7 +32,6 @@ volatile Uint32 audio_callback_time;
 #define NUM_KEYS 32
 ChannelPlayback * keyboard_instruments[NUM_KEYS];
 
-InstSample * load_instrument(char * filename);
 int note_keymap(SDL_Keycode key);
 Sint32 calc_playback_rate(int out_freq, float c5_freq, float rate);
 ChannelPlayback * find_empty_channel(void);
@@ -53,9 +54,6 @@ int current_page_ticks = 0;
 
 
 int main(int argv, char ** argc) {
-    for (ID id = 0; id < MAX_ID; id++)
-        id_table[id].type = ID_EMPTY;
-
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     SDL_Window * window = SDL_CreateWindow("chromatracker",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -80,7 +78,7 @@ int main(int argv, char ** argc) {
         return 1;
     }
 
-    load_mod("mod.resonance");
+    load_mod("mod.resonance", &song);
 
     for (int i = 0; i < NUM_CHANNELS; i++)
         channels[i].note_state = PLAY_OFF;
@@ -131,31 +129,11 @@ int main(int argv, char ** argc) {
     }
     printf("no\n");
 
-    for (ID id = 0; id < MAX_ID; id++)
-        delete_id(id);
+    free_song(&song);
     SDL_DestroyWindow(window);
     SDL_CloseAudio();
     SDL_Quit();
     return 0;
-}
-
-
-InstSample * load_instrument(char * filename) {
-    InstSample * inst = new_inst_sample();
-    SDL_RWops * file = SDL_RWFromFile(filename, "rb");
-    if (!file) {
-        printf("Can't open file\n");
-        return NULL;
-    }
-
-    int file_size = SDL_RWsize(file);
-    inst->wave_len = file_size / sizeof(Sample);
-
-    inst->wave = malloc(file_size);
-    SDL_RWread(file, inst->wave, file_size, 1);
-    SDL_RWclose(file);
-
-    return inst;
 }
 
 
@@ -279,15 +257,15 @@ void callback(void * userdata, Uint8 * stream, int len) {
 void process_tick(void) {
     // process page
     if (current_page == -1
-            || current_page_ticks >= pages[current_page].length) {
+            || current_page_ticks >= song.pages[current_page].length) {
         current_page++;
-        if (current_page == num_pages)
+        if (current_page == song.num_pages)
             current_page = 0;
         printf("Page %d\n", current_page);
         current_page_ticks = 0;
-        Page page = pages[current_page];
+        Page page = song.pages[current_page];
         for (int i = 0; i < NUM_TRACKS; i++) {
-            track_states[i].pattern = &(tracks[i].patterns[page.patterns[i]]);
+            track_states[i].pattern = &(song.tracks[i].patterns[page.patterns[i]]);
         }
     }
     current_page_ticks++;
@@ -386,7 +364,7 @@ void process_event(Event event, ChannelPlayback * channel, int tick_delay) {
     if (inst_col == NOTE_CUT) {
         channel->note_state = PLAY_OFF;
     } else {
-        InstSample * inst = get_instrument(inst_col);
+        InstSample * inst = get_instrument(&song, inst_col);
         if (!inst)
             return;
         channel->instrument = inst;

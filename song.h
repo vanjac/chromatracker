@@ -13,18 +13,25 @@ typedef struct {
     } pointer;
 } IDEntry;
 
-IDEntry id_table[MAX_ID];
+typedef struct {
+    IDEntry id_table[MAX_ID];
 
-InstSample * get_instrument(ID id);
-void put_instrument(ID id, InstSample * instrument);
+    Track * tracks;
+    int num_tracks;
+    int alloc_tracks;
 
-void delete_id(ID id);
+    Page * pages;
+    int num_pages;
+    int alloc_pages;
+} Song;
 
-Track * tracks;
-int num_tracks;
-int alloc_tracks;
+void init_song(Song * song);
+void free_song(Song * song);
 
-Page * pages;
-int num_pages;
+InstSample * get_instrument(Song * song, ID id);
+void put_instrument(Song * song, ID id, InstSample * instrument);
+
+void delete_id(Song * song, ID id);
+
 
 #endif

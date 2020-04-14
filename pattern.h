@@ -26,19 +26,20 @@ typedef struct {
     int length; // ticks
 } Pattern;
 
+void free_pattern(Pattern * pattern);
+
 #define NUM_TRACK_PATTERNS 99
 
 typedef struct {
     Pattern patterns[NUM_TRACK_PATTERNS];
 } Track;
 
+void free_track(Track * track);
+
 typedef struct {
     // TODO!
     ID patterns[4];
     int length;
 } Page;
-
-Pattern * new_pattern(void);
-void delete_pattern(Pattern * pattern);
 
 #endif

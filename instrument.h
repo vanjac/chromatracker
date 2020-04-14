@@ -12,7 +12,7 @@ typedef struct {
     int loop_start, loop_end;
 } InstSample;
 
-InstSample * new_inst_sample(void);
-void delete_inst_sample(InstSample * sample);
+void init_inst_sample(InstSample * sample);
+void free_inst_sample(InstSample * sample);
 
 #endif
