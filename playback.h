@@ -5,6 +5,9 @@
 #include "pattern.h"
 #include "instrument.h"
 
+// num percentage points per 24 ticks
+#define VELOCITY_SLIDE_SCALE (1.0 / 100.0 / 24.0)
+
 float note_rate(int note);
 
 typedef struct {

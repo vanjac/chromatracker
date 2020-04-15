@@ -6,7 +6,8 @@
 #define SONG_TABLE_SIZE 128
 #define NUM_SAMPLES 31
 #define PATTERN_LEN 64
-#define TICKS_PER_ROW 48
+#define MOD_TICKS_PER_ROW 6
+#define TICKS_PER_ROW (MOD_TICKS_PER_ROW * 8)
 #define NUM_TRACKS 4
 #define EVENT_SIZE 4
 
@@ -33,6 +34,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern);
 static ID sample_num_to_id(int num);
 static int period_to_pitch(int period, int sample_num);
 static Sint8 volume_to_velocity(int volume);
+static Sint8 velocity_slide_units(int volume_slide);
 
 void load_mod(char * filename, Song * song) {
     // http://coppershade.org/articles/More!/Topics/Protracker_File_Format/
@@ -172,13 +174,12 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern) {
                     event.param = 0;
                     break;
                 case 0xA: // volume slide
-                    // TODO units!
                     if (params & 0xF0) {
                         event.inst_control = CTL_VEL_UP;
-                        event.param = params >> 4;
+                        event.param = velocity_slide_units(params >> 4);
                     } else {
                         event.inst_control = CTL_VEL_DOWN;
-                        event.param = params & 0x0F;
+                        event.param = velocity_slide_units(params & 0x0F);
                     }
                     break;
                 case 0xC: // volume set
@@ -244,4 +245,11 @@ static int period_to_pitch(int period, int sample_num) {
 
 static Sint8 volume_to_velocity(int volume) {
     return (Sint8)(volume * 100.0 / 64.0);
+}
+
+
+static Sint8 velocity_slide_units(int volume_slide) {
+    // * 100 / 64 * 5 / 6 * 3
+    // TODO reorder??
+    return volume_slide * 100.0 / 64.0 * (MOD_TICKS_PER_ROW - 1) / MOD_TICKS_PER_ROW * 3.0;
 }

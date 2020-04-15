@@ -364,14 +364,12 @@ void process_tick_channel(ChannelPlayback * c) {
 
     switch (c->control_command) {
         case CTL_VEL_UP:
-            // TODO units!
-            c->volume += (5.0 / 6.0 / 64.0 / 8.0) * c->ctl_vel_up;
+            c->volume += VELOCITY_SLIDE_SCALE * c->ctl_vel_up;
             if (c->volume > 1.0)
                 c->volume = 1.0;
             break;
         case CTL_VEL_DOWN:
-            // TODO units!
-            c->volume -= (5.0 / 6.0 / 64.0 / 8.0) * c->ctl_vel_down;
+            c->volume -= VELOCITY_SLIDE_SCALE * c->ctl_vel_down;
             if (c->volume < 0.0)
                 c->volume = 0.0;
             break;
