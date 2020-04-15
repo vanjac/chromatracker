@@ -38,6 +38,7 @@ ChannelPlayback * find_empty_channel(void);
 void callback(void * userdata, Uint8 * stream, int len);
 void process_tick(void);
 void process_tick_track(TrackPlayback * track);
+void process_tick_channel(ChannelPlayback * c);
 void process_event(Event event, ChannelPlayback * channel, int tick_delay);
 
 #define NUM_TRACKS 4
@@ -292,59 +293,9 @@ void process_tick(void) {
         tick_buffer[i].l = 0;
         tick_buffer[i].r = 0;
     }
-    Sample * tick_buffer_end = tick_buffer + tick_buffer_len;
 
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        ChannelPlayback * c = &channels[i];
-        if (c->note_state == PLAY_OFF)
-            continue;
-
-        InstSample * inst = c->instrument;
-
-        Sample * write = tick_buffer;
-        while (c->note_state != PLAY_OFF && write < tick_buffer_end) {
-            int loop = 0;
-            Sint64 max_pos = c->playback_pos + (tick_buffer_end - write) * c->playback_rate;
-            if (inst->playback_mode == SMP_LOOP) {
-                if (max_pos > (Sint64)inst->loop_end << 16) {
-                    max_pos = (Sint64)inst->loop_end << 16;
-                    loop = 1;
-                }
-            } else {
-                if (max_pos > (Sint64)inst->wave_len << 16) {
-                    max_pos = (Sint64)inst->wave_len << 16;
-                    c->note_state = PLAY_OFF;
-                } 
-            }
-
-            while (c->playback_pos < max_pos) {
-                Sample mix_sample = inst->wave[c->playback_pos >> 16];
-                write->l += mix_sample.l * c->volume * SAMPLE_MASTER_VOLUME;
-                write->r += mix_sample.r * c->volume * SAMPLE_MASTER_VOLUME;
-                write++;
-                c->playback_pos += c->playback_rate;
-            }
-            if (loop)
-                c->playback_pos -= (Sint64)(inst->loop_end - inst->loop_start) << 16;
-        }
-
-        // these control commands go after tick (some could go before)
-
-        switch (c->control_command) {
-            case CTL_VEL_UP:
-                // TODO units!
-                c->volume += (5.0 / 6.0 / 64.0 / 8.0) * c->ctl_vel_up;
-                if (c->volume > 1.0)
-                    c->volume = 1.0;
-                break;
-            case CTL_VEL_DOWN:
-                // TODO units!
-                c->volume -= (5.0 / 6.0 / 64.0 / 8.0) * c->ctl_vel_down;
-                if (c->volume < 0.0)
-                    c->volume = 0.0;
-                break;
-        }
-    }
+    for (int i = 0; i < NUM_CHANNELS; i++)
+        process_tick_channel(&channels[i]);
 }
 
 
@@ -371,6 +322,59 @@ void process_tick_track(TrackPlayback * track) {
     if (track->pattern_tick >= track->pattern->length) {
         track->pattern_tick = 0;
         track->event_i = 0;
+    }
+}
+
+
+void process_tick_channel(ChannelPlayback * c) {
+    if (c->note_state == PLAY_OFF)
+        return;
+
+    InstSample * inst = c->instrument;
+
+    Sample * write = tick_buffer;
+    Sample * tick_buffer_end = tick_buffer + tick_buffer_len;
+    while (c->note_state != PLAY_OFF && write < tick_buffer_end) {
+        int loop = 0;
+        Sint64 max_pos = c->playback_pos + (tick_buffer_end - write) * c->playback_rate;
+        if (inst->playback_mode == SMP_LOOP) {
+            if (max_pos > (Sint64)inst->loop_end << 16) {
+                max_pos = (Sint64)inst->loop_end << 16;
+                loop = 1;
+            }
+        } else {
+            if (max_pos > (Sint64)inst->wave_len << 16) {
+                max_pos = (Sint64)inst->wave_len << 16;
+                c->note_state = PLAY_OFF;
+            } 
+        }
+
+        while (c->playback_pos < max_pos) {
+            Sample mix_sample = inst->wave[c->playback_pos >> 16];
+            write->l += mix_sample.l * c->volume * SAMPLE_MASTER_VOLUME;
+            write->r += mix_sample.r * c->volume * SAMPLE_MASTER_VOLUME;
+            write++;
+            c->playback_pos += c->playback_rate;
+        }
+        if (loop)
+            c->playback_pos -= (Sint64)(inst->loop_end - inst->loop_start) << 16;
+    }
+
+    // these control commands go after tick (some could go before)
+
+    switch (c->control_command) {
+        case CTL_VEL_UP:
+            // TODO units!
+            c->volume += (5.0 / 6.0 / 64.0 / 8.0) * c->ctl_vel_up;
+            if (c->volume > 1.0)
+                c->volume = 1.0;
+            break;
+        case CTL_VEL_DOWN:
+            // TODO units!
+            c->volume -= (5.0 / 6.0 / 64.0 / 8.0) * c->ctl_vel_down;
+            if (c->volume < 0.0)
+                c->volume = 0.0;
+            break;
     }
 }
 
