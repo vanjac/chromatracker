@@ -272,6 +272,8 @@ void process_tick(void) {
                 track_states[i].pattern = NULL;
             else
                 track_states[i].pattern = &(song.tracks[i].patterns[pattern_num]);
+            track_states[i].pattern_tick = 0;
+            track_states[i].event_i = 0;
         }
     }
     current_page_ticks++;
