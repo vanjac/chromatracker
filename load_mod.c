@@ -22,6 +22,7 @@ static const Uint16 tuning0_table[NUM_TUNINGS] = {
 };
 
 typedef struct {
+    ID inst_id;
     Uint8 default_volume;
     Uint8 finetune;
 } ModSampleInfo;
@@ -32,7 +33,6 @@ static Song * current_song;
 // return wave end
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
 static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
-static ID sample_num_to_id(int num);
 static int period_to_pitch(int period, int sample_num);
 static Sint8 volume_to_velocity(int volume);
 static Sint8 velocity_slide_units(int volume_slide);
@@ -84,8 +84,9 @@ void load_mod(char * filename, Song * song) {
         InstSample * sample = malloc(sizeof(InstSample));
         init_inst_sample(sample);
         int sample_num = i + 1; // sample numbers start at 1
+        sample_info[sample_num].inst_id = sample_num; // TODO
         wave_pos = read_sample(file, sample, &sample_info[sample_num], wave_pos);
-        put_instrument(song, sample_num_to_id(sample_num), sample);
+        put_instrument(song, sample_info[sample_num].inst_id, sample);
     }
 
     for (int i = 0; i < max_pattern + 1; i++) {
@@ -211,7 +212,8 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
             if (event.velocity == NO_VELOCITY)
                 event.velocity = volume_to_velocity(sample_info[sample_num].default_volume);
 
-            event.inst_control |= sample_num_to_id(sample_num);
+            if (sample_num)
+                event.inst_control |= sample_info[sample_num].inst_id;
             event.pitch = period_to_pitch(period, sample_num);
         } else if (sample_num) {
             // reset note velocity
@@ -236,14 +238,6 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     }
 }
 
-
-
-static ID sample_num_to_id(int num) {
-    if (num == 0)
-        return NO_ID;
-    else
-        return num; // TODO
-}
 
 static int period_to_pitch(int period, int sample_num) {
     // TODO binary search + different tunings
