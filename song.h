@@ -14,14 +14,14 @@ typedef struct {
 } IDEntry;
 
 typedef struct {
-    IDEntry id_table[MAX_ID];
-
     Track * tracks;
     int num_tracks;
     int alloc_tracks;
 
-    int page_lengths[MAX_PAGES]; // in ticks
     int num_pages;
+    int page_lengths[MAX_PAGES]; // in ticks
+
+    IDEntry id_table[MAX_ID];
 } Song;
 
 void init_song(Song * song);

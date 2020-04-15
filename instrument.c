@@ -8,6 +8,7 @@ void init_inst_sample(InstSample * sample) {
     sample->loop_type = LOOP_FORWARD;
     sample->loop_start = 0;
     sample->loop_end = 0;
+    sample->num_slices = 0;
 }
 
 void free_inst_sample(InstSample * sample) {

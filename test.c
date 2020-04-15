@@ -410,6 +410,10 @@ void process_event(Event event, ChannelPlayback * channel, int tick_delay) {
             case CTL_VEL_DOWN:
                 channel->ctl_vel_down = event.param;
                 break;
+            case CTL_SLICE:
+                if (channel->instrument && event.param < channel->instrument->num_slices)
+                    channel->playback_pos = (Sint64)channel->instrument->slices[event.param] << 16;
+                break;
         }
     }
 }

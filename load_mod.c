@@ -23,6 +23,7 @@ static const Uint16 tuning0_table[NUM_TUNINGS] = {
 
 typedef struct {
     ID inst_id;
+    InstSample * sample;
     Uint8 default_volume;
     Uint8 finetune;
 } ModSampleInfo;
@@ -36,6 +37,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
 static int period_to_pitch(int period, int sample_num);
 static Sint8 volume_to_velocity(int volume);
 static Sint8 velocity_slide_units(int volume_slide);
+static int sample_add_slice(InstSample * sample, int slice_point);
 
 void load_mod(char * filename, Song * song) {
     // http://coppershade.org/articles/More!/Topics/Protracker_File_Format/
@@ -85,6 +87,7 @@ void load_mod(char * filename, Song * song) {
         init_inst_sample(sample);
         int sample_num = i + 1; // sample numbers start at 1
         sample_info[sample_num].inst_id = sample_num; // TODO
+        sample_info[sample_num].sample = sample;
         wave_pos = read_sample(file, sample, &sample_info[sample_num], wave_pos);
         put_instrument(song, sample_info[sample_num].inst_id, sample);
     }
@@ -171,10 +174,22 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         Event event = {i * TICKS_PER_ROW, 0, NO_PITCH, NO_VELOCITY, 0};
 
         if (effect != prev_effect || params != prev_params) {
+            int slice_point;
             switch (effect) {
                 case 0x0: // clear
                     event.inst_control = CTL_VEL_DOWN;
                     event.param = 0;
+                    break;
+                case 0x9: // sample offset
+                    slice_point = params * 256;
+                    // search for existing slice point
+                    if (sample_num) {
+                        event.inst_control = CTL_SLICE;
+                        event.param = sample_add_slice(sample_info[sample_num].sample, slice_point);
+                    } else if (sample_num_memory) {
+                        event.inst_control = CTL_SLICE;
+                        event.param = sample_add_slice(sample_info[sample_num_memory].sample, slice_point);
+                    }
                     break;
                 case 0xA: // volume slide
                     if (params & 0xF0) {
@@ -255,9 +270,19 @@ static Sint8 volume_to_velocity(int volume) {
     return (Sint8)(volume * 100.0 / 64.0);
 }
 
-
 static Sint8 velocity_slide_units(int volume_slide) {
     // * 100 / 64 * 5 / 6 * 3
     // TODO reorder??
     return volume_slide * 100.0 / 64.0 * (MOD_TICKS_PER_ROW - 1) / MOD_TICKS_PER_ROW * 3.0;
+}
+
+static int sample_add_slice(InstSample * sample, int slice_point) {
+    for (int i = 0; i < sample->num_slices; i++) {
+        if (sample->slices[i] == slice_point)
+            return i;
+    }
+    // TODO check overflow
+    sample->slices[sample->num_slices] = slice_point;
+    sample->num_slices++;
+    return sample->num_slices - 1;
 }
