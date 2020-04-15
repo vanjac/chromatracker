@@ -216,6 +216,10 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern) {
             sample_num_memory = sample_num;
         if (event.velocity != NO_VELOCITY)
             velocity_memory = event.velocity;
+        if ((event.inst_control & CONTROL_MASK) == CTL_VEL_UP)
+            velocity_memory += event.param * TICKS_PER_ROW / 24;
+        else if ((event.inst_control & CONTROL_MASK) == CTL_VEL_DOWN)
+            velocity_memory -= event.param * TICKS_PER_ROW / 24;
 
         // skip other tracks to next row
         SDL_RWseek(file, (NUM_TRACKS - 1) * EVENT_SIZE, RW_SEEK_CUR);
