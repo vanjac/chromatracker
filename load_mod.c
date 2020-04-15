@@ -26,11 +26,12 @@ typedef struct {
     Uint8 finetune;
 } ModSampleInfo;
 
-ModSampleInfo sample_info[NUM_SAMPLES + 1]; // indices start at 1
+static ModSampleInfo sample_info[NUM_SAMPLES + 1]; // indices start at 1
+static Song * current_song;
 
 // return wave end
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
-static void read_pattern(SDL_RWops * file, Pattern * pattern);
+static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
 static ID sample_num_to_id(int num);
 static int period_to_pitch(int period, int sample_num);
 static Sint8 volume_to_velocity(int volume);
@@ -38,6 +39,7 @@ static Sint8 velocity_slide_units(int volume_slide);
 
 void load_mod(char * filename, Song * song) {
     // http://coppershade.org/articles/More!/Topics/Protracker_File_Format/
+    current_song = song;
     init_song(song);
 
     SDL_RWops * file = SDL_RWFromFile(filename, "rb");
@@ -90,7 +92,7 @@ void load_mod(char * filename, Song * song) {
         int pattern_pos = pattern_size * i + 1084;
         for (int t = 0; t < NUM_TRACKS; t++) {
             SDL_RWseek(file, 1084 + pattern_size * i + NUM_TRACKS * t, RW_SEEK_SET);
-            read_pattern(file, &song->tracks[t].patterns[i]);
+            read_pattern(file, &song->tracks[t].patterns[i], i);
         }
     }
 
@@ -138,7 +140,7 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
 }
 
 
-static void read_pattern(SDL_RWops * file, Pattern * pattern) {
+static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     /* from OpenMPT wiki  https://wiki.openmpt.org/Manual:_Patterns
 
     If there is no instrument number next to a note, the previously used sample
@@ -184,6 +186,14 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern) {
                     break;
                 case 0xC: // volume set
                     event.velocity = volume_to_velocity(params);
+                    break;
+                case 0xD: // pattern break
+                    // find each page that uses this pattern
+                    for (int i = 0; i < current_song->num_pages; i++) {
+                        if (current_song->tracks[0].pages[i] == pattern_num) {
+                            current_song->page_lengths[i] = event.time + TICKS_PER_ROW; // after this row
+                        }
+                    }
                     break;
             }
             prev_effect = effect;
