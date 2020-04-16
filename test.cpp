@@ -15,8 +15,6 @@
 
 #define OUT_FREQ 48000
 
-#define SAMPLE_MASTER_VOLUME 0.5
-
 Song song;
 SongPlayback playback;
 
@@ -32,13 +30,8 @@ volatile Uint32 audio_callback_time;
 ChannelPlayback * keyboard_instruments[NUM_KEYS];
 
 Sint8 note_keymap(SDL_Keycode key);
-Sint32 calc_playback_rate(int out_freq, float c5_freq, float rate);
 ChannelPlayback * find_empty_channel(SongPlayback * playback);
 void callback(void * userdata, Uint8 * stream, int len);
-void process_tick(SongPlayback * playback);
-void process_tick_track(TrackPlayback * track);
-void process_tick_channel(ChannelPlayback * c);
-void process_event(Event event, ChannelPlayback * channel, int tick_delay);
 
 
 int main(int argv, char ** argc) {
@@ -99,7 +92,7 @@ int main(int argv, char ** argc) {
 
     load_mod("space_debris.mod", &song);
 
-    init_song_playback(&playback, &song);
+    init_song_playback(&playback, &song, OUT_FREQ);
 
     audio_callback_time = SDL_GetTicks();
     SDL_PauseAudioDevice(device, 0); // audio devices start paused
@@ -124,7 +117,7 @@ int main(int argv, char ** argc) {
                     ChannelPlayback * channel = find_empty_channel(&playback);
                     // tick time: tick_len / spec.freq
                     Event key_event = {0, inst_select, (Sint8)(key + 5*12), 100, 0};
-                    process_event(key_event, channel, tick_delay);
+                    process_event(key_event, &playback, channel, tick_delay);
                     keyboard_instruments[key] = channel;
                 } else {
                     if (event.key.keysym.sym == SDLK_EQUALS) {
@@ -141,7 +134,7 @@ int main(int argv, char ** argc) {
                 if (key >= 0 && keyboard_instruments[key]) {
                     ChannelPlayback * channel = keyboard_instruments[key];
                     Event key_event = {0, NOTE_CUT, 0, 0, 0};
-                    process_event(key_event, channel, tick_delay);
+                    process_event(key_event, &playback, channel, tick_delay);
                     keyboard_instruments[key] = 0;
                 }
             }
@@ -243,11 +236,6 @@ Sint8 note_keymap(SDL_Keycode key) {
 }
 
 
-Sint32 calc_playback_rate(int out_freq, float c5_freq, float rate) {
-    return (Sint32)(rate * c5_freq / out_freq * 65536);
-}
-
-
 ChannelPlayback * find_empty_channel(SongPlayback * playback) {
     for (int i = 0; i < playback->num_channels; i++) {
         ChannelPlayback * c = &playback->channels[i];
@@ -283,160 +271,7 @@ void callback(void * userdata, Uint8 * stream, int len) {
         if (sample_stream >= sample_stream_end)
             break;
 
-        process_tick(&playback);
+        tick_buffer_len = process_tick(&playback, tick_buffer);
         tick_buffer_pos = 0;
-    }
-}
-
-
-void process_tick(SongPlayback * playback) {
-    // process page
-    Song * song = playback->song;
-    if (playback->current_page_ticks >= song->page_lengths[playback->current_page]) {
-        set_playback_page(playback, playback->current_page + 1);
-    }
-    playback->current_page_ticks++;
-
-    // process events
-    for (int i = 0; i < playback->num_tracks; i++)
-        process_tick_track(&playback->tracks[i]);
-
-    // process audio
-
-    tick_buffer_len = playback->tick_len >> 16;
-    playback->tick_len_error += playback->tick_len & 0xFFFF;
-    if (playback->tick_len_error >= (1<<16)) {
-        playback->tick_len_error -= 1<<16;
-        tick_buffer_len += 1;
-    }
-
-    for (int i = 0; i < tick_buffer_len; i++) {
-        tick_buffer[i].l = 0;
-        tick_buffer[i].r = 0;
-    }
-
-    for (int i = 0; i < playback->num_channels; i++)
-        process_tick_channel(&playback->channels[i]);
-}
-
-
-void process_tick_track(TrackPlayback * track) {
-    Pattern * pattern = track->pattern;
-    if (!pattern)
-        return;
-    while (1) {
-        if (track->event_i >= pattern->num_events)
-            break;
-        Event next_event = pattern->events[track->event_i];
-        if (next_event.time == track->pattern_tick) {
-            track->event_i++;
-            // play event
-            ChannelPlayback * channel = track->channel;
-            process_event(next_event, channel, 0);
-        } else {
-            break;
-        }
-    }
-
-    track->pattern_tick++;
-    // loop
-    if (track->pattern_tick >= track->pattern->length) {
-        track->pattern_tick = 0;
-        track->event_i = 0;
-    }
-}
-
-
-void process_tick_channel(ChannelPlayback * c) {
-    if (c->note_state == PLAY_OFF)
-        return;
-
-    InstSample * inst = c->instrument;
-
-    Sample * write = tick_buffer;
-    Sample * tick_buffer_end = tick_buffer + tick_buffer_len;
-    while (c->note_state != PLAY_OFF && write < tick_buffer_end) {
-        int loop = 0;
-        Sint64 max_pos = c->playback_pos + (tick_buffer_end - write) * c->playback_rate;
-        if (inst->playback_mode == SMP_LOOP) {
-            if (max_pos > (Sint64)inst->loop_end << 16) {
-                max_pos = (Sint64)inst->loop_end << 16;
-                loop = 1;
-            }
-        } else {
-            if (max_pos > (Sint64)inst->wave_len << 16) {
-                max_pos = (Sint64)inst->wave_len << 16;
-                c->note_state = PLAY_OFF;
-            } 
-        }
-
-        while (c->playback_pos < max_pos) {
-            Sample mix_sample = inst->wave[c->playback_pos >> 16];
-            write->l += mix_sample.l * c->volume * SAMPLE_MASTER_VOLUME;
-            write->r += mix_sample.r * c->volume * SAMPLE_MASTER_VOLUME;
-            write++;
-            c->playback_pos += c->playback_rate;
-        }
-        if (loop)
-            c->playback_pos -= (Sint64)(inst->loop_end - inst->loop_start) << 16;
-    }
-
-    // these control commands go after tick (some could go before)
-
-    switch (c->control_command) {
-        case CTL_VEL_UP:
-            c->volume += VELOCITY_SLIDE_SCALE * c->ctl_vel_up;
-            if (c->volume > 1.0)
-                c->volume = 1.0;
-            break;
-        case CTL_VEL_DOWN:
-            c->volume -= VELOCITY_SLIDE_SCALE * c->ctl_vel_down;
-            if (c->volume < 0.0)
-                c->volume = 0.0;
-            break;
-    }
-}
-
-
-void process_event(Event event, ChannelPlayback * channel, int tick_delay) {
-    // TODO use tick delay!!
-    int inst_col = event.inst_control & INST_MASK;
-    if (inst_col == NOTE_CUT) {
-        channel->note_state = PLAY_OFF;
-    } else {
-        if (inst_col != NO_ID) {
-            // note on
-            InstSample * inst = get_instrument(&song, inst_col);
-            if (inst) {
-                channel->instrument = inst;
-                channel->playback_pos = 0;
-                channel->note_state = PLAY_ON;
-            }
-        }
-        
-        if (event.pitch != NO_PITCH && channel->instrument) {
-            float rate = note_rate(event.pitch);
-            channel->playback_rate = calc_playback_rate(OUT_FREQ, channel->instrument->c5_freq, rate);
-        }
-        if (event.velocity != NO_VELOCITY)
-            channel->volume = event.velocity / 100.0;
-
-        channel->control_command = event.inst_control & CONTROL_MASK;
-        Uint16 numeric = event.param & PARAM_NUM_MASK;
-        switch (channel->control_command) {
-            case CTL_VEL_UP:
-                if (event.param & PARAM_IS_NUM)
-                    channel->ctl_vel_up = numeric;
-                break;
-            case CTL_VEL_DOWN:
-                if (event.param & PARAM_IS_NUM)
-                    channel->ctl_vel_down = numeric;
-                break;
-            case CTL_SLICE:
-                if ((event.param & PARAM_IS_NUM) && channel->instrument
-                        && numeric < channel->instrument->num_slices)
-                    channel->playback_pos = (Sint64)channel->instrument->slices[numeric] << 16;
-                break;
-        }
     }
 }

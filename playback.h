@@ -6,11 +6,6 @@
 #include "instrument.h"
 #include "song.h"
 
-// num percentage points per 24 ticks
-#define VELOCITY_SLIDE_SCALE (1.0 / 100.0 / 24.0)
-
-float note_rate(int note);
-
 typedef enum {PLAY_OFF, PLAY_ON, PLAY_RELEASE} NoteState;
 
 typedef struct {
@@ -41,6 +36,8 @@ typedef struct {
     int current_page;
     int current_page_ticks;
 
+    int out_freq;
+
     int tick_len; // fp 16.16 sample length
     int tick_len_error; // fp 16.16 accumulated error in tick length
 
@@ -50,9 +47,11 @@ typedef struct {
     int num_tracks;
 } SongPlayback;
 
-void init_song_playback(SongPlayback * playback, Song * song);
+void init_song_playback(SongPlayback * playback, Song * song, int out_freq);
 void free_song_playback(SongPlayback * playback);
 
-void set_playback_page(SongPlayback * playback, int page);
+// return tick length (num samples written to buffer)
+int process_tick(SongPlayback * playback, Sample * tick_buffer);
+void process_event(Event event, SongPlayback * playback, ChannelPlayback * channel, int tick_delay);
 
 #endif
