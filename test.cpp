@@ -453,7 +453,7 @@ void process_event(Event event, ChannelPlayback * channel, int tick_delay) {
 
         channel->control_command = event.inst_control & CONTROL_MASK;
         Uint16 numeric = event.param & PARAM_NUM_MASK;
-        switch (channel->control_command & ~CTL_MODULATION) {
+        switch (channel->control_command) {
             case CTL_VEL_UP:
                 if (event.param & PARAM_IS_NUM)
                     channel->ctl_vel_up = numeric;
