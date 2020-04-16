@@ -18,19 +18,13 @@
 #define SAMPLE_MASTER_VOLUME 0.5
 
 Song song;
-
-// 125 bpm
-int tick_len = 120<<16; // fp 16.16 sample length
-int tick_len_error = 0; // fp 16.16 accumulated error in tick length
+SongPlayback playback;
 
 // enough for 15 BPM at 48000Hz
 #define MAX_TICK_BUFFER 1024
 Sample tick_buffer[MAX_TICK_BUFFER];
 int tick_buffer_len = 0;
 int tick_buffer_pos = 0;
-
-#define NUM_CHANNELS 8
-ChannelPlayback channels[NUM_CHANNELS];
 
 volatile Uint32 audio_callback_time;
 
@@ -39,24 +33,12 @@ ChannelPlayback * keyboard_instruments[NUM_KEYS];
 
 Sint8 note_keymap(SDL_Keycode key);
 Sint32 calc_playback_rate(int out_freq, float c5_freq, float rate);
-ChannelPlayback * find_empty_channel(void);
+ChannelPlayback * find_empty_channel(SongPlayback * playback);
 void callback(void * userdata, Uint8 * stream, int len);
-void process_tick(void);
+void process_tick(SongPlayback * playback);
 void process_tick_track(TrackPlayback * track);
 void process_tick_channel(ChannelPlayback * c);
 void process_event(Event event, ChannelPlayback * channel, int tick_delay);
-
-#define NUM_TRACKS 4
-TrackPlayback track_states[NUM_TRACKS] = {
-    {&channels[0], NULL, 0, 0},
-    {&channels[1], NULL, 0, 0},
-    {&channels[2], NULL, 0, 0},
-    {&channels[3], NULL, 0, 0}
-};
-
-
-int current_page = -1;
-int current_page_ticks = 0;
 
 
 int main(int argv, char ** argc) {
@@ -115,10 +97,10 @@ int main(int argv, char ** argc) {
         return 1;
     }
 
-    load_mod("mod.resonance", &song);
+    load_mod("space_debris.mod", &song);
 
-    for (int i = 0; i < NUM_CHANNELS; i++)
-        channels[i].note_state = PLAY_OFF;
+    init_song_playback(&playback, &song);
+
     audio_callback_time = SDL_GetTicks();
     SDL_PauseAudioDevice(device, 0); // audio devices start paused
 
@@ -132,14 +114,14 @@ int main(int argv, char ** argc) {
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL2_ProcessEvent(&event);
             int time_offset = SDL_GetTicks() - audio_callback_time;
-            int tick_delay = ((OUT_FREQ * time_offset / 1000) << 16) / tick_len;
+            int tick_delay = ((OUT_FREQ * time_offset / 1000) << 16) / playback.tick_len;
 
             if (event.type == SDL_QUIT)
                 running = 0;
             if (event.type == SDL_KEYDOWN) {
                 Sint8 key = note_keymap(event.key.keysym.sym);
                 if (key >= 0 && !keyboard_instruments[key]) {
-                    ChannelPlayback * channel = find_empty_channel();
+                    ChannelPlayback * channel = find_empty_channel(&playback);
                     // tick time: tick_len / spec.freq
                     Event key_event = {0, inst_select, (Sint8)(key + 5*12), 100, 0};
                     process_event(key_event, channel, tick_delay);
@@ -181,6 +163,7 @@ int main(int argv, char ** argc) {
     // stop callbacks
     SDL_PauseAudioDevice(device, 1);
 
+    free_song_playback(&playback);
     free_song(&song);
     SDL_DestroyWindow(window);
     SDL_CloseAudioDevice(device);
@@ -265,18 +248,18 @@ Sint32 calc_playback_rate(int out_freq, float c5_freq, float rate) {
 }
 
 
-ChannelPlayback * find_empty_channel(void) {
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        ChannelPlayback * c = &channels[i];
+ChannelPlayback * find_empty_channel(SongPlayback * playback) {
+    for (int i = 0; i < playback->num_channels; i++) {
+        ChannelPlayback * c = &playback->channels[i];
         if (c->note_state == PLAY_OFF)
             return c;
     }
-    for (int i = 0; i < NUM_CHANNELS; i++) {
-        ChannelPlayback * c = &channels[i];
+    for (int i = 0; i < playback->num_channels; i++) {
+        ChannelPlayback * c = &playback->channels[i];
         if (c->note_state == PLAY_RELEASE)
             return c;
     }
-    return &channels[0]; // TODO
+    return &playback->channels[0]; // TODO
 }
 
 
@@ -300,43 +283,30 @@ void callback(void * userdata, Uint8 * stream, int len) {
         if (sample_stream >= sample_stream_end)
             break;
 
-        process_tick();
+        process_tick(&playback);
         tick_buffer_pos = 0;
     }
 }
 
 
-void process_tick(void) {
+void process_tick(SongPlayback * playback) {
     // process page
-    if (current_page == -1
-            || current_page_ticks >= song.page_lengths[current_page]) {
-        current_page++;
-        if (current_page == song.num_pages)
-            current_page = 0;
-        printf("Page %d\n", current_page);
-        current_page_ticks = 0;
-        for (int i = 0; i < NUM_TRACKS; i++) {
-            int pattern_num = song.tracks[i].pages[current_page];
-            if (pattern_num == NO_PATTERN)
-                track_states[i].pattern = NULL;
-            else
-                track_states[i].pattern = &(song.tracks[i].patterns[pattern_num]);
-            track_states[i].pattern_tick = 0;
-            track_states[i].event_i = 0;
-        }
+    Song * song = playback->song;
+    if (playback->current_page_ticks >= song->page_lengths[playback->current_page]) {
+        set_playback_page(playback, playback->current_page + 1);
     }
-    current_page_ticks++;
+    playback->current_page_ticks++;
 
     // process events
-    for (int i = 0; i < NUM_TRACKS; i++)
-        process_tick_track(&track_states[i]);
+    for (int i = 0; i < playback->num_tracks; i++)
+        process_tick_track(&playback->tracks[i]);
 
     // process audio
 
-    tick_buffer_len = tick_len >> 16;
-    tick_len_error += tick_len & 0xFFFF;
-    if (tick_len_error >= (1<<16)) {
-        tick_len_error -= 1<<16;
+    tick_buffer_len = playback->tick_len >> 16;
+    playback->tick_len_error += playback->tick_len & 0xFFFF;
+    if (playback->tick_len_error >= (1<<16)) {
+        playback->tick_len_error -= 1<<16;
         tick_buffer_len += 1;
     }
 
@@ -345,8 +315,8 @@ void process_tick(void) {
         tick_buffer[i].r = 0;
     }
 
-    for (int i = 0; i < NUM_CHANNELS; i++)
-        process_tick_channel(&channels[i]);
+    for (int i = 0; i < playback->num_channels; i++)
+        process_tick_channel(&playback->channels[i]);
 }
 
 
