@@ -9,7 +9,6 @@ void gui(SongPlayback * playback) {
     ImGui::SetNextWindowSize(ImVec2(640, 480));
     ImGui::Begin("chromatracker", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
 
-    const float my_values[] = { 0.2f, 0.1f, 1.0f, 0.5f, 0.9f, 2.2f };
     ImGui::PlotLines("Wave", (float *)tick_buffer, tick_buffer_len * 2, 0, NULL, -1.0, 1.0, ImVec2(200, 150));
 
     ImGui::Text("Page: %d", playback->current_page);
@@ -32,12 +31,15 @@ void gui(SongPlayback * playback) {
         ChannelPlayback * channel = playback->channels + i;
         ImGui::Text("Channel %d", i);
         ImGui::Text("State: %d", channel->note_state);
-        float volume = channel->volume;
-        ImGui::SliderFloat("Volume", &volume, 0.0, 1.0, "");
+        ImGui::ProgressBar(channel->volume);
         ImGui::Text("Rate 0x%X", channel->playback_rate);
         int wave_len = 0;
-        if (channel->instrument)
+        float * wave = NULL;
+        if (channel->instrument) {
             wave_len = channel->instrument->wave_len;
+            wave = (float *)channel->instrument->wave;
+        }
+        ImGui::PlotLines("", wave, wave_len * 2, 0, NULL, -1.0, 1.0, ImVec2(0, 60));
         int sample_pos = channel->playback_pos >> 16;
         ImGui::SliderInt("Sample", &sample_pos, 0, wave_len, "%d");
         ImGui::Text("Control: %d", channel->control_command >> 12);
