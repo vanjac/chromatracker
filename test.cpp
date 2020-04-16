@@ -81,8 +81,13 @@ int main(int argv, char ** argc) {
         SDL_Quit();
         return 1;
     }
+    SDL_GL_SetSwapInterval(1); // Enable vsync
 
-    gl3wInit();
+    if (gl3wInit()) {
+        printf("Couldn't load OpenGL!\n");
+        SDL_Quit();
+        return 1;
+    }
 
     // https://github.com/ocornut/imgui/blob/master/examples/example_sdl_opengl3/main.cpp
     // Setup Dear ImGui context
