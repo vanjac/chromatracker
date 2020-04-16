@@ -59,9 +59,20 @@ int main(int argv, char ** argc) {
     SDL_Window * window = SDL_CreateWindow("chromatracker",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         640, 480,
-        0);
-    if (window == NULL) {
+        SDL_WINDOW_OPENGL);
+    if (!window) {
         printf("Couldn't create window: %s\n", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                        SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GLContext context = SDL_GL_CreateContext(window);
+    if (!context) {
+        printf("Couldn't create OpenGL context: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
     }
@@ -127,6 +138,7 @@ int main(int argv, char ** argc) {
                 }
             }
         }
+        SDL_GL_SwapWindow(window);
     }
     printf("no\n");
     // stop callbacks
