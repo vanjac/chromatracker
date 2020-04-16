@@ -1,5 +1,9 @@
 #include <SDL.h>
+#include <GL/gl3w.h> 
 #include <stdio.h>
+#include "imgui.h"
+#include "imgui_impl_sdl.h"
+#include "imgui_impl_opengl3.h"
 
 #include "chroma.h"
 #include "pattern.h"
@@ -7,6 +11,7 @@
 #include "instrument.h"
 #include "song.h"
 #include "load_mod.h"
+#include "guimain.h"
 
 #define OUT_FREQ 48000
 
@@ -66,16 +71,31 @@ int main(int argv, char ** argc) {
         return 1;
     }
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
-                        SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-    SDL_GLContext context = SDL_GL_CreateContext(window);
-    if (!context) {
+    SDL_GLContext gl_context = SDL_GL_CreateContext(window);
+    if (!gl_context) {
         printf("Couldn't create OpenGL context: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
     }
+
+    gl3wInit();
+
+    // https://github.com/ocornut/imgui/blob/master/examples/example_sdl_opengl3/main.cpp
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+    // Setup Platform/Renderer bindings
+    ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
+    ImGui_ImplOpenGL3_Init("#version 130");
+
 
     SDL_AudioSpec spec;
     spec.freq = OUT_FREQ;
@@ -105,6 +125,7 @@ int main(int argv, char ** argc) {
     SDL_Event event;
     while (running) {
         while (SDL_PollEvent(&event)) {
+            ImGui_ImplSDL2_ProcessEvent(&event);
             int time_offset = SDL_GetTicks() - audio_callback_time;
             int tick_delay = ((OUT_FREQ * time_offset / 1000) << 16) / tick_len;
 
@@ -138,8 +159,19 @@ int main(int argv, char ** argc) {
                 }
             }
         }
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL2_NewFrame(window);
+        ImGui::NewFrame();
+        gui();
+        ImGui::Render();
+        glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+        glClearColor(0.0, 0.0, 0.0, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         SDL_GL_SwapWindow(window);
     }
+
     printf("no\n");
     // stop callbacks
     SDL_PauseAudioDevice(device, 1);
