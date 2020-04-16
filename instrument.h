@@ -5,12 +5,15 @@
 
 #define MAX_SLICES 100
 
+typedef enum {SMP_NORMAL, SMP_LOOP, SMP_SUSTAIN} PlaybackMode;
+typedef enum {LOOP_FORWARD, LOOP_PINGPONG} LoopType;
+
 typedef struct {
     Sample * wave; // TODO allow mono
     int wave_len;
     float c5_freq;
-    enum {SMP_NORMAL, SMP_LOOP, SMP_SUSTAIN} playback_mode;
-    enum {LOOP_FORWARD, LOOP_PINGPONG} loop_type;
+    PlaybackMode playback_mode;
+    LoopType loop_type;
     int loop_start, loop_end;
     int num_slices;
     int slices[MAX_SLICES];

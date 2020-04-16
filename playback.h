@@ -10,11 +10,13 @@
 
 float note_rate(int note);
 
+typedef enum {PLAY_OFF, PLAY_ON, PLAY_RELEASE} NoteState;
+
 typedef struct {
     InstSample * instrument;
     Sint32 playback_rate; // fp 16.16 sample rate
     Sint64 playback_pos; // fp 32.16 sample num
-    enum {PLAY_OFF, PLAY_ON, PLAY_RELEASE} note_state;
+    NoteState note_state;
     float volume;
 
     Uint16 control_command;

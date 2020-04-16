@@ -39,7 +39,7 @@ static Sint8 volume_to_velocity(int volume);
 static Sint8 velocity_slide_units(int volume_slide);
 static int sample_add_slice(InstSample * sample, int slice_point);
 
-void load_mod(char * filename, Song * song) {
+void load_mod(const char * filename, Song * song) {
     // http://coppershade.org/articles/More!/Topics/Protracker_File_Format/
     current_song = song;
     init_song(song);
@@ -51,7 +51,7 @@ void load_mod(char * filename, Song * song) {
     }
 
     song->num_tracks = song->alloc_tracks = NUM_TRACKS;
-    song->tracks = malloc(song->alloc_tracks * sizeof(Track));
+    song->tracks = (Track *)malloc(song->alloc_tracks * sizeof(Track));
     for (int i = 0; i < NUM_TRACKS; i++)
         init_track(&song->tracks[i]);
 
@@ -83,7 +83,7 @@ void load_mod(char * filename, Song * song) {
     int wave_pos = pattern_size * (max_pattern + 1) + 1084;
     for (int i = 0; i < NUM_SAMPLES; i++) {
         SDL_RWseek(file, 20 + 30 * i, RW_SEEK_SET);
-        InstSample * sample = malloc(sizeof(InstSample));
+        InstSample * sample = (InstSample *)malloc(sizeof(InstSample));
         init_inst_sample(sample);
         int sample_num = i + 1; // sample numbers start at 1
         sample_info[sample_num].inst_id = sample_num; // TODO
@@ -131,7 +131,7 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
     SDL_RWseek(file, wave_start, RW_SEEK_SET);
     SDL_RWread(file, wave8, sample->wave_len, 1);
 
-    Sample * wave = malloc(sample->wave_len * sizeof(Sample));
+    Sample * wave = (Sample *)malloc(sample->wave_len * sizeof(Sample));
     sample->wave = wave;
     for (int i = 0; i < sample->wave_len; i++) {
         float v = wave8[i] / 128.0;
@@ -155,7 +155,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     */
 
     pattern->length = PATTERN_LEN * TICKS_PER_ROW;
-    pattern->events = malloc(PATTERN_LEN * sizeof(Event));
+    pattern->events = (Event *)malloc(PATTERN_LEN * sizeof(Event));
     pattern->alloc_events = PATTERN_LEN;
     pattern->num_events = 0;
 
@@ -171,7 +171,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         int effect = bytes[2] & 0x0F;
         int params = bytes[3];
 
-        Event event = {i * TICKS_PER_ROW, 0, NO_PITCH, NO_VELOCITY, 0};
+        Event event = {(Uint16)(i * TICKS_PER_ROW), 0, NO_PITCH, NO_VELOCITY, 0};
 
         if (effect != prev_effect || params != prev_params) {
             int slice_point;
@@ -204,6 +204,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                     event.velocity = volume_to_velocity(params);
                     break;
                 case 0xD: // pattern break
+                    // TODO jump to row
                     // find each page that uses this pattern
                     for (int i = 0; i < current_song->num_pages; i++) {
                         if (current_song->tracks[0].pages[i] == pattern_num) {

@@ -5,8 +5,10 @@
 #include "instrument.h"
 #include "pattern.h"
 
+typedef enum {ID_EMPTY=0, ID_INSTRUMENT, ID_PATTERN} IDEntryType;
+
 typedef struct {
-    enum {ID_EMPTY=0, ID_INSTRUMENT, ID_PATTERN} type;
+    IDEntryType type;
     union {
         void * any;
         InstSample * instrument;

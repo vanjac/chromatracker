@@ -1,4 +1,4 @@
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include <stdio.h>
 
 #include "chroma.h"
@@ -32,7 +32,7 @@ volatile Uint32 audio_callback_time;
 #define NUM_KEYS 32
 ChannelPlayback * keyboard_instruments[NUM_KEYS];
 
-int note_keymap(SDL_Keycode key);
+Sint8 note_keymap(SDL_Keycode key);
 Sint32 calc_playback_rate(int out_freq, float c5_freq, float rate);
 ChannelPlayback * find_empty_channel(void);
 void callback(void * userdata, Uint8 * stream, int len);
@@ -90,7 +90,7 @@ int main(int argv, char ** argc) {
         keyboard_instruments[i] = 0;
 
     int running = 1;
-    int inst_select = 1;
+    Uint16 inst_select = 1;
     SDL_Event event;
     while (running) {
         while (SDL_PollEvent(&event)) {
@@ -100,20 +100,20 @@ int main(int argv, char ** argc) {
             if (event.type == SDL_QUIT)
                 running = 0;
             if (event.type == SDL_KEYDOWN) {
-                int key = note_keymap(event.key.keysym.sym);
+                Sint8 key = note_keymap(event.key.keysym.sym);
                 if (key >= 0 && !keyboard_instruments[key]) {
                     ChannelPlayback * channel = find_empty_channel();
                     // tick time: tick_len / spec.freq
-                    Event key_event = {0, inst_select, key + 5*12, 100, 0};
+                    Event key_event = {0, inst_select, (Sint8)(key + 5*12), 100, 0};
                     process_event(key_event, channel, tick_delay);
                     keyboard_instruments[key] = channel;
                 } else {
                     if (event.key.keysym.sym == SDLK_EQUALS) {
                         inst_select++;
-                        printf("instrument %d\n", inst_select);
+                        printf("instrument %hu\n", inst_select);
                     } else if (event.key.keysym.sym == SDLK_MINUS) {
                         inst_select--;
-                        printf("instrument %d\n", inst_select);
+                        printf("instrument %hu\n", inst_select);
                     }
                 }
             }
@@ -140,7 +140,7 @@ int main(int argv, char ** argc) {
 }
 
 
-int note_keymap(SDL_Keycode key) {
+Sint8 note_keymap(SDL_Keycode key) {
     switch(key) {
         case SDLK_z:
             return 0;
