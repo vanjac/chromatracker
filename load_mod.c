@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <math.h>
 
 #include "song.h"
 #include "instrument.h"
@@ -260,13 +261,13 @@ static int period_to_pitch(int period, int sample_num) {
 }
 
 static Sint8 volume_to_velocity(int volume) {
-    return (Sint8)(volume * 100.0 / 64.0);
+    return (Sint8)roundf(volume * 100.0 / 64.0);
 }
 
 static Sint8 velocity_slide_units(int volume_slide) {
     // * 100 / 64 * 5 / 6 * 3
     // TODO reorder??
-    return volume_slide * 100.0 / 64.0 * (MOD_TICKS_PER_ROW - 1) / MOD_TICKS_PER_ROW * 3.0;
+    return (Sint8)roundf(volume_slide * 100.0 / 64.0 * (MOD_TICKS_PER_ROW - 1) / MOD_TICKS_PER_ROW * 3.0);
 }
 
 static int sample_add_slice(InstSample * sample, int slice_point) {
