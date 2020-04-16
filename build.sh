@@ -1,1 +1,4 @@
-gcc -g `sdl2-config --cflags` chroma.c instrument.c pattern.c song.c playback.c load_mod.c test.c -lSDL2
+g++ -g `sdl2-config --cflags` -Iimgui -Iimgui/examples -Iimgui/examples/libs/gl3w \
+    chroma.c instrument.c pattern.c song.c playback.c load_mod.c guimain.cpp test.cpp \
+    imgui/imgui*.cpp imgui/examples/imgui_impl_opengl3.cpp imgui/examples/imgui_impl_sdl.cpp imgui/examples/libs/gl3w/GL/gl3w.c \
+    -lSDL2 -lGL -ldl
