@@ -34,7 +34,7 @@ typedef struct {
     Song * song;
 
     int current_page;
-    int current_page_ticks;
+    int current_page_tick;
 
     int out_freq;
 

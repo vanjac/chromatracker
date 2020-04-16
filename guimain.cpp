@@ -1,35 +1,50 @@
 #include "imgui.h"
+#include "playback.h"
 
-bool my_tool_active;
-float my_color[4];
+extern Sample tick_buffer[1024];
+extern int tick_buffer_len;
 
-void gui(void) {
-    // Create a window called "My First Tool", with a menu bar.
-    ImGui::Begin("My First Tool", &my_tool_active, ImGuiWindowFlags_MenuBar);
-    if (ImGui::BeginMenuBar())
-    {
-        if (ImGui::BeginMenu("File"))
-        {
-            if (ImGui::MenuItem("Open..", "Ctrl+O")) { /* Do stuff */ }
-            if (ImGui::MenuItem("Save", "Ctrl+S"))   { /* Do stuff */ }
-            if (ImGui::MenuItem("Close", "Ctrl+W"))  { my_tool_active = false; }
-            ImGui::EndMenu();
-        }
-        ImGui::EndMenuBar();
+void gui(SongPlayback * playback) {
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(640, 480));
+    ImGui::Begin("chromatracker", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
+
+    const float my_values[] = { 0.2f, 0.1f, 1.0f, 0.5f, 0.9f, 2.2f };
+    ImGui::PlotLines("Wave", (float *)tick_buffer, tick_buffer_len * 2, 0, NULL, -1.0, 1.0, ImVec2(200, 150));
+
+    ImGui::Text("Page: %d", playback->current_page);
+    ImGui::Text("Page tick: 0x%X", playback->current_page_tick);
+
+    ImGui::Columns(playback->num_tracks);
+    ImGui::Separator();
+    for (int i = 0; i < playback->num_tracks; i++) {
+        TrackPlayback * track = playback->tracks + i;
+        ImGui::Text("Track %d", i);
+        ImGui::Text("Pattern: %d", playback->song->tracks[i].pages[playback->current_page]);
+        ImGui::Text("Pattern tick: 0x%X", track->pattern_tick);
+        ImGui::Text("Event: %d", track->event_i);
+        ImGui::NextColumn();
     }
 
-    // Edit a color (stored as ~4 floats)
-    ImGui::ColorEdit4("Color", my_color);
+    ImGui::Columns(playback->num_channels);
+    ImGui::Separator();
+    for (int i = 0; i < playback->num_channels; i++) {
+        ChannelPlayback * channel = playback->channels + i;
+        ImGui::Text("Channel %d", i);
+        ImGui::Text("State: %d", channel->note_state);
+        float volume = channel->volume;
+        ImGui::SliderFloat("Volume", &volume, 0.0, 1.0, "");
+        ImGui::Text("Rate 0x%X", channel->playback_rate);
+        int wave_len = 0;
+        if (channel->instrument)
+            wave_len = channel->instrument->wave_len;
+        int sample_pos = channel->playback_pos >> 16;
+        ImGui::SliderInt("Sample", &sample_pos, 0, wave_len, "%d");
+        ImGui::Text("Control: %d", channel->control_command >> 12);
+        ImGui::NextColumn();
+    }
+    ImGui::Columns(1);
+    ImGui::Separator();
 
-    // Plot some values
-    const float my_values[] = { 0.2f, 0.1f, 1.0f, 0.5f, 0.9f, 2.2f };
-    ImGui::PlotLines("Frame Times", my_values, IM_ARRAYSIZE(my_values));
-
-    // Display contents in a scrolling region
-    ImGui::TextColored(ImVec4(1,1,0,1), "Important Stuff");
-    ImGui::BeginChild("Scrolling");
-    for (int n = 0; n < 50; n++)
-        ImGui::Text("%04d: Some text", n);
-    ImGui::EndChild();
     ImGui::End();
 }

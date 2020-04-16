@@ -143,7 +143,7 @@ int main(int argv, char ** argc) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame(window);
         ImGui::NewFrame();
-        gui();
+        gui(&playback);
         ImGui::Render();
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
         glClearColor(0.0, 0.0, 0.0, 1.0);

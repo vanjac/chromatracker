@@ -39,7 +39,7 @@ void init_song_playback(SongPlayback * playback, Song * song, int out_freq) {
     playback->song = song;
 
     playback->current_page = 0;
-    playback->current_page_ticks = 0;
+    playback->current_page_tick = 0;
 
     playback->tick_len = 120<<16; // 125 bpm TODO
     playback->tick_len_error = 0;
@@ -75,7 +75,7 @@ void set_playback_page(SongPlayback * playback, int page) {
     Song * song = playback->song;
     page %= song->num_pages;
     playback->current_page = page;
-    playback->current_page_ticks = 0;
+    playback->current_page_tick = 0;
     for (int i = 0; i < playback->num_tracks; i++) {
         TrackPlayback * track = &playback->tracks[i];
         int pattern_num = song->tracks[i].pages[page];
@@ -93,10 +93,10 @@ void set_playback_page(SongPlayback * playback, int page) {
 int process_tick(SongPlayback * playback, Sample * tick_buffer) {
     // process page
     Song * song = playback->song;
-    if (playback->current_page_ticks >= song->page_lengths[playback->current_page]) {
+    if (playback->current_page_tick >= song->page_lengths[playback->current_page]) {
         set_playback_page(playback, playback->current_page + 1);
     }
-    playback->current_page_ticks++;
+    playback->current_page_tick++;
 
     // process events
     for (int i = 0; i < playback->num_tracks; i++)
