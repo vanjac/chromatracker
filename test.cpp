@@ -430,8 +430,6 @@ void process_tick_channel(ChannelPlayback * c) {
 
 void process_event(Event event, ChannelPlayback * channel, int tick_delay) {
     // TODO use tick delay!!
-    float rate = note_rate(event.pitch);
-
     int inst_col = event.inst_control & INST_MASK;
     if (inst_col == NOTE_CUT) {
         channel->note_state = PLAY_OFF;
@@ -446,8 +444,10 @@ void process_event(Event event, ChannelPlayback * channel, int tick_delay) {
             }
         }
         
-        if (event.pitch != NO_PITCH && channel->instrument)
+        if (event.pitch != NO_PITCH && channel->instrument) {
+            float rate = note_rate(event.pitch);
             channel->playback_rate = calc_playback_rate(OUT_FREQ, channel->instrument->c5_freq, rate);
+        }
         if (event.velocity != NO_VELOCITY)
             channel->volume = event.velocity / 100.0;
 
