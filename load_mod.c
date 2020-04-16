@@ -162,7 +162,6 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     int prev_effect = -1; // always reset at start
     int prev_params = -1;
     int sample_num_memory = 0;
-    int velocity_memory = NO_VELOCITY;
     for (int i = 0; i < PATTERN_LEN; i++) {
         Uint8 bytes[EVENT_SIZE];
         SDL_RWread(file, bytes, 1, EVENT_SIZE);
@@ -171,33 +170,33 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         int effect = bytes[2] & 0x0F;
         int params = bytes[3];
 
-        Event event = {(Uint16)(i * TICKS_PER_ROW), 0, NO_PITCH, NO_VELOCITY, 0};
+        Event event = {(Uint16)(i * TICKS_PER_ROW), NO_ID, NO_PITCH, NO_VELOCITY, NO_ID};
 
         if (effect != prev_effect || params != prev_params) {
             int slice_point;
             switch (effect) {
                 case 0x0: // clear
                     event.inst_control = CTL_VEL_DOWN;
-                    event.param = 0;
+                    event.param = PARAM_IS_NUM; // zero
                     break;
                 case 0x9: // sample offset
                     slice_point = params * 256;
                     // search for existing slice point
                     if (sample_num) {
                         event.inst_control = CTL_SLICE;
-                        event.param = sample_add_slice(sample_info[sample_num].sample, slice_point);
+                        event.param = PARAM_IS_NUM | sample_add_slice(sample_info[sample_num].sample, slice_point);
                     } else if (sample_num_memory) {
                         event.inst_control = CTL_SLICE;
-                        event.param = sample_add_slice(sample_info[sample_num_memory].sample, slice_point);
+                        event.param = PARAM_IS_NUM | sample_add_slice(sample_info[sample_num_memory].sample, slice_point);
                     }
                     break;
                 case 0xA: // volume slide
                     if (params & 0xF0) {
                         event.inst_control = CTL_VEL_UP;
-                        event.param = velocity_slide_units(params >> 4);
+                        event.param = PARAM_IS_NUM | velocity_slide_units(params >> 4);
                     } else {
                         event.inst_control = CTL_VEL_DOWN;
-                        event.param = velocity_slide_units(params & 0x0F);
+                        event.param = PARAM_IS_NUM | velocity_slide_units(params & 0x0F);
                     }
                     break;
                 case 0xC: // volume set
@@ -220,13 +219,12 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         if (period != 0 && (sample_num || sample_num_memory)) {
             // note on
             if (!sample_num) {
-                // recall previous settings
                 sample_num = sample_num_memory;
+                // use previous velocity
+            } else {
                 if (event.velocity == NO_VELOCITY)
-                    event.velocity = velocity_memory;
+                    event.velocity = volume_to_velocity(sample_info[sample_num].default_volume);
             }
-            if (event.velocity == NO_VELOCITY)
-                event.velocity = volume_to_velocity(sample_info[sample_num].default_volume);
 
             if (sample_num)
                 event.inst_control |= sample_info[sample_num].inst_id;
@@ -242,12 +240,6 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
 
         if (sample_num)
             sample_num_memory = sample_num;
-        if (event.velocity != NO_VELOCITY)
-            velocity_memory = event.velocity;
-        if ((event.inst_control & CONTROL_MASK) == CTL_VEL_UP)
-            velocity_memory += event.param * TICKS_PER_ROW / 24;
-        else if ((event.inst_control & CONTROL_MASK) == CTL_VEL_DOWN)
-            velocity_memory -= event.param * TICKS_PER_ROW / 24;
 
         // skip other tracks to next row
         SDL_RWseek(file, (NUM_TRACKS - 1) * EVENT_SIZE, RW_SEEK_CUR);

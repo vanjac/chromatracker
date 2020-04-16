@@ -452,16 +452,20 @@ void process_event(Event event, ChannelPlayback * channel, int tick_delay) {
             channel->volume = event.velocity / 100.0;
 
         channel->control_command = event.inst_control & CONTROL_MASK;
+        Uint16 numeric = event.param & PARAM_NUM_MASK;
         switch (channel->control_command & ~CTL_MODULATION) {
             case CTL_VEL_UP:
-                channel->ctl_vel_up = event.param;
+                if (event.param & PARAM_IS_NUM)
+                    channel->ctl_vel_up = numeric;
                 break;
             case CTL_VEL_DOWN:
-                channel->ctl_vel_down = event.param;
+                if (event.param & PARAM_IS_NUM)
+                    channel->ctl_vel_down = numeric;
                 break;
             case CTL_SLICE:
-                if (channel->instrument && event.param < channel->instrument->num_slices)
-                    channel->playback_pos = (Sint64)channel->instrument->slices[event.param] << 16;
+                if ((event.param & PARAM_IS_NUM) && channel->instrument
+                        && numeric < channel->instrument->num_slices)
+                    channel->playback_pos = (Sint64)channel->instrument->slices[numeric] << 16;
                 break;
         }
     }

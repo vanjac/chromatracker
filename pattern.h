@@ -27,8 +27,11 @@
 #define CTL_SLICE       0x8000
 #define CTL_FINETUNE    0x9000
 
-#define NO_PITCH -1
-#define NO_VELOCITY -1
+#define NO_PITCH ((Sint8)-1)
+#define NO_VELOCITY ((Sint8)-1)
+
+#define PARAM_IS_NUM   (1<<11) // specifies that param value is numeric (not ID)
+#define PARAM_NUM_MASK  0x7F
 
 typedef struct {
     Uint16 time; // in ticks
