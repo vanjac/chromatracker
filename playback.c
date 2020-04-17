@@ -6,22 +6,17 @@
 // num percentage points per 24 ticks
 #define VELOCITY_SLIDE_SCALE (1.0 / 100.0 / 24.0)
 
-static float note_rate(int note);
 static void set_playback_page(SongPlayback * playback, int page);
 static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
 static void process_tick_channel(ChannelPlayback * c, Sample * tick_buffer, int tick_buffer_len);
-static Sint32 calc_playback_rate(int out_freq, float c5_freq, float rate);
-
-float note_rate(int note) {
-    // TODO slow?
-    return exp2f((note - MIDDLE_C) / 12.0);
-}
+static Sint32 calc_playback_rate(int out_freq, float c5_freq, int note);
 
 void init_channel_playback(ChannelPlayback * channel) {
     channel->instrument = NULL;
+    channel->note_state = PLAY_OFF;
+    channel->pitch_cents = 0;
     channel->playback_rate = 0;
     channel->playback_pos = 0;
-    channel->note_state = PLAY_OFF;
     channel->volume = 1.0;
     channel->control_command = NO_ID;
     channel->ctl_vel_slide = 0.0;
@@ -219,8 +214,8 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
         }
         
         if (event.pitch != NO_PITCH && channel->instrument) {
-            float rate = note_rate(event.pitch);
-            channel->playback_rate = calc_playback_rate(playback->out_freq, channel->instrument->c5_freq, rate);
+            channel->pitch_cents = event.pitch * 100;
+            channel->playback_rate = calc_playback_rate(playback->out_freq, channel->instrument->c5_freq, channel->pitch_cents);
         }
         if (event.velocity != NO_VELOCITY)
             channel->volume = event.velocity / 100.0;
@@ -253,6 +248,7 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
 }
 
 
-Sint32 calc_playback_rate(int out_freq, float c5_freq, float rate) {
-    return (Sint32)roundf(rate * c5_freq / out_freq * 65536);
+Sint32 calc_playback_rate(int out_freq, float c5_freq, int note) {
+    float note_rate = exp2f((note - MIDDLE_C*100) / 1200.0);
+    return (Sint32)roundf(note_rate * c5_freq / out_freq * 65536);
 }

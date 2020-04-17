@@ -32,6 +32,7 @@ void gui(SongPlayback * playback) {
         ImGui::Text("Channel %d", i);
         ImGui::Text("State: %d", channel->note_state);
         ImGui::ProgressBar(channel->volume);
+        ImGui::Text("Pitch %f", channel->pitch_cents / 100.0);
         ImGui::Text("Rate 0x%X", channel->playback_rate);
         int wave_len = 0;
         float * wave = NULL;
