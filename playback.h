@@ -12,7 +12,7 @@ typedef struct {
     InstSample * instrument;
     NoteState note_state;
 
-    int pitch_cents; // pitch * 100 cents
+    float pitch_octaves; // pitch, 1/12.0 = 1 semitone
     Sint32 playback_rate; // fp 16.16 sample rate, calculated from pitch_cents
     Sint64 playback_pos; // fp 32.16 sample num
 

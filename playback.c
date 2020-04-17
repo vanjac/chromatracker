@@ -9,12 +9,12 @@
 static void set_playback_page(SongPlayback * playback, int page);
 static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
 static void process_tick_channel(ChannelPlayback * c, Sample * tick_buffer, int tick_buffer_len);
-static Sint32 calc_playback_rate(int out_freq, float c5_freq, int note);
+static Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_octaves);
 
 void init_channel_playback(ChannelPlayback * channel) {
     channel->instrument = NULL;
     channel->note_state = PLAY_OFF;
-    channel->pitch_cents = 0;
+    channel->pitch_octaves = 0.0;
     channel->playback_rate = 0;
     channel->playback_pos = 0;
     channel->volume = 1.0;
@@ -214,8 +214,8 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
         }
         
         if (event.pitch != NO_PITCH && channel->instrument) {
-            channel->pitch_cents = event.pitch * 100;
-            channel->playback_rate = calc_playback_rate(playback->out_freq, channel->instrument->c5_freq, channel->pitch_cents);
+            channel->pitch_octaves = event.pitch / 12.0;
+            channel->playback_rate = calc_playback_rate(playback->out_freq, channel->instrument->c5_freq, channel->pitch_octaves);
         }
         if (event.velocity != NO_VELOCITY)
             channel->volume = event.velocity / 100.0;
@@ -248,7 +248,7 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
 }
 
 
-Sint32 calc_playback_rate(int out_freq, float c5_freq, int note) {
-    float note_rate = exp2f((note - MIDDLE_C*100) / 1200.0);
+Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_octaves) {
+    float note_rate = exp2f(pitch_octaves - (MIDDLE_C/12.0));
     return (Sint32)roundf(note_rate * c5_freq / out_freq * 65536);
 }
