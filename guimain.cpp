@@ -42,7 +42,7 @@ void gui(SongPlayback * playback) {
         ImGui::PlotLines("", wave, wave_len * 2, 0, NULL, -1.0, 1.0, ImVec2(0, 60));
         int sample_pos = channel->playback_pos >> 16;
         ImGui::SliderInt("Sample", &sample_pos, 0, wave_len, "%d");
-        ImGui::Text("Control: %d", channel->control_command >> 12);
+        ImGui::Text("Control: %d", CONTROL_INDEX(channel->control_command));
         ImGui::NextColumn();
     }
     ImGui::Columns(1);

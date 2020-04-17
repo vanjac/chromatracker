@@ -16,7 +16,7 @@ typedef struct {
     float volume;
 
     Uint16 control_command;
-    Uint8 ctl_vel_up, ctl_vel_down;
+    float ctl_vel_slide;
 } ChannelPlayback;
 
 void init_channel_playback(ChannelPlayback * channel);
@@ -26,6 +26,8 @@ typedef struct {
     Pattern * pattern;
     int pattern_tick;
     int event_i;
+
+    Uint8 control_memory[MAX_CONTROL_INDEX];
 } TrackPlayback;
 
 void init_track_playback(TrackPlayback * track);
@@ -52,6 +54,6 @@ void free_song_playback(SongPlayback * playback);
 
 // return tick length (num samples written to buffer)
 int process_tick(SongPlayback * playback, Sample * tick_buffer);
-void process_event(Event event, SongPlayback * playback, ChannelPlayback * channel, int tick_delay);
+void process_event(Event event, SongPlayback * playback, TrackPlayback * track, int tick_delay);
 
 #endif

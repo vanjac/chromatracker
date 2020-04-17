@@ -27,10 +27,9 @@ int tick_buffer_pos = 0;
 volatile Uint32 audio_callback_time;
 
 #define NUM_KEYS 32
-ChannelPlayback * keyboard_instruments[NUM_KEYS];
+int key_down[NUM_KEYS];
 
 Sint8 note_keymap(SDL_Keycode key);
-ChannelPlayback * find_empty_channel(SongPlayback * playback);
 void callback(void * userdata, Uint8 * stream, int len);
 
 
@@ -98,7 +97,7 @@ int main(int argv, char ** argc) {
     SDL_PauseAudioDevice(device, 0); // audio devices start paused
 
     for (int i = 0; i < NUM_KEYS; i++)
-        keyboard_instruments[i] = 0;
+        key_down[i] = 0;
 
     int running = 1;
     Uint16 inst_select = 1;
@@ -113,12 +112,12 @@ int main(int argv, char ** argc) {
                 running = 0;
             if (event.type == SDL_KEYDOWN) {
                 Sint8 key = note_keymap(event.key.keysym.sym);
-                if (key >= 0 && !keyboard_instruments[key]) {
-                    ChannelPlayback * channel = find_empty_channel(&playback);
+                if (key >= 0 && !key_down[key]) {
                     // tick time: tick_len / spec.freq
                     Event key_event = {0, inst_select, (Sint8)(key + 5*12), 100, 0};
-                    process_event(key_event, &playback, channel, tick_delay);
-                    keyboard_instruments[key] = channel;
+                    // TODO choose track based on selection
+                    process_event(key_event, &playback, playback.tracks + 0, tick_delay);
+                    key_down[key] = 1;
                 } else {
                     if (event.key.keysym.sym == SDLK_EQUALS) {
                         inst_select++;
@@ -131,11 +130,10 @@ int main(int argv, char ** argc) {
             }
             if (event.type == SDL_KEYUP) {
                 int key = note_keymap(event.key.keysym.sym);
-                if (key >= 0 && keyboard_instruments[key]) {
-                    ChannelPlayback * channel = keyboard_instruments[key];
+                if (key >= 0 && key_down[key]) {
                     Event key_event = {0, NOTE_CUT, 0, 0, 0};
-                    process_event(key_event, &playback, channel, tick_delay);
-                    keyboard_instruments[key] = 0;
+                    process_event(key_event, &playback, playback.tracks + 0, tick_delay);
+                    key_down[key] = 0;
                 }
             }
         }
@@ -233,21 +231,6 @@ Sint8 note_keymap(SDL_Keycode key) {
         default:
             return -1;
     }
-}
-
-
-ChannelPlayback * find_empty_channel(SongPlayback * playback) {
-    for (int i = 0; i < playback->num_channels; i++) {
-        ChannelPlayback * c = &playback->channels[i];
-        if (c->note_state == PLAY_OFF)
-            return c;
-    }
-    for (int i = 0; i < playback->num_channels; i++) {
-        ChannelPlayback * c = &playback->channels[i];
-        if (c->note_state == PLAY_RELEASE)
-            return c;
-    }
-    return &playback->channels[0]; // TODO
 }
 
 

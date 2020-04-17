@@ -24,8 +24,7 @@ void init_channel_playback(ChannelPlayback * channel) {
     channel->note_state = PLAY_OFF;
     channel->volume = 1.0;
     channel->control_command = NO_ID;
-    channel->ctl_vel_up = 0;
-    channel->ctl_vel_down = 0;
+    channel->ctl_vel_slide = 0.0;
 }
 
 void init_track_playback(TrackPlayback * track) {
@@ -33,6 +32,10 @@ void init_track_playback(TrackPlayback * track) {
     track->pattern = NULL;
     track->pattern_tick = 0;
     track->event_i = 0;
+
+    for (int i = 0; i < MAX_CONTROL_INDEX; i++)
+        track->control_memory[i] = 0;
+    track->control_memory[CONTROL_INDEX(CTL_TUNE)] = 50;
 }
 
 void init_song_playback(SongPlayback * playback, Song * song, int out_freq) {
@@ -133,9 +136,7 @@ void process_tick_track(TrackPlayback * track, SongPlayback * playback) {
         Event next_event = pattern->events[track->event_i];
         if (next_event.time == track->pattern_tick) {
             track->event_i++;
-            // play event
-            ChannelPlayback * channel = track->channel;
-            process_event(next_event, playback, channel, 0);
+            process_event(next_event, playback, track, 0);
         } else {
             break;
         }
@@ -188,21 +189,21 @@ void process_tick_channel(ChannelPlayback * c, Sample * tick_buffer, int tick_bu
 
     switch (c->control_command) {
         case CTL_VEL_UP:
-            c->volume += VELOCITY_SLIDE_SCALE * c->ctl_vel_up;
+        case CTL_VEL_DOWN:
+            c->volume += c->ctl_vel_slide;
             if (c->volume > 1.0)
                 c->volume = 1.0;
-            break;
-        case CTL_VEL_DOWN:
-            c->volume -= VELOCITY_SLIDE_SCALE * c->ctl_vel_down;
-            if (c->volume < 0.0)
+            else if (c->volume < 0.0)
                 c->volume = 0.0;
             break;
     }
 }
 
 
-void process_event(Event event, SongPlayback * playback, ChannelPlayback * channel, int tick_delay) {
+void process_event(Event event, SongPlayback * playback, TrackPlayback * track, int tick_delay) {
     // TODO use tick delay!!
+    ChannelPlayback * channel = track->channel;
+
     int inst_col = event.inst_control & INST_MASK;
     if (inst_col == NOTE_CUT) {
         channel->note_state = PLAY_OFF;
@@ -224,20 +225,27 @@ void process_event(Event event, SongPlayback * playback, ChannelPlayback * chann
         if (event.velocity != NO_VELOCITY)
             channel->volume = event.velocity / 100.0;
 
-        channel->control_command = event.inst_control & CONTROL_MASK;
-        Uint16 numeric = event.param & PARAM_NUM_MASK;
+        Uint16 command = event.inst_control & CONTROL_MASK;
+        channel->control_command = command;
+        Uint16 numeric;
+        if (event.param & PARAM_IS_NUM) {
+            // store in memory
+            numeric = event.param & PARAM_NUM_MASK;
+            track->control_memory[CONTROL_INDEX(command)] = numeric;
+        } else {
+            // recall from memory
+            numeric = track->control_memory[CONTROL_INDEX(command)];
+        }
+
         switch (channel->control_command) {
             case CTL_VEL_UP:
-                if (event.param & PARAM_IS_NUM)
-                    channel->ctl_vel_up = numeric;
+                channel->ctl_vel_slide = numeric * VELOCITY_SLIDE_SCALE;
                 break;
             case CTL_VEL_DOWN:
-                if (event.param & PARAM_IS_NUM)
-                    channel->ctl_vel_down = numeric;
+                channel->ctl_vel_slide = -numeric * VELOCITY_SLIDE_SCALE;
                 break;
             case CTL_SLICE:
-                if ((event.param & PARAM_IS_NUM) && channel->instrument
-                        && numeric < channel->instrument->num_slices)
+                if (channel->instrument && numeric < channel->instrument->num_slices)
                     channel->playback_pos = (Sint64)channel->instrument->slices[numeric] << 16;
                 break;
         }

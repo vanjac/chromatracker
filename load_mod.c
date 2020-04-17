@@ -177,6 +177,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
             int slice_point;
             switch (effect) {
                 case 0x0: // clear
+                    // TODO: only do this if rest of event is empty
                     event.inst_control = CTL_VEL_DOWN;
                     event.param = PARAM_IS_NUM; // zero
                     break;

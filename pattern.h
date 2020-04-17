@@ -5,6 +5,8 @@
 
 #define INST_MASK       0x07FF
 #define CONTROL_MASK    0xF000  // not including modulation
+#define CONTROL_INDEX(inst_control) ((inst_control) >> 12)
+#define MAX_CONTROL_INDEX 16
 
 // these go in the instrument column
 #define NOTE_RELEASE    0x07FF
