@@ -254,5 +254,5 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
 
 
 Sint32 calc_playback_rate(int out_freq, float c5_freq, float rate) {
-    return (Sint32)(rate * c5_freq / out_freq * 65536);
+    return (Sint32)roundf(rate * c5_freq / out_freq * 65536);
 }
