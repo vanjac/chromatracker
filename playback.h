@@ -19,7 +19,8 @@ typedef struct {
     float volume;
 
     Uint16 control_command;
-    float ctl_vel_slide;
+    float vel_slide, target_vel;
+    float pitch_slide, target_pitch;
 } ChannelPlayback;
 
 void init_channel_playback(ChannelPlayback * channel);

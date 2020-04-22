@@ -181,6 +181,10 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                     event.inst_control = CTL_VEL_DOWN;
                     event.param = PARAM_IS_NUM; // zero
                     break;
+                case 0x3: // tone portamento
+                    event.inst_control = CTL_PORT_NOTE;
+                    event.param = PARAM_IS_NUM | 1;
+                    break;
                 case 0x9: // sample offset
                     slice_point = params * 256;
                     // search for existing slice point
