@@ -4,7 +4,9 @@ static int id_to_index(char id[2]);
 static int alphanum_to_index(char c);
 
 Song::Song()
-: tracks(NULL), num_tracks(0), alloc_tracks(0), num_pages(0) {
+: tracks(NULL), num_tracks(0), alloc_tracks(0),
+num_pages(0)
+{
     for (int i = 0; i < MAX_INST; i++)
         inst_table[i] = NULL;
 }
