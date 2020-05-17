@@ -1,8 +1,11 @@
 #include "song.h"
 
+static int id_to_index(char id[2]);
+static int alphanum_to_index(char c);
+
 void init_song(Song * song) {
-    for (ID id = 0; id < MAX_ID; id++)
-        song->id_table[id].type = ID_EMPTY;
+    for (int i = 0; i < MAX_INST; i++)
+        song->inst_table[i] = NULL;
     song->tracks = NULL;
     song->num_tracks = song->alloc_tracks = 0;
 
@@ -10,8 +13,11 @@ void init_song(Song * song) {
 }
 
 void free_song(Song * song) {
-    for (ID id = 0; id < MAX_ID; id++) {
-        delete_id(song, id);
+    for (int i = 0; i < MAX_INST; i++) {
+        if (song->inst_table[i]) {
+            free_inst_sample(song->inst_table[i]);
+            song->inst_table[i] = NULL;
+        }
     }
 
     if (song->tracks) {
@@ -22,41 +28,31 @@ void free_song(Song * song) {
     }
 }
 
-static IDEntry * get_id_entry(Song * song, ID id) {
-    if (id >= MAX_ID)
-        return 0;
-    return &song->id_table[id];
+int id_to_index(char id[2]) {
+    int first = alphanum_to_index(id[0]);
+    int second = alphanum_to_index(id[1]);
+    if (first < 0 || second < 0)
+        return -1;
+    return first * 36 + second;
 }
 
-InstSample * get_instrument(Song * song, ID id) {
-    IDEntry * entry = get_id_entry(song, id);
-    if (entry && entry->type == ID_INSTRUMENT)
-        return entry->pointer.instrument;
-    else
+static int alphanum_to_index(char c) {
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'A' && c <= 'Z')
+        return (c - 'A') + 10;
+    return -1;
+}
+
+InstSample * get_instrument(Song * song, char id[2]) {
+    int index = id_to_index(id);
+    if (index < 0)
         return NULL;
+    return song->inst_table[index];
 }
 
-void put_instrument(Song * song, ID id, InstSample * instrument) {
-    IDEntry * entry = get_id_entry(song, id);
-    if (entry) {
-        entry->type = ID_INSTRUMENT;
-        entry->pointer.instrument = instrument;
-    }
-}
-
-void delete_id(Song * song, ID id) {
-    IDEntry * entry = get_id_entry(song, id);
-    if (!entry)
-        return;
-    if (entry->pointer.any) {
-        switch (entry->type) {
-            case ID_EMPTY:
-                break;
-            case ID_INSTRUMENT:
-                free_inst_sample(entry->pointer.instrument);
-                break;
-        }
-        free(entry->pointer.any);
-        entry->pointer.any = NULL;
-    }
+void put_instrument(Song * song, char id[2], InstSample * instrument) {
+    int index = id_to_index(id);
+    if (index >= 0)
+        song->inst_table[index] = instrument;
 }

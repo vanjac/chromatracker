@@ -8,10 +8,4 @@ typedef struct {
 } Sample;
 
 
-typedef Uint16 ID;
-
-#define MAX_ID ((26<<6) + 37)
-#define NO_ID ((ID)0)
-extern const char * id_chars;
-
 #endif

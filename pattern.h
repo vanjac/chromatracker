@@ -3,45 +3,60 @@
 
 #include "chroma.h"
 
-#define INST_MASK       0x07FF
-#define CONTROL_MASK    0xF000  // not including modulation
-#define CONTROL_INDEX(inst_control) ((inst_control) >> 12)
-#define MAX_CONTROL_INDEX 16
-
 // these go in the instrument column
-#define NOTE_RELEASE    0x07FF
-#define NOTE_CUT        0x07FE
-#define NOTE_FADE       0x07FD
+enum Events {
+    EVENT_NOTE_CHANGE       = 0,
+    EVENT_CANCEL_EFFECTS    = 'x',
+    EVENT_NOTE_OFF          = '=',
+    EVENT_NOTE_CUT          = '/',
+    EVENT_NOTE_FADE         = '~',
+    EVENT_REPLAY            = '+',
+    EVENT_COMBINE           = '<',
+    EVENT_PLAYBACK          = '#'
+};
 
-// these go in the control command column
-#define CTL_NONE        0x0000
-#define CTL_TUNE        0x1000
-#define CTL_PORT_UP     0x2000
-#define CTL_PORT_DOWN   0x3000
-#define CTL_VEL_UP      0x4000
-#define CTL_VEL_DOWN    0x5000
-#define CTL_PORT_NOTE   0x6000
-#define CTL_SLICE       0x7000
+enum Effects {
+    EFFECT_NONE             = 0,
+    EFFECT_PITCH            = 1, // pitch column only
+    EFFECT_VELOCITY         = 2, // velocity column only
 
-// can be added to any control command
-#define CTL_MODULATION  0x0800
+    EFFECT_PITCH_SLIDE_UP   = 'U',
+    EFFECT_PITCH_SLIDE_DOWN = 'D',
+    EFFECT_GLIDE            = 'G',
+    EFFECT_TUNE             = 'F',
+    EFFECT_VIBRATO          = 'V',
+    EFFECT_VEL_SLIDE_UP     = 'I',
+    EFFECT_VEL_SLIDE_DOWN   = 'O',
+    EFFECT_TREMOLO          = 'T',
+    EFFECT_PAN              = 'P',
+    EFFECT_PAN_SLIDE_LEFT   = 'L',
+    EFFECT_PAN_SLIDE_RIGHT  = 'R',
+    EFFECT_AUTO_PAN         = 'N',
+    EFFECT_SAMPLE_OFFSET    = 'S',
+    EFFECT_BACKWARDS        = 'B',
 
-#define NO_PITCH ((Sint8)-1)
-#define MIDDLE_C ((Sint8)5*12)
-#define NO_VELOCITY ((Sint8)-1)
+    // special playback events, pitch column only
+    EFFECT_TEMPO             = 3,
+    EFFECT_PAUSE             = 4,
+    EFFECT_JUMP              = 5,
+    EFFECT_REPEAT            = 6,
+    EFFECT_MASTER_VOLUME     = 7
+};
 
-#define PARAM_IS_NUM   (1<<11) // specifies that param value is numeric (not ID)
-#define PARAM_NUM_MASK  0x7F
+#define MIDDLE_C (5*12)
+#define MAX_VELOCITY 0x80
 
 typedef struct {
     Uint16 time; // in ticks
-    Uint16 inst_control;
-    Sint8 pitch;
-    Sint8 velocity; // negative is empty
-    Uint16 param;
+    char instrument[2];
+    char p_effect; // pitch column
+    Uint8 p_value;
+    char v_effect; // velocity column
+    Uint8 v_value;
 } Event;
 
 int event_is_empty(Event event);
+int instrument_is_special(Event event);
 
 typedef struct {
     Event * events;
@@ -53,13 +68,12 @@ typedef struct {
 void init_pattern(Pattern * pattern);
 void free_pattern(Pattern * pattern);
 
-#define NUM_TRACK_PATTERNS 99
+#define NUM_TRACK_PATTERNS 256
 #define MAX_PAGES 256
-#define NO_PATTERN -1
 
 typedef struct {
     Pattern patterns[NUM_TRACK_PATTERNS];
-    Sint8 pages[MAX_PAGES]; // patter number selections
+    Uint8 pages[MAX_PAGES]; // patter number selections
 } Track;
 
 void init_track(Track * track);

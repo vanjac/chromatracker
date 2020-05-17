@@ -23,9 +23,8 @@ static const Uint16 tuning0_table[NUM_TUNINGS] = {
 };
 
 typedef struct {
-    ID inst_id;
+    char inst_id[2];
     InstSample * sample;
-    Uint8 default_volume;
     Uint8 finetune;
 } ModSampleInfo;
 
@@ -36,8 +35,8 @@ static Song * current_song;
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
 static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
 static int period_to_pitch(int period, int sample_num);
-static Sint8 volume_to_velocity(int volume);
-static Sint8 velocity_slide_units(int volume_slide);
+static Uint8 volume_to_velocity(int volume);
+static Uint8 velocity_slide_units(int volume_slide);
 static int sample_add_slice(InstSample * sample, int slice_point);
 
 void load_mod(const char * filename, Song * song) {
@@ -87,10 +86,12 @@ void load_mod(const char * filename, Song * song) {
         InstSample * sample = (InstSample *)malloc(sizeof(InstSample));
         init_inst_sample(sample);
         int sample_num = i + 1; // sample numbers start at 1
-        sample_info[sample_num].inst_id = sample_num; // TODO
-        sample_info[sample_num].sample = sample;
-        wave_pos = read_sample(file, sample, &sample_info[sample_num], wave_pos);
-        put_instrument(song, sample_info[sample_num].inst_id, sample);
+        ModSampleInfo * info = &sample_info[sample_num];
+        info->inst_id[0] = '0' + (sample_num / 10);
+        info->inst_id[1] = '0' + (sample_num % 10);
+        info->sample = sample;
+        wave_pos = read_sample(file, sample, info, wave_pos);
+        put_instrument(song, info->inst_id, sample);
     }
 
     for (int i = 0; i < max_pattern + 1; i++) {
@@ -105,8 +106,6 @@ void load_mod(const char * filename, Song * song) {
 }
 
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start) {
-    init_inst_sample(sample);
-
     char sample_name[22];
     SDL_RWread(file, sample_name, sizeof(sample_name), 1);
     printf("%s\n", sample_name);
@@ -125,7 +124,7 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
         sample->loop_start = SDL_SwapBE16(word_rep_pt) * 2;
         sample->loop_end = sample->loop_start + word_rep_len * 2;
     }
-    info->default_volume = volume;
+    sample->default_velocity = volume_to_velocity(volume);
     info->finetune = finetune;
 
     static Sint8 wave8[65536 * 2];
@@ -161,7 +160,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     pattern->num_events = 0;
 
     int prev_effect = -1; // always reset at start
-    int prev_params = -1;
+    int prev_value = -1;
     int sample_num_memory = 0;
     for (int i = 0; i < PATTERN_LEN; i++) {
         Uint8 bytes[EVENT_SIZE];
@@ -169,44 +168,46 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         int period = ((bytes[0] & 0x0F) << 8) | bytes[1];
         int sample_num = (bytes[0] & 0xF0) | (bytes[2] >> 4);
         int effect = bytes[2] & 0x0F;
-        int params = bytes[3];
+        int value = bytes[3];
 
-        Event event = {(Uint16)(i * TICKS_PER_ROW), NO_ID, NO_PITCH, NO_VELOCITY, NO_ID};
+        Event event = {(Uint16)(i * TICKS_PER_ROW), {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE},
+            EFFECT_NONE, 0, EFFECT_NONE, 0};
 
-        if (effect != prev_effect || params != prev_params) {
+        if (effect != prev_effect || value != prev_value) {
             int slice_point;
             switch (effect) {
                 case 0x0: // clear
                     // TODO: only do this if rest of event is empty
-                    event.inst_control = CTL_VEL_DOWN;
-                    event.param = PARAM_IS_NUM; // zero
+                    event.instrument[0] = event.instrument[1]
+                        = EVENT_CANCEL_EFFECTS;
                     break;
                 case 0x3: // tone portamento
-                    event.inst_control = CTL_PORT_NOTE;
-                    event.param = PARAM_IS_NUM | 1;
+                    event.v_effect = EFFECT_GLIDE;
+                    event.v_value = value; // TODO
                     break;
                 case 0x9: // sample offset
-                    slice_point = params * 256;
+                    slice_point = value * 256;
                     // search for existing slice point
                     if (sample_num) {
-                        event.inst_control = CTL_SLICE;
-                        event.param = PARAM_IS_NUM | sample_add_slice(sample_info[sample_num].sample, slice_point);
+                        event.v_effect = EFFECT_SAMPLE_OFFSET;
+                        event.v_value = sample_add_slice(sample_info[sample_num].sample, slice_point);
                     } else if (sample_num_memory) {
-                        event.inst_control = CTL_SLICE;
-                        event.param = PARAM_IS_NUM | sample_add_slice(sample_info[sample_num_memory].sample, slice_point);
+                        event.v_effect = EFFECT_SAMPLE_OFFSET;
+                        event.v_value = sample_add_slice(sample_info[sample_num_memory].sample, slice_point);
                     }
                     break;
                 case 0xA: // volume slide
-                    if (params & 0xF0) {
-                        event.inst_control = CTL_VEL_UP;
-                        event.param = PARAM_IS_NUM | velocity_slide_units(params >> 4);
+                    if (value & 0xF0) {
+                        event.v_effect = EFFECT_VEL_SLIDE_UP;
+                        event.v_value = velocity_slide_units(value >> 4);
                     } else {
-                        event.inst_control = CTL_VEL_DOWN;
-                        event.param = PARAM_IS_NUM | velocity_slide_units(params & 0x0F);
+                        event.v_effect = EFFECT_VEL_SLIDE_DOWN;
+                        event.v_value = velocity_slide_units(value & 0x0F);
                     }
                     break;
                 case 0xC: // volume set
-                    event.velocity = volume_to_velocity(params);
+                    event.v_effect = EFFECT_VELOCITY;
+                    event.v_value = volume_to_velocity(value);
                     break;
                 case 0xD: // pattern break
                     // TODO jump to row
@@ -219,26 +220,32 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                     break;
             }
             prev_effect = effect;
-            prev_params = params;
+            prev_value = value;
         }
 
-        if (period != 0 && (sample_num || sample_num_memory)) {
+        if (period != 0) {
             // note on
-            if (!sample_num) {
-                sample_num = sample_num_memory;
-                // use previous velocity
+            // TODO: note change if glide effect
+            if (sample_num) {
+                ModSampleInfo * info = &sample_info[sample_num];
+                event.instrument[0] = info->inst_id[0];
+                event.instrument[1] = info->inst_id[1];
             } else {
-                if (event.velocity == NO_VELOCITY)
-                    event.velocity = volume_to_velocity(sample_info[sample_num].default_volume);
+                event.instrument[0] = event.instrument[1]
+                    = EVENT_REPLAY;
             }
 
-            if (sample_num)
-                event.inst_control |= sample_info[sample_num].inst_id;
-            event.pitch = period_to_pitch(period, sample_num);
+            event.p_effect = EFFECT_PITCH;
+            event.p_value = period_to_pitch(period, sample_num);
         } else if (sample_num) {
             // reset note velocity
-            if (event.velocity == NO_VELOCITY)
-                event.velocity = volume_to_velocity(sample_info[sample_num].default_volume);
+            if (event.v_effect != EFFECT_VELOCITY) {
+                // keep existing effect
+                event.p_effect = event.v_effect;
+                event.p_value = event.v_value;
+                event.v_effect = EFFECT_VELOCITY;
+                event.v_value = sample_info[sample_num].sample->default_velocity;
+            }
         }
 
         if (!event_is_empty(event))
@@ -255,24 +262,20 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
 
 static int period_to_pitch(int period, int sample_num) {
     // TODO binary search + different tunings
-    if (period == 0)
-        return NO_PITCH;
-    int pitch = NO_PITCH;
-    for (pitch = 0; pitch < NUM_TUNINGS; pitch++) {
+    for (int pitch = 0; pitch < NUM_TUNINGS; pitch++) {
         if (tuning0_table[pitch] == period)
-            break;
+            return pitch + 3 * 12;
     }
-    return pitch + 3 * 12;
+    return MIDDLE_C;
 }
 
-static Sint8 volume_to_velocity(int volume) {
-    return (Sint8)roundf(volume * 100.0 / 64.0);
+static Uint8 volume_to_velocity(int volume) {
+    return volume * 2;
 }
 
-static Sint8 velocity_slide_units(int volume_slide) {
-    // * 100 / 64 * 5 / 6 * 3
-    // TODO reorder??
-    return (Sint8)roundf(volume_slide * 100.0 / 64.0 * (MOD_TICKS_PER_ROW - 1) / MOD_TICKS_PER_ROW * 3.0);
+static Uint8 velocity_slide_units(int volume_slide) {
+    // TODO!
+    return volume_slide;
 }
 
 static int sample_add_slice(InstSample * sample, int slice_point) {

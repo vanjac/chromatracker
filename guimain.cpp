@@ -17,7 +17,7 @@ void gui(SongPlayback * playback) {
     ImGui::Columns(playback->num_tracks);
     ImGui::Separator();
     for (int i = 0; i < playback->num_tracks; i++) {
-        TrackPlayback * track = playback->tracks + i;
+        TrackPlayback * track = &playback->tracks[i];
         ImGui::Text("Track %d", i);
         ImGui::Text("Pattern: %d", playback->song->tracks[i].pages[playback->current_page]);
         ImGui::Text("Pattern tick: 0x%X", track->pattern_tick);
@@ -28,11 +28,11 @@ void gui(SongPlayback * playback) {
     ImGui::Columns(playback->num_channels);
     ImGui::Separator();
     for (int i = 0; i < playback->num_channels; i++) {
-        ChannelPlayback * channel = playback->channels + i;
+        ChannelPlayback * channel = &playback->channels[i];
         ImGui::Text("Channel %d", i);
         ImGui::Text("State: %d", channel->note_state);
         ImGui::ProgressBar(channel->volume);
-        ImGui::Text("Pitch %f", channel->pitch_octaves * 12.0);
+        ImGui::Text("Pitch %f", channel->pitch_semis);
         ImGui::Text("Rate 0x%X", channel->playback_rate);
         int wave_len = 0;
         float * wave = NULL;
@@ -43,7 +43,6 @@ void gui(SongPlayback * playback) {
         ImGui::PlotLines("", wave, wave_len * 2, 0, NULL, -1.0, 1.0, ImVec2(0, 60));
         int sample_pos = channel->playback_pos >> 16;
         ImGui::SliderInt("Sample", &sample_pos, 0, wave_len, "%d");
-        ImGui::Text("Control: %d", CONTROL_INDEX(channel->control_command));
         ImGui::NextColumn();
     }
     ImGui::Columns(1);

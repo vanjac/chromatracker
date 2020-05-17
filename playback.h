@@ -12,15 +12,13 @@ typedef struct {
     InstSample * instrument;
     NoteState note_state;
 
-    float pitch_octaves; // pitch, 1/12.0 = 1 semitone
-    Sint32 playback_rate; // fp 16.16 sample rate, calculated from pitch_cents
+    float pitch_semis; // pitch, 1.0 = 1 semitone
+    Sint32 playback_rate; // fp 16.16 sample rate, calculated from pitch
     Sint64 playback_pos; // fp 32.16 sample num
 
     float volume;
 
-    Uint16 control_command;
-    float vel_slide, target_vel;
-    float pitch_slide, target_pitch;
+    float vel_slide, pitch_slide;
 } ChannelPlayback;
 
 void init_channel_playback(ChannelPlayback * channel);
@@ -30,8 +28,6 @@ typedef struct {
     Pattern * pattern;
     int pattern_tick;
     int event_i;
-
-    Uint8 control_memory[MAX_CONTROL_INDEX];
 } TrackPlayback;
 
 void init_track_playback(TrackPlayback * track);

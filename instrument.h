@@ -17,6 +17,10 @@ typedef struct {
     int loop_start, loop_end;
     int num_slices;
     int slices[MAX_SLICES];
+
+    // future instrument properties
+    Uint8 default_pitch;
+    Uint8 default_velocity;
 } InstSample;
 
 void init_inst_sample(InstSample * sample);

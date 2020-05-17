@@ -5,15 +5,7 @@
 #include "instrument.h"
 #include "pattern.h"
 
-typedef enum {ID_EMPTY=0, ID_INSTRUMENT, ID_PATTERN} IDEntryType;
-
-typedef struct {
-    IDEntryType type;
-    union {
-        void * any;
-        InstSample * instrument;
-    } pointer;
-} IDEntry;
+#define MAX_INST 36 * 36
 
 typedef struct {
     Track * tracks;
@@ -23,16 +15,13 @@ typedef struct {
     int num_pages;
     int page_lengths[MAX_PAGES]; // in ticks
 
-    IDEntry id_table[MAX_ID];
+    InstSample * inst_table[MAX_INST];
 } Song;
 
 void init_song(Song * song);
 void free_song(Song * song);
 
-InstSample * get_instrument(Song * song, ID id);
-void put_instrument(Song * song, ID id, InstSample * instrument);
-
-void delete_id(Song * song, ID id);
-
+InstSample * get_instrument(Song * song, char id[2]);
+void put_instrument(Song * song, char id[2], InstSample * instrument);
 
 #endif

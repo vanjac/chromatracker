@@ -100,7 +100,7 @@ int main(int argv, char ** argc) {
         key_down[i] = 0;
 
     int running = 1;
-    Uint16 inst_select = 1;
+    char inst_select[2] = {'0', '1'};
     SDL_Event event;
     while (running) {
         while (SDL_PollEvent(&event)) {
@@ -114,24 +114,25 @@ int main(int argv, char ** argc) {
                 Sint8 key = note_keymap(event.key.keysym.sym);
                 if (key >= 0 && !key_down[key]) {
                     // tick time: tick_len / spec.freq
-                    Event key_event = {0, inst_select, (Sint8)(key + 5*12), 100, 0};
+                    Event key_event = {0, {inst_select[0], inst_select[1]},
+                        EFFECT_PITCH, (Uint8)(key + MIDDLE_C), EFFECT_VELOCITY, MAX_VELOCITY};
                     // TODO choose track based on selection
                     process_event(key_event, &playback, playback.tracks + 0, tick_delay);
                     key_down[key] = 1;
                 } else {
                     if (event.key.keysym.sym == SDLK_EQUALS) {
-                        inst_select++;
-                        printf("instrument %hu\n", inst_select);
+                        inst_select[1]++;
+                        printf("instrument %c%c\n", inst_select[0], inst_select[1]);
                     } else if (event.key.keysym.sym == SDLK_MINUS) {
-                        inst_select--;
-                        printf("instrument %hu\n", inst_select);
+                        inst_select[1]--;
+                        printf("instrument %c%c\n", inst_select[0], inst_select[1]);
                     }
                 }
             }
             if (event.type == SDL_KEYUP) {
                 int key = note_keymap(event.key.keysym.sym);
                 if (key >= 0 && key_down[key]) {
-                    Event key_event = {0, NOTE_CUT, 0, 0, 0};
+                    Event key_event = {0, {EVENT_NOTE_CUT, EVENT_NOTE_CUT}, EFFECT_NONE, 0, EFFECT_NONE, 0};
                     process_event(key_event, &playback, playback.tracks + 0, tick_delay);
                     key_down[key] = 0;
                 }

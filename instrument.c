@@ -1,4 +1,5 @@
 #include "instrument.h"
+#include "pattern.h"
 
 void init_inst_sample(InstSample * sample) {
     sample->wave = NULL;
@@ -9,6 +10,9 @@ void init_inst_sample(InstSample * sample) {
     sample->loop_start = 0;
     sample->loop_end = 0;
     sample->num_slices = 0;
+
+    sample->default_pitch = MIDDLE_C;
+    sample->default_velocity = MAX_VELOCITY;
 }
 
 void free_inst_sample(InstSample * sample) {

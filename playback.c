@@ -3,27 +3,21 @@
 
 #define SAMPLE_MASTER_VOLUME 0.5
 
-// num percentage points per 24 ticks
-#define VELOCITY_SLIDE_SCALE (1.0 / 100.0 / 24.0)
-#define PITCH_SLIDE_SCALE 1.0  // help??
-
 static void set_playback_page(SongPlayback * playback, int page);
 static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
 static void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, Sample * tick_buffer, int tick_buffer_len);
-static Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_octaves);
+static void process_effect(char effect, Uint8 value, ChannelPlayback * channel);
+static Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_semis);
 
 void init_channel_playback(ChannelPlayback * channel) {
     channel->instrument = NULL;
     channel->note_state = PLAY_OFF;
-    channel->pitch_octaves = 0.0;
+    channel->pitch_semis = 0.0;
     channel->playback_rate = 0;
     channel->playback_pos = 0;
     channel->volume = 1.0;
-    channel->control_command = NO_ID;
     channel->vel_slide = 0;
-    channel->target_vel = 0;
     channel->pitch_slide = 0;
-    channel->target_pitch = 0;
 }
 
 void init_track_playback(TrackPlayback * track) {
@@ -31,10 +25,6 @@ void init_track_playback(TrackPlayback * track) {
     track->pattern = NULL;
     track->pattern_tick = 0;
     track->event_i = 0;
-
-    for (int i = 0; i < MAX_CONTROL_INDEX; i++)
-        track->control_memory[i] = 0;
-    track->control_memory[CONTROL_INDEX(CTL_TUNE)] = 50;
 }
 
 void init_song_playback(SongPlayback * playback, Song * song, int out_freq) {
@@ -81,10 +71,7 @@ void set_playback_page(SongPlayback * playback, int page) {
     for (int i = 0; i < playback->num_tracks; i++) {
         TrackPlayback * track = &playback->tracks[i];
         int pattern_num = song->tracks[i].pages[page];
-        if (pattern_num == NO_PATTERN)
-            track->pattern = NULL;
-        else
-            track->pattern = &song->tracks[i].patterns[pattern_num];
+        track->pattern = &song->tracks[i].patterns[pattern_num];
         track->pattern_tick = 0;
         track->event_i = 0;
     }
@@ -184,38 +171,18 @@ void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, Sample *
             c->playback_pos -= (Sint64)(inst->loop_end - inst->loop_start) << 16;
     }
 
-    // these control commands go after tick (some could go before)
+    // these control commands go after tick
 
-    switch (c->control_command) {
-        case CTL_VEL_UP:
-        case CTL_VEL_DOWN:
-            c->volume += c->vel_slide;
-            if (c->volume > 1.0)
-                c->volume = 1.0;
-            else if (c->volume < 0.0)
-                c->volume = 0.0;
-            break;
-        case CTL_PORT_UP:
-        case CTL_PORT_DOWN:
-            c->pitch_octaves += c->pitch_slide;
-            c->playback_rate = calc_playback_rate(playback->out_freq,
-                c->instrument->c5_freq, c->pitch_octaves);
-            break;
-        case CTL_PORT_NOTE:
-            c->volume += c->vel_slide;
-            if (c->vel_slide > 0 && c->volume > c->target_vel)
-                c->volume = c->target_vel;
-            else if (c->vel_slide < 0 && c->volume < c->target_vel)
-                c->volume = c->target_vel;
-            c->pitch_octaves += c->pitch_slide;
-            if (c->pitch_slide > 0 && c->pitch_octaves > c->target_pitch)
-                c->pitch_octaves = c->target_pitch;
-            else if (c->pitch_slide < 0 && c->pitch_octaves < c->target_pitch)
-                c->pitch_octaves = c->target_pitch;
-
-            c->playback_rate = calc_playback_rate(playback->out_freq,
-                c->instrument->c5_freq, c->pitch_octaves);
-            break;
+    c->volume += c->vel_slide;
+    if (c->volume > 1.0)
+        c->volume = 1.0;
+    else if (c->volume < 0.0)
+        c->volume = 0.0;
+    
+    if (c->pitch_slide != 0.0) {
+        c->pitch_semis += c->pitch_slide;
+        c->playback_rate = calc_playback_rate(playback->out_freq,
+            c->instrument->c5_freq, c->pitch_semis);
     }
 }
 
@@ -224,89 +191,67 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
     // TODO use tick delay!!
     ChannelPlayback * channel = track->channel;
 
-    int inst_col = event.inst_control & INST_MASK;
-    if (inst_col == NOTE_CUT) {
+    char inst_special = event.instrument[0];
+    if (inst_special == EVENT_NOTE_CUT) {
         channel->note_state = PLAY_OFF;
     } else {
-        if (inst_col != NO_ID) {
+        if (!instrument_is_special(event)) {
             // note on
-            InstSample * inst = get_instrument(playback->song, inst_col);
+            InstSample * inst = get_instrument(playback->song, event.instrument);
             if (inst) {
                 channel->instrument = inst;
+                channel->playback_pos = 0;
+                channel->note_state = PLAY_ON;
+                channel->pitch_semis = inst->default_pitch;
+                channel->volume = inst->default_velocity / (float)MAX_VELOCITY;
+            }
+        } else if (inst_special == EVENT_REPLAY) {
+            // use previous instrument, don't set defaults
+            if (channel->instrument) {
                 channel->playback_pos = 0;
                 channel->note_state = PLAY_ON;
             }
         }
 
-        Uint16 command = event.inst_control & CONTROL_MASK;
-        Uint16 numeric;
-        if (event.param & PARAM_IS_NUM) {
-            // store in memory
-            numeric = event.param & PARAM_NUM_MASK;
-            track->control_memory[CONTROL_INDEX(command)] = numeric;
-        } else {
-            // recall from memory
-            numeric = track->control_memory[CONTROL_INDEX(command)];
-        }
-
-        if (command != CTL_PORT_NOTE) {
-            if (event.pitch != NO_PITCH)
-                channel->pitch_octaves = event.pitch / 12.0;
-            if (event.velocity != NO_VELOCITY)
-                channel->volume = event.velocity / 100.0;
-        }
-
-        switch (command) {
-            int tick_time;
-            case CTL_VEL_UP:
-                channel->vel_slide = numeric * VELOCITY_SLIDE_SCALE;
-                break;
-            case CTL_VEL_DOWN:
-                channel->vel_slide = -numeric * VELOCITY_SLIDE_SCALE;
-                break;
-            case CTL_PORT_UP:
-                channel->pitch_slide = numeric * PITCH_SLIDE_SCALE;
-                break;
-            case CTL_PORT_DOWN:
-                channel->pitch_slide = -numeric * PITCH_SLIDE_SCALE;
-                break;
-            case CTL_TUNE:
-                channel->pitch_octaves += (numeric - 50) / 1200.0;
-                break;
-            case CTL_PORT_NOTE:
-                if (event.pitch != NO_PITCH)
-                    channel->target_pitch = event.pitch / 12.0;
-                else if (channel->control_command != CTL_PORT_NOTE) // slide already in progress
-                    channel->target_pitch = channel->pitch_octaves;
-                // TODO: reset velocity on Note On
-                if (event.velocity != NO_VELOCITY)
-                    channel->target_vel = event.velocity / 100.0;
-                else if (channel->control_command != CTL_PORT_NOTE)
-                    channel->target_vel = channel->volume;
-                if (channel->control_command != CTL_PORT_NOTE || event.param & PARAM_IS_NUM) {
-                    tick_time = numeric * 8;
-                    if (tick_time == 0)
-                        tick_time = 1;
-                    channel->pitch_slide = (channel->target_pitch - channel->pitch_octaves) / tick_time;
-                    channel->vel_slide = (channel->target_vel - channel->volume) / tick_time;
-                }
-                break;
-            case CTL_SLICE:
-                if (channel->instrument && numeric < channel->instrument->num_slices)
-                    channel->playback_pos = (Sint64)channel->instrument->slices[numeric] << 16;
-                break;
-        }
-
-        channel->control_command = command;
+        // reset previous effects (TODO: special case for glide)
+        channel->pitch_slide = 0.0;
+        channel->vel_slide = 0.0;
+        process_effect(event.p_effect, event.p_value, channel);
+        process_effect(event.v_effect, event.v_value, channel);
 
         if (channel->instrument)
             channel->playback_rate = calc_playback_rate(playback->out_freq,
-                channel->instrument->c5_freq, channel->pitch_octaves);
+                channel->instrument->c5_freq, channel->pitch_semis);
     }
 }
 
 
-Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_octaves) {
-    float note_rate = exp2f(pitch_octaves - (MIDDLE_C/12.0));
+void process_effect(char effect, Uint8 value, ChannelPlayback * channel) {
+    switch (effect) {
+        case EFFECT_PITCH:
+            // TODO check for glide
+            channel->pitch_semis = value;
+            break;
+        case EFFECT_VELOCITY:
+            channel->volume = value / (float)MAX_VELOCITY;
+            break;
+        case EFFECT_TUNE:
+            channel->pitch_semis += (value - 0x40) / (float)0x40;
+            break;
+        case EFFECT_SAMPLE_OFFSET:
+            if (channel->instrument) {
+                if (value < channel->instrument->num_slices) {
+                    channel->playback_pos = (Sint64)channel->instrument->slices[value] << 16;
+                } else {
+                    channel->playback_pos = ((Sint64)channel->instrument->wave_len * value / 256) << 16;
+                }
+            }
+            break;
+    }
+}
+
+
+Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_semis) {
+    float note_rate = exp2f((pitch_semis - MIDDLE_C) / 12.0);
     return (Sint32)roundf(note_rate * c5_freq / out_freq * 65536);
 }
