@@ -36,6 +36,8 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
 static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
 static int period_to_pitch(int period, int sample_num);
 static Uint8 volume_to_velocity(int volume);
+static Uint8 slide_hex_float(Uint32 slide, int bias);
+static Uint8 pitch_slide_units(int pitch_slide);
 static Uint8 velocity_slide_units(int volume_slide);
 static int sample_add_slice(InstSample * sample, int slice_point);
 
@@ -154,6 +156,10 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     pattern->events.reserve(PATTERN_LEN);
 
     int prev_effect = -1; // always reset at start
+    int prev_value = -1;
+    Uint8 prev_glide = 0;
+    Uint8 prev_vibrato = 0;
+    Uint8 prev_tremolo = 0;
     int sample_num_memory = 0;
     for (int i = 0; i < PATTERN_LEN; i++) {
         Uint8 bytes[EVENT_SIZE];
@@ -165,54 +171,101 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
 
         Event event = {(Uint16)(i * TICKS_PER_ROW), {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE},
             EFFECT_NONE, 0, EFFECT_NONE, 0};
-
+        
         int keep_empty_event = 0;
 
-            switch (effect) {
-            int slice_point;
-                case 0x0: // clear
+        switch (effect) {
+            int speed, depth, slice_point;
+            case 0x0: // clear
                 if (prev_effect != 0x0)
                     keep_empty_event = 1;
-                    break;
-                case 0x3: // tone portamento
-                    event.v_effect = EFFECT_GLIDE;
-                    event.v_value = value; // TODO
-                    break;
-                case 0x9: // sample offset
-                    slice_point = value * 256;
-                    // search for existing slice point
-                    if (sample_num) {
-                        event.v_effect = EFFECT_SAMPLE_OFFSET;
-                        event.v_value = sample_add_slice(sample_info[sample_num].sample, slice_point);
-                    } else if (sample_num_memory) {
-                        event.v_effect = EFFECT_SAMPLE_OFFSET;
-                        event.v_value = sample_add_slice(sample_info[sample_num_memory].sample, slice_point);
+                break;
+            case 0x1:
+                event.v_effect = EFFECT_PITCH_SLIDE_UP;
+                event.v_value = pitch_slide_units(value);
+            case 0x2:
+                event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
+                event.v_value = pitch_slide_units(value);
+            case 0x3:
+                event.v_effect = EFFECT_GLIDE;
+                if (value == 0)
+                    event.v_value = prev_glide; // memory
+                else
+                    event.v_value = pitch_slide_units(value);
+                prev_glide = event.v_value;
+                break;
+            case 0x4:
+                event.v_effect = EFFECT_VIBRATO;
+                if (value == 0)
+                    event.v_value = prev_vibrato;
+                else {
+                    speed = value >> 4; // TODO
+                    depth = value & 0xF;
+                    depth /= 2;
+                    event.v_value = (speed << 4) | depth;
+                    prev_vibrato = event.v_value;
+                }
+                break;
+            case 0x7:
+                event.v_effect = EFFECT_TREMOLO;
+                if (value == 0)
+                    event.v_value = prev_tremolo;
+                else {
+                    speed = value >> 4; // TODO
+                    depth = value & 0xF;
+                    depth /= 2; // TODO
+                    event.v_value = (speed << 4) | depth;
+                    prev_tremolo = event.v_value;
+                }
+            case 0x9:
+                // TODO effect memory
+                event.v_effect = EFFECT_SAMPLE_OFFSET;
+                slice_point = value * 256;
+                // search for existing slice point
+                if (sample_num) {
+                    event.v_value = sample_add_slice(sample_info[sample_num].sample, slice_point);
+                } else if (sample_num_memory) {
+                    event.v_value = sample_add_slice(sample_info[sample_num_memory].sample, slice_point);
+                }
+                break;
+            case 0xA:
+            case 0x5:
+            case 0x6:
+                if (value & 0xF0) {
+                    event.v_effect = EFFECT_VEL_SLIDE_UP;
+                    event.v_value = velocity_slide_units(value >> 4);
+                } else {
+                    event.v_effect = EFFECT_VEL_SLIDE_DOWN;
+                    event.v_value = velocity_slide_units(value & 0x0F);
+                }
+                // continue previous effects...
+                // TODO these will get overwritten by pitch which is probably fine?
+                if (effect == 0x5) {
+                    event.p_effect = EFFECT_GLIDE;
+                    event.p_value = prev_glide;
+                } else if (effect == 0x6) {
+                    event.p_effect = EFFECT_VIBRATO;
+                    event.p_value = prev_vibrato;
+                }
+                break;
+            // TODO Position jump
+            case 0xC:
+                event.v_effect = EFFECT_VELOCITY;
+                event.v_value = volume_to_velocity(value);
+                break;
+            case 0xD: // pattern break
+                // TODO jump to row
+                // find each page that uses this pattern
+                for (int i = 0; i < current_song->num_pages; i++) {
+                    if (current_song->tracks[0].pages[i] == pattern_num) {
+                        current_song->page_lengths[i] = event.time + TICKS_PER_ROW; // after this row
                     }
-                    break;
-                case 0xA: // volume slide
-                    if (value & 0xF0) {
-                        event.v_effect = EFFECT_VEL_SLIDE_UP;
-                        event.v_value = velocity_slide_units(value >> 4);
-                    } else {
-                        event.v_effect = EFFECT_VEL_SLIDE_DOWN;
-                        event.v_value = velocity_slide_units(value & 0x0F);
-                    }
-                    break;
-                case 0xC: // volume set
-                    event.v_effect = EFFECT_VELOCITY;
-                    event.v_value = volume_to_velocity(value);
-                    break;
-                case 0xD: // pattern break
-                    // TODO jump to row
-                    // find each page that uses this pattern
-                    for (int i = 0; i < current_song->num_pages; i++) {
-                        if (current_song->tracks[0].pages[i] == pattern_num) {
-                            current_song->page_lengths[i] = event.time + TICKS_PER_ROW; // after this row
-                        }
-                    }
-                    break;
-            }
-            prev_effect = effect;
+                }
+                break;
+            // TODO E, F
+        }
+        prev_effect = effect;
+        prev_value = value;
 
         if (period != 0) {
             // note on
@@ -269,9 +322,32 @@ static Uint8 volume_to_velocity(int volume) {
     return volume * 2;
 }
 
+static Uint8 slide_hex_float(Uint32 slide, int bias) {
+    if (slide == 0)
+        return 0;
+    Uint32 mant = slide;
+    int exp = 31 + bias;
+    while (!(mant & (1<<31))) {
+        mant <<= 1;
+        exp -= 1;
+    }
+    if (exp > 0xF)
+        return 0xFF;
+    mant >>= (31 - 4); // truncate
+    mant &= 0xF; // implicit 1
+    return mant | (exp << 4);
+}
+
+
+static Uint8 pitch_slide_units(int pitch_slide) {
+    // TODO!
+    return pitch_slide;
+}
+
 static Uint8 velocity_slide_units(int volume_slide) {
     // TODO!
-    return volume_slide;
+    int units_per_quarter = volume_slide * (MOD_TICKS_PER_ROW - 1) * (TICKS_PER_QUARTER / TICKS_PER_ROW);
+    return slide_hex_float(units_per_quarter, 1);
 }
 
 static int sample_add_slice(InstSample * sample, int slice_point) {

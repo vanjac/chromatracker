@@ -46,6 +46,7 @@ enum Effects {
     EFFECT_MASTER_VOLUME     = 7
 };
 
+#define TICKS_PER_QUARTER 192
 #define MIDDLE_C (5*12)
 #define MAX_VELOCITY 0x80
 
