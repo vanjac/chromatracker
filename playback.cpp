@@ -49,6 +49,8 @@ void set_playback_song(SongPlayback * playback, Song * song) {
 
 void set_playback_page(SongPlayback * playback, int page) {
     Song * song = playback->song;
+    if (song->num_pages == 0)
+        return;
     page %= song->num_pages;
     playback->current_page = page;
     playback->current_page_tick = 0;
