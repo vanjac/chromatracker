@@ -2,6 +2,9 @@
 #include <stdio.h>
 
 static const char * NOTE_NAMES = "C-C#D-D#E-F-F#G-G#A-A#B-";
+static const char PLAYBACK_EVENT_NAMES[][4] = {
+    "   ", "Pit", "Vel",
+    "Tmp", "Pau", "Jmp", "Rep", "Vol" };
 
 static void effect_to_string(char effect, Uint8 value, char * str);
 
@@ -22,7 +25,10 @@ void event_to_string(Event e, char * str) {
     else
         memcpy(str, e.instrument, 2);
     str[2] = ' ';
-    effect_to_string(e.p_effect, e.p_value, &str[3]);
+    if (e.instrument[0] == EVENT_PLAYBACK)
+        memcpy(&str[3], PLAYBACK_EVENT_NAMES[e.p_effect], 3);
+    else
+        effect_to_string(e.p_effect, e.p_value, &str[3]);
     str[6] = ' ';
     effect_to_string(e.v_effect, e.v_value, &str[7]);
     str[10] = 0;
