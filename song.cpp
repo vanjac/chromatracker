@@ -3,31 +3,16 @@
 static int id_to_index(char id[2]);
 static int alphanum_to_index(char c);
 
-void init_song(Song * song) {
+Song::Song()
+: tracks(NULL), num_tracks(0), alloc_tracks(0), num_pages(0) {
     for (int i = 0; i < MAX_INST; i++)
-        song->inst_table[i] = NULL;
-    song->tracks = NULL;
-    song->num_tracks = song->alloc_tracks = 0;
-
-    song->num_pages = 0;
+        inst_table[i] = NULL;
 }
 
-void free_song(Song * song) {
-    for (int i = 0; i < MAX_INST; i++) {
-        if (song->inst_table[i]) {
-            free_inst_sample(song->inst_table[i]);
-            delete song->inst_table[i];
-            song->inst_table[i] = NULL;
-        }
-    }
-
-    if (song->tracks) {
-        for (int i = 0; i < song->num_tracks; i++) {
-            free_track(&song->tracks[i]);
-        }
-        delete [] song->tracks;
-        song->tracks = NULL;
-    }
+Song::~Song() {
+    for (int i = 0; i < MAX_INST; i++)
+        delete inst_table[i];
+    delete [] tracks;
 }
 
 int id_to_index(char id[2]) {

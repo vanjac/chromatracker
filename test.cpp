@@ -156,7 +156,6 @@ int main(int argv, char ** argc) {
     SDL_PauseAudioDevice(device, 1);
 
     free_song_playback(&playback);
-    free_song(&song);
     SDL_DestroyWindow(window);
     SDL_CloseAudioDevice(device);
     SDL_Quit();

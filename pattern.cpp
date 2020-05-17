@@ -10,24 +10,9 @@ int instrument_is_special(Event event) {
     return !( (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') );
 }
 
-void init_pattern(Pattern * pattern) {
-    pattern->events = NULL;
-    pattern->num_events = 0;
-    pattern->alloc_events = 0;
-    pattern->length = 0;
-}
+Pattern::Pattern()
+: events(NULL), num_events(0), alloc_events(0), length(0) { }
 
-void free_pattern(Pattern * pattern) {
-    delete [] pattern->events;
-    pattern->events = NULL;
-}
-
-void init_track(Track * track) {
-    for (int i = 0; i < NUM_TRACK_PATTERNS; i++)
-        init_pattern(&track->patterns[i]);
-}
-
-void free_track(Track * track) {
-    for (int i = 0; i < NUM_TRACK_PATTERNS; i++)
-        free_pattern(&track->patterns[i]);
+Pattern::~Pattern() {
+    delete [] events;
 }

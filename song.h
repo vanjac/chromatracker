@@ -16,10 +16,10 @@ struct Song {
     int page_lengths[MAX_PAGES]; // in ticks
 
     InstSample * inst_table[MAX_INST];
-};
 
-void init_song(Song * song);
-void free_song(Song * song);
+    Song();
+    ~Song();
+};
 
 InstSample * get_instrument(Song * song, char id[2]);
 void put_instrument(Song * song, char id[2], InstSample * instrument);

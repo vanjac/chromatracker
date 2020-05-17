@@ -41,8 +41,8 @@ static int sample_add_slice(InstSample * sample, int slice_point);
 
 void load_mod(const char * filename, Song * song) {
     // http://coppershade.org/articles/More!/Topics/Protracker_File_Format/
+    printf("Loading %s\n", filename);
     current_song = song;
-    init_song(song);
 
     SDL_RWops * file = SDL_RWFromFile(filename, "rb");
     if (!file) {
@@ -52,8 +52,6 @@ void load_mod(const char * filename, Song * song) {
 
     song->num_tracks = song->alloc_tracks = NUM_TRACKS;
     song->tracks = new Track[NUM_TRACKS];
-    for (int i = 0; i < NUM_TRACKS; i++)
-        init_track(&song->tracks[i]);
 
     // first find the number of patterns
     // by searching for the highest numbered pattern in the song table
@@ -84,7 +82,6 @@ void load_mod(const char * filename, Song * song) {
     for (int i = 0; i < NUM_SAMPLES; i++) {
         SDL_RWseek(file, 20 + 30 * i, RW_SEEK_SET);
         InstSample * sample = new InstSample;
-        init_inst_sample(sample);
         int sample_num = i + 1; // sample numbers start at 1
         ModSampleInfo * info = &sample_info[sample_num];
         info->inst_id[0] = '0' + (sample_num / 10);

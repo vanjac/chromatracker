@@ -21,9 +21,9 @@ struct InstSample {
     // future instrument properties
     Uint8 default_pitch;
     Uint8 default_velocity;
-};
 
-void init_inst_sample(InstSample * sample);
-void free_inst_sample(InstSample * sample);
+    InstSample();
+    ~InstSample();
+};
 
 #endif

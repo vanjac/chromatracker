@@ -63,10 +63,10 @@ struct Pattern {
     int num_events;
     int alloc_events;
     int length; // ticks
-};
 
-void init_pattern(Pattern * pattern);
-void free_pattern(Pattern * pattern);
+    Pattern();
+    ~Pattern();
+};
 
 #define NUM_TRACK_PATTERNS 256
 #define MAX_PAGES 256
@@ -75,8 +75,5 @@ struct Track {
     Pattern patterns[NUM_TRACK_PATTERNS];
     Uint8 pages[MAX_PAGES]; // patter number selections
 };
-
-void init_track(Track * track);
-void free_track(Track * track);
 
 #endif
