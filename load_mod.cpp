@@ -36,7 +36,7 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
 static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
 static int period_to_pitch(int period, int sample_num);
 static Uint8 volume_to_velocity(int volume);
-static Uint8 slide_hex_float(Uint32 slide, int bias);
+static Uint8 slide_hex_float(float slide, int bias);
 static Uint8 pitch_slide_units(int pitch_slide);
 static Uint8 velocity_slide_units(int volume_slide);
 static int sample_add_slice(InstSample * sample, int slice_point);
@@ -341,19 +341,30 @@ static Uint8 volume_to_velocity(int volume) {
     return volume * 2;
 }
 
-static Uint8 slide_hex_float(Uint32 slide, int bias) {
-    if (slide == 0)
+static Uint8 slide_hex_float(float slide, int bias) {
+    if (slide <= 0)
         return 0;
-    Uint32 mant = slide;
-    int exp = 31 + bias;
-    while (!(mant & (1<<31))) {
-        mant <<= 1;
-        exp -= 1;
+    void * bit_ptr = &slide;
+    Uint32 float_bits = *((Uint32 *)bit_ptr);
+
+    int exp = float_bits >> 23;
+    exp += bias - 127;
+    unsigned mant = float_bits >> 19;
+    mant &= 0xF;
+
+    if (float_bits & (1 << 18)) { // TODO tie to even?
+        mant += 1; // round up
+        if (mant == 16) {
+            exp += 1; // overflow
+            mant = 0;
+        }
     }
+
+    if (exp < 0)
+        return 0;
     if (exp > 0xF)
         return 0xFF;
-    mant >>= (31 - 4); // truncate
-    mant &= 0xF; // implicit 1
+
     return mant | (exp << 4);
 }
 
