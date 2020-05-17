@@ -154,7 +154,6 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     pattern->events.reserve(PATTERN_LEN);
 
     int prev_effect = -1; // always reset at start
-    int prev_value = -1;
     int sample_num_memory = 0;
     for (int i = 0; i < PATTERN_LEN; i++) {
         Uint8 bytes[EVENT_SIZE];
@@ -167,13 +166,13 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         Event event = {(Uint16)(i * TICKS_PER_ROW), {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE},
             EFFECT_NONE, 0, EFFECT_NONE, 0};
 
-        if (effect != prev_effect || value != prev_value) {
-            int slice_point;
+        int keep_empty_event = 0;
+
             switch (effect) {
+            int slice_point;
                 case 0x0: // clear
-                    // TODO: only do this if rest of event is empty
-                    event.instrument[0] = event.instrument[1]
-                        = EVENT_CANCEL_EFFECTS;
+                if (prev_effect != 0x0)
+                    keep_empty_event = 1;
                     break;
                 case 0x3: // tone portamento
                     event.v_effect = EFFECT_GLIDE;
@@ -214,8 +213,6 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                     break;
             }
             prev_effect = effect;
-            prev_value = value;
-        }
 
         if (period != 0) {
             // note on
@@ -244,6 +241,11 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
 
         if (!event_is_empty(event))
             pattern->events.push_back(event);
+        else if (keep_empty_event) {
+            event.instrument[0] = event.instrument[1]
+                = EVENT_CANCEL_EFFECTS;
+            pattern->events.push_back(event);
+        }
 
         if (sample_num)
             sample_num_memory = sample_num;
