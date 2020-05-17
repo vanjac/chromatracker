@@ -18,10 +18,8 @@ void init_pattern(Pattern * pattern) {
 }
 
 void free_pattern(Pattern * pattern) {
-    if (pattern->events) {
-        free(pattern->events);
-        pattern->events = NULL;
-    }
+    delete pattern->events;
+    pattern->events = NULL;
 }
 
 void init_track(Track * track) {

@@ -39,11 +39,11 @@ void init_song_playback(SongPlayback * playback, Song * song, int out_freq) {
     playback->out_freq = out_freq;
 
     playback->num_channels = song->num_tracks;
-    playback->channels = (ChannelPlayback *)malloc(playback->num_channels * sizeof(ChannelPlayback));
+    playback->channels = new ChannelPlayback[playback->num_channels];
     for (int i = 0; i < playback->num_channels; i++)
         init_channel_playback(&playback->channels[i]);
     playback->num_tracks = song->num_tracks;
-    playback->tracks = (TrackPlayback *)malloc(playback->num_tracks * sizeof(TrackPlayback));
+    playback->tracks = new TrackPlayback[playback->num_tracks];
     for (int i = 0; i < playback->num_tracks; i++) {
         init_track_playback(&playback->tracks[i]);
         playback->tracks[i].channel = &playback->channels[i];
@@ -53,14 +53,10 @@ void init_song_playback(SongPlayback * playback, Song * song, int out_freq) {
 }
 
 void free_song_playback(SongPlayback * playback) {
-    if (playback->channels) {
-        free(playback->channels);
-        playback->channels = NULL;
-    }
-    if (playback->tracks) {
-        free(playback->tracks);
-        playback->tracks = NULL;
-    }
+    delete playback->channels;
+    playback->channels = NULL;
+    delete playback->tracks;
+    playback->tracks = NULL;
 }
 
 void set_playback_page(SongPlayback * playback, int page) {

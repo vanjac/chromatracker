@@ -51,7 +51,7 @@ void load_mod(const char * filename, Song * song) {
     }
 
     song->num_tracks = song->alloc_tracks = NUM_TRACKS;
-    song->tracks = (Track *)malloc(song->alloc_tracks * sizeof(Track));
+    song->tracks = new Track[NUM_TRACKS];
     for (int i = 0; i < NUM_TRACKS; i++)
         init_track(&song->tracks[i]);
 
@@ -83,7 +83,7 @@ void load_mod(const char * filename, Song * song) {
     int wave_pos = pattern_size * (max_pattern + 1) + 1084;
     for (int i = 0; i < NUM_SAMPLES; i++) {
         SDL_RWseek(file, 20 + 30 * i, RW_SEEK_SET);
-        InstSample * sample = (InstSample *)malloc(sizeof(InstSample));
+        InstSample * sample = new InstSample;
         init_inst_sample(sample);
         int sample_num = i + 1; // sample numbers start at 1
         ModSampleInfo * info = &sample_info[sample_num];
@@ -131,7 +131,7 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
     SDL_RWseek(file, wave_start, RW_SEEK_SET);
     SDL_RWread(file, wave8, sample->wave_len, 1);
 
-    StereoFrame * wave = (StereoFrame *)malloc(sample->wave_len * sizeof(StereoFrame));
+    StereoFrame * wave = new StereoFrame[sample->wave_len];
     sample->wave = wave;
     for (int i = 0; i < sample->wave_len; i++) {
         float v = wave8[i] / 128.0;
@@ -155,7 +155,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     */
 
     pattern->length = PATTERN_LEN * TICKS_PER_ROW;
-    pattern->events = (Event *)malloc(PATTERN_LEN * sizeof(Event));
+    pattern->events = new Event[PATTERN_LEN];
     pattern->alloc_events = PATTERN_LEN;
     pattern->num_events = 0;
 

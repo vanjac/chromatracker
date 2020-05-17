@@ -24,7 +24,8 @@ void free_song(Song * song) {
         for (int i = 0; i < song->num_tracks; i++) {
             free_track(&song->tracks[i]);
         }
-        free(song->tracks);
+        delete song->tracks;
+        song->tracks = NULL;
     }
 }
 
