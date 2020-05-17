@@ -16,7 +16,7 @@
 #define OUT_FREQ 48000
 
 Song song;
-SongPlayback playback;
+SongPlayback playback(OUT_FREQ);
 
 // enough for 15 BPM at 48000Hz
 #define MAX_TICK_BUFFER 1024
@@ -91,7 +91,7 @@ int main(int argv, char ** argc) {
 
     load_mod("mod.resonance", &song);
 
-    init_song_playback(&playback, &song, OUT_FREQ);
+    set_playback_song(&playback, &song);
 
     audio_callback_time = SDL_GetTicks();
     SDL_PauseAudioDevice(device, 0); // audio devices start paused
@@ -155,7 +155,6 @@ int main(int argv, char ** argc) {
     // stop callbacks
     SDL_PauseAudioDevice(device, 1);
 
-    free_song_playback(&playback);
     SDL_DestroyWindow(window);
     SDL_CloseAudioDevice(device);
     SDL_Quit();

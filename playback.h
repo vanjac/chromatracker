@@ -19,18 +19,18 @@ struct ChannelPlayback {
     float volume;
 
     float vel_slide, pitch_slide;
-};
 
-void init_channel_playback(ChannelPlayback * channel);
+    ChannelPlayback();
+};
 
 struct TrackPlayback {
     ChannelPlayback * channel;
     Pattern * pattern;
     int pattern_tick;
     int event_i;
-};
 
-void init_track_playback(TrackPlayback * track);
+    TrackPlayback();
+};
 
 struct SongPlayback {
     Song * song;
@@ -47,11 +47,12 @@ struct SongPlayback {
     int num_channels;
     TrackPlayback * tracks;
     int num_tracks;
+
+    SongPlayback(int out_freq);
+    ~SongPlayback();
 };
 
-void init_song_playback(SongPlayback * playback, Song * song, int out_freq);
-void free_song_playback(SongPlayback * playback);
-
+void set_playback_song(SongPlayback * playback, Song * song);
 // return tick length (num frames written to buffer)
 int process_tick(SongPlayback * playback, StereoFrame * tick_buffer);
 void process_event(Event event, SongPlayback * playback, TrackPlayback * track, int tick_delay);

@@ -9,54 +9,42 @@ static void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, S
 static void process_effect(char effect, Uint8 value, ChannelPlayback * channel);
 static Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_semis);
 
-void init_channel_playback(ChannelPlayback * channel) {
-    channel->instrument = NULL;
-    channel->note_state = PLAY_OFF;
-    channel->pitch_semis = 0.0;
-    channel->playback_rate = 0;
-    channel->playback_pos = 0;
-    channel->volume = 1.0;
-    channel->vel_slide = 0;
-    channel->pitch_slide = 0;
+
+ChannelPlayback::ChannelPlayback() 
+: instrument(NULL), note_state(PLAY_OFF),
+pitch_semis(0.0), playback_rate(0), playback_pos(0),
+volume(1.0),
+vel_slide(0), pitch_slide(0) { }
+
+TrackPlayback::TrackPlayback()
+: channel(NULL),
+pattern(NULL), pattern_tick(0), event_i(0) { }
+
+SongPlayback::SongPlayback(int out_freq)
+: song(NULL), out_freq(out_freq),
+current_page(0), current_page_tick(0),
+tick_len(120<<16), tick_len_error(0),  // 125 bpm TODO
+channels(NULL), num_channels(0),
+tracks(NULL), num_tracks(0) { }
+
+SongPlayback::~SongPlayback() {
+    delete [] channels;
+    delete [] tracks;
 }
 
-void init_track_playback(TrackPlayback * track) {
-    track->channel = NULL;
-    track->pattern = NULL;
-    track->pattern_tick = 0;
-    track->event_i = 0;
-}
 
-void init_song_playback(SongPlayback * playback, Song * song, int out_freq) {
+void set_playback_song(SongPlayback * playback, Song * song) {
     playback->song = song;
-
-    playback->current_page = 0;
-    playback->current_page_tick = 0;
-
-    playback->tick_len = 120<<16; // 125 bpm TODO
-    playback->tick_len_error = 0;
-
-    playback->out_freq = out_freq;
 
     playback->num_channels = song->num_tracks;
     playback->channels = new ChannelPlayback[playback->num_channels];
-    for (int i = 0; i < playback->num_channels; i++)
-        init_channel_playback(&playback->channels[i]);
     playback->num_tracks = song->num_tracks;
     playback->tracks = new TrackPlayback[playback->num_tracks];
-    for (int i = 0; i < playback->num_tracks; i++) {
-        init_track_playback(&playback->tracks[i]);
+
+    for (int i = 0; i < playback->num_tracks; i++)
         playback->tracks[i].channel = &playback->channels[i];
-    }
 
     set_playback_page(playback, 0);
-}
-
-void free_song_playback(SongPlayback * playback) {
-    delete [] playback->channels;
-    playback->channels = NULL;
-    delete [] playback->tracks;
-    playback->tracks = NULL;
 }
 
 void set_playback_page(SongPlayback * playback, int page) {
@@ -72,7 +60,6 @@ void set_playback_page(SongPlayback * playback, int page) {
         track->event_i = 0;
     }
 }
-
 
 
 int process_tick(SongPlayback * playback, StereoFrame * tick_buffer) {
