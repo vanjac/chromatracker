@@ -4,13 +4,14 @@
 #include "chroma.h"
 #include "instrument.h"
 #include "pattern.h"
+#include <vector>
+
+using std::vector;
 
 #define MAX_INST 36 * 36
 
 struct Song {
-    Track * tracks;
-    int num_tracks;
-    int alloc_tracks;
+    vector<Track> tracks;
 
     int num_pages;
     int page_lengths[MAX_PAGES]; // in ticks

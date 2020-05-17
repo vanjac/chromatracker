@@ -36,9 +36,9 @@ SongPlayback::~SongPlayback() {
 void set_playback_song(SongPlayback * playback, Song * song) {
     playback->song = song;
 
-    playback->num_channels = song->num_tracks;
+    playback->num_channels = song->tracks.size();
     playback->channels = new ChannelPlayback[playback->num_channels];
-    playback->num_tracks = song->num_tracks;
+    playback->num_tracks = song->tracks.size();
     playback->tracks = new TrackPlayback[playback->num_tracks];
 
     for (int i = 0; i < playback->num_tracks; i++)
@@ -100,7 +100,7 @@ void process_tick_track(TrackPlayback * track, SongPlayback * playback) {
     if (!pattern)
         return;
     while (1) {
-        if (track->event_i >= pattern->num_events)
+        if (track->event_i >= pattern->events.size())
             break;
         Event next_event = pattern->events[track->event_i];
         if (next_event.time == track->pattern_tick) {

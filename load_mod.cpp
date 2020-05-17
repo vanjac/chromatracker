@@ -50,8 +50,7 @@ void load_mod(const char * filename, Song * song) {
         return;
     }
 
-    song->num_tracks = song->alloc_tracks = NUM_TRACKS;
-    song->tracks = new Track[NUM_TRACKS];
+    song->tracks = vector<Track>(NUM_TRACKS);
 
     // first find the number of patterns
     // by searching for the highest numbered pattern in the song table
@@ -152,9 +151,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     */
 
     pattern->length = PATTERN_LEN * TICKS_PER_ROW;
-    pattern->events = new Event[PATTERN_LEN];
-    pattern->alloc_events = PATTERN_LEN;
-    pattern->num_events = 0;
+    pattern->events.reserve(PATTERN_LEN);
 
     int prev_effect = -1; // always reset at start
     int prev_value = -1;
@@ -246,7 +243,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         }
 
         if (!event_is_empty(event))
-            pattern->events[pattern->num_events++] = event;
+            pattern->events.push_back(event);
 
         if (sample_num)
             sample_num_memory = sample_num;

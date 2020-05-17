@@ -2,6 +2,9 @@
 #define PATTERN_H
 
 #include "chroma.h"
+#include <vector>
+
+using std::vector;
 
 // these go in the instrument column
 enum Events {
@@ -59,13 +62,10 @@ int event_is_empty(Event event);
 int instrument_is_special(Event event);
 
 struct Pattern {
-    Event * events;
-    int num_events;
-    int alloc_events;
+    vector<Event> events;
     int length; // ticks
 
     Pattern();
-    ~Pattern();
 };
 
 #define NUM_TRACK_PATTERNS 256

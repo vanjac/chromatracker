@@ -11,9 +11,4 @@ int instrument_is_special(Event event) {
 }
 
 Pattern::Pattern()
-: events(NULL), num_events(0), alloc_events(0),
-length(0) { }
-
-Pattern::~Pattern() {
-    delete [] events;
-}
+: length(0) { }
