@@ -159,6 +159,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     Uint8 prev_glide = 0;
     Uint8 prev_vibrato = 0;
     Uint8 prev_tremolo = 0;
+    Uint8 prev_offset = 0;
     int sample_num_memory = 0;
     for (int i = 0; i < PATTERN_LEN; i++) {
         Uint8 bytes[EVENT_SIZE];
@@ -175,8 +176,10 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
 
         switch (effect) {
             int speed, depth, slice_point;
-            case 0x0: // clear
-                if (prev_effect != 0x0)
+            case 0x0:
+                // clear previous effect
+                if (prev_effect != 0x0 && prev_effect != 0x9 && prev_effect != 0xB
+                    && prev_effect != 0xC && prev_effect != 0xD && prev_effect != 0xF)
                     keep_empty_event = 1;
                 break;
             case 0x1:
@@ -211,21 +214,21 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                     event.v_value = prev_tremolo;
                 else {
                     speed = value >> 4; // TODO
-                    depth = value & 0xF;
-                    depth /= 2; // TODO
+                    depth = value & 0xF; // TODO
                     event.v_value = (speed << 4) | depth;
                     prev_tremolo = event.v_value;
                 }
             case 0x9:
-                // TODO effect memory
                 event.v_effect = EFFECT_SAMPLE_OFFSET;
                 slice_point = value * 256;
                 // search for existing slice point
-                if (sample_num) {
+                if (value == 0)
+                    event.v_value = prev_offset;
+                if (sample_num)
                     event.v_value = sample_add_slice(sample_info[sample_num].sample, slice_point);
-                } else if (sample_num_memory) {
+                else if (sample_num_memory)
                     event.v_value = sample_add_slice(sample_info[sample_num_memory].sample, slice_point);
-                }
+                prev_offset = event.v_value;
                 break;
             case 0xA:
             case 0x5:
@@ -261,7 +264,19 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                     }
                 }
                 break;
-            // TODO E, F
+            case 0xE:
+                // TODO
+                break;
+            case 0xF:
+                if (value >= 0x20) {
+                    event.instrument[0] = event.instrument[1]
+                        = EVENT_PLAYBACK;
+                    event.p_effect = EFFECT_TEMPO;
+                    event.v_effect = EFFECT_VELOCITY;
+                    event.v_value = value;
+                    break;
+                } else { } // TODO set speed
+                break;
         }
         prev_effect = effect;
         prev_value = value;
