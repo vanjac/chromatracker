@@ -20,7 +20,7 @@ SongPlayback playback;
 
 // enough for 15 BPM at 48000Hz
 #define MAX_TICK_BUFFER 1024
-Sample tick_buffer[MAX_TICK_BUFFER];
+StereoFrame tick_buffer[MAX_TICK_BUFFER];
 int tick_buffer_len = 0;
 int tick_buffer_pos = 0;
 
@@ -89,7 +89,7 @@ int main(int argv, char ** argc) {
         return 1;
     }
 
-    load_mod("space_debris.mod", &song);
+    load_mod("mod.resonance", &song);
 
     init_song_playback(&playback, &song, OUT_FREQ);
 
@@ -238,21 +238,21 @@ Sint8 note_keymap(SDL_Keycode key) {
 void callback(void * userdata, Uint8 * stream, int len) {
     audio_callback_time = SDL_GetTicks();
 
-    Sample * sample_stream = (Sample *)stream;
-    int sample_stream_len = len / sizeof(Sample);
-    Sample * sample_stream_end = sample_stream + sample_stream_len;
+    StereoFrame * frame_stream = (StereoFrame *)stream;
+    int frame_stream_len = len / sizeof(StereoFrame);
+    StereoFrame * frame_stream_end = frame_stream + frame_stream_len;
 
     while (1) {
         if (tick_buffer_pos < tick_buffer_len) {
             int write_len = tick_buffer_len - tick_buffer_pos;
-            if (write_len > (sample_stream_end - sample_stream)) {
-                write_len = sample_stream_end - sample_stream;
+            if (write_len > (frame_stream_end - frame_stream)) {
+                write_len = frame_stream_end - frame_stream;
             }
             for (int i = 0; i < write_len; i++)
-                *(sample_stream++) = tick_buffer[tick_buffer_pos++];
+                *(frame_stream++) = tick_buffer[tick_buffer_pos++];
         }
 
-        if (sample_stream >= sample_stream_end)
+        if (frame_stream >= frame_stream_end)
             break;
 
         tick_buffer_len = process_tick(&playback, tick_buffer);

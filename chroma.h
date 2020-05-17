@@ -5,7 +5,7 @@
 
 typedef struct {
     float l, r;
-} Sample;
+} StereoFrame;
 
 
 #endif

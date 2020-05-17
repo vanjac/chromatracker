@@ -9,7 +9,7 @@ typedef enum {SMP_NORMAL, SMP_LOOP, SMP_SUSTAIN} PlaybackMode;
 typedef enum {LOOP_FORWARD, LOOP_PINGPONG} LoopType;
 
 typedef struct {
-    Sample * wave; // TODO allow mono
+    StereoFrame * wave; // TODO allow mono
     int wave_len;
     float c5_freq;
     PlaybackMode playback_mode;

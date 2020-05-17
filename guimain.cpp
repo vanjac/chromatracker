@@ -1,7 +1,7 @@
 #include "imgui.h"
 #include "playback.h"
 
-extern Sample tick_buffer[1024];
+extern StereoFrame tick_buffer[1024];
 extern int tick_buffer_len;
 
 void gui(SongPlayback * playback) {
@@ -41,8 +41,8 @@ void gui(SongPlayback * playback) {
             wave = (float *)channel->instrument->wave;
         }
         ImGui::PlotLines("", wave, wave_len * 2, 0, NULL, -1.0, 1.0, ImVec2(0, 60));
-        int sample_pos = channel->playback_pos >> 16;
-        ImGui::SliderInt("Sample", &sample_pos, 0, wave_len, "%d");
+        int frame_pos = channel->playback_pos >> 16;
+        ImGui::SliderInt("Sample", &frame_pos, 0, wave_len, "%d");
         ImGui::NextColumn();
     }
     ImGui::Columns(1);

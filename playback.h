@@ -13,8 +13,8 @@ typedef struct {
     NoteState note_state;
 
     float pitch_semis; // pitch, 1.0 = 1 semitone
-    Sint32 playback_rate; // fp 16.16 sample rate, calculated from pitch
-    Sint64 playback_pos; // fp 32.16 sample num
+    Sint32 playback_rate; // fp 16.16 frame rate, calculated from pitch
+    Sint64 playback_pos; // fp 32.16 frame num
 
     float volume;
 
@@ -40,7 +40,7 @@ typedef struct {
 
     int out_freq;
 
-    int tick_len; // fp 16.16 sample length
+    int tick_len; // fp 16.16 frame length
     int tick_len_error; // fp 16.16 accumulated error in tick length
 
     ChannelPlayback * channels;
@@ -52,8 +52,8 @@ typedef struct {
 void init_song_playback(SongPlayback * playback, Song * song, int out_freq);
 void free_song_playback(SongPlayback * playback);
 
-// return tick length (num samples written to buffer)
-int process_tick(SongPlayback * playback, Sample * tick_buffer);
+// return tick length (num frames written to buffer)
+int process_tick(SongPlayback * playback, StereoFrame * tick_buffer);
 void process_event(Event event, SongPlayback * playback, TrackPlayback * track, int tick_delay);
 
 #endif

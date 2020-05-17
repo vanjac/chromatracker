@@ -131,7 +131,7 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
     SDL_RWseek(file, wave_start, RW_SEEK_SET);
     SDL_RWread(file, wave8, sample->wave_len, 1);
 
-    Sample * wave = (Sample *)malloc(sample->wave_len * sizeof(Sample));
+    StereoFrame * wave = (StereoFrame *)malloc(sample->wave_len * sizeof(StereoFrame));
     sample->wave = wave;
     for (int i = 0; i < sample->wave_len; i++) {
         float v = wave8[i] / 128.0;

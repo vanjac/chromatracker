@@ -5,7 +5,7 @@
 
 static void set_playback_page(SongPlayback * playback, int page);
 static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
-static void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, Sample * tick_buffer, int tick_buffer_len);
+static void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFrame * tick_buffer, int tick_buffer_len);
 static void process_effect(char effect, Uint8 value, ChannelPlayback * channel);
 static Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_semis);
 
@@ -79,7 +79,7 @@ void set_playback_page(SongPlayback * playback, int page) {
 
 
 
-int process_tick(SongPlayback * playback, Sample * tick_buffer) {
+int process_tick(SongPlayback * playback, StereoFrame * tick_buffer) {
     // process page
     Song * song = playback->song;
     if (playback->current_page_tick >= song->page_lengths[playback->current_page]) {
@@ -137,14 +137,14 @@ void process_tick_track(TrackPlayback * track, SongPlayback * playback) {
 }
 
 
-void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, Sample * tick_buffer, int tick_buffer_len) {
+void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFrame * tick_buffer, int tick_buffer_len) {
     if (c->note_state == PLAY_OFF)
         return;
 
     InstSample * inst = c->instrument;
 
-    Sample * write = tick_buffer;
-    Sample * tick_buffer_end = tick_buffer + tick_buffer_len;
+    StereoFrame * write = tick_buffer;
+    StereoFrame * tick_buffer_end = tick_buffer + tick_buffer_len;
     while (c->note_state != PLAY_OFF && write < tick_buffer_end) {
         int loop = 0;
         Sint64 max_pos = c->playback_pos + (tick_buffer_end - write) * c->playback_rate;
@@ -161,9 +161,9 @@ void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, Sample *
         }
 
         while (c->playback_pos < max_pos) {
-            Sample mix_sample = inst->wave[c->playback_pos >> 16];
-            write->l += mix_sample.l * c->volume * SAMPLE_MASTER_VOLUME;
-            write->r += mix_sample.r * c->volume * SAMPLE_MASTER_VOLUME;
+            StereoFrame mix_frame = inst->wave[c->playback_pos >> 16];
+            write->l += mix_frame.l * c->volume * SAMPLE_MASTER_VOLUME;
+            write->r += mix_frame.r * c->volume * SAMPLE_MASTER_VOLUME;
             write++;
             c->playback_pos += c->playback_rate;
         }
