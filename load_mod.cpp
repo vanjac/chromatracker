@@ -68,7 +68,6 @@ void load_mod(const char * filename, Song * song) {
     int max_pattern = 0;
     for (int i = 0; i < song_length; i++) {
         int pat_num = song_table[i];
-        printf("%d ", pat_num);
         if (pat_num > max_pattern)
             max_pattern = pat_num;
         song->page_lengths[i] = PATTERN_LEN * TICKS_PER_ROW;
@@ -95,6 +94,7 @@ void load_mod(const char * filename, Song * song) {
     for (int i = 0; i < max_pattern + 1; i++) {
         int pattern_pos = pattern_size * i + 1084;
         for (int t = 0; t < NUM_TRACKS; t++) {
+            printf("Pattern %d Track %d\n", i, t);
             SDL_RWseek(file, 1084 + pattern_size * i + NUM_TRACKS * t, RW_SEEK_SET);
             read_pattern(file, &song->tracks[t].patterns[i], i);
         }
@@ -106,7 +106,6 @@ void load_mod(const char * filename, Song * song) {
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start) {
     char sample_name[22];
     SDL_RWread(file, sample_name, sizeof(sample_name), 1);
-    printf("%s\n", sample_name);
 
     Uint16 word_len, word_rep_pt, word_rep_len;
     Uint8 finetune, volume;
@@ -300,12 +299,17 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
             pattern->events.push_back(event);
         }
 
+        char event_str[EVENT_STR_LEN];
+        event_to_string(event, event_str);
+        printf("%.2X  %s\n", i, event_str);
+
         if (sample_num)
             sample_num_memory = sample_num;
 
         // skip other tracks to next row
         SDL_RWseek(file, (NUM_TRACKS - 1) * EVENT_SIZE, RW_SEEK_CUR);
     }
+    printf("\n\n");
 }
 
 

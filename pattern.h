@@ -59,8 +59,11 @@ struct Event {
     Uint8 v_value;
 };
 
+#define EVENT_STR_LEN 11
+
 int event_is_empty(Event event);
 int instrument_is_special(Event event);
+void event_to_string(Event e, char * str);
 
 struct Pattern {
     vector<Event> events;
