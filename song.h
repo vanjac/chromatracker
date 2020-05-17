@@ -7,7 +7,7 @@
 
 #define MAX_INST 36 * 36
 
-typedef struct {
+struct Song {
     Track * tracks;
     int num_tracks;
     int alloc_tracks;
@@ -16,7 +16,7 @@ typedef struct {
     int page_lengths[MAX_PAGES]; // in ticks
 
     InstSample * inst_table[MAX_INST];
-} Song;
+};
 
 void init_song(Song * song);
 void free_song(Song * song);

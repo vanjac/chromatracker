@@ -46,24 +46,24 @@ enum Effects {
 #define MIDDLE_C (5*12)
 #define MAX_VELOCITY 0x80
 
-typedef struct {
+struct Event {
     Uint16 time; // in ticks
     char instrument[2];
     char p_effect; // pitch column
     Uint8 p_value;
     char v_effect; // velocity column
     Uint8 v_value;
-} Event;
+};
 
 int event_is_empty(Event event);
 int instrument_is_special(Event event);
 
-typedef struct {
+struct Pattern {
     Event * events;
     int num_events;
     int alloc_events;
     int length; // ticks
-} Pattern;
+};
 
 void init_pattern(Pattern * pattern);
 void free_pattern(Pattern * pattern);
@@ -71,10 +71,10 @@ void free_pattern(Pattern * pattern);
 #define NUM_TRACK_PATTERNS 256
 #define MAX_PAGES 256
 
-typedef struct {
+struct Track {
     Pattern patterns[NUM_TRACK_PATTERNS];
     Uint8 pages[MAX_PAGES]; // patter number selections
-} Track;
+};
 
 void init_track(Track * track);
 void free_track(Track * track);

@@ -22,11 +22,11 @@ static const Uint16 tuning0_table[NUM_TUNINGS] = {
      107, 101,  95,  90,  85,  80,  76,  71,  67,  64,  60,  57  // octave 4
 };
 
-typedef struct {
+struct ModSampleInfo {
     char inst_id[2];
     InstSample * sample;
     Uint8 finetune;
-} ModSampleInfo;
+};
 
 static ModSampleInfo sample_info[NUM_SAMPLES + 1]; // indices start at 1
 static Song * current_song;

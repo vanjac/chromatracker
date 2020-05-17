@@ -6,9 +6,9 @@
 #include "instrument.h"
 #include "song.h"
 
-typedef enum {PLAY_OFF, PLAY_ON, PLAY_RELEASE} NoteState;
+enum NoteState {PLAY_OFF, PLAY_ON, PLAY_RELEASE};
 
-typedef struct {
+struct ChannelPlayback {
     InstSample * instrument;
     NoteState note_state;
 
@@ -19,20 +19,20 @@ typedef struct {
     float volume;
 
     float vel_slide, pitch_slide;
-} ChannelPlayback;
+};
 
 void init_channel_playback(ChannelPlayback * channel);
 
-typedef struct {
+struct TrackPlayback {
     ChannelPlayback * channel;
     Pattern * pattern;
     int pattern_tick;
     int event_i;
-} TrackPlayback;
+};
 
 void init_track_playback(TrackPlayback * track);
 
-typedef struct {
+struct SongPlayback {
     Song * song;
 
     int current_page;
@@ -47,7 +47,7 @@ typedef struct {
     int num_channels;
     TrackPlayback * tracks;
     int num_tracks;
-} SongPlayback;
+};
 
 void init_song_playback(SongPlayback * playback, Song * song, int out_freq);
 void free_song_playback(SongPlayback * playback);

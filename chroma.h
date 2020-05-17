@@ -3,9 +3,9 @@
 
 #include <SDL2/SDL_stdinc.h>
 
-typedef struct {
+struct StereoFrame{
     float l, r;
-} StereoFrame;
+};
 
 
 #endif

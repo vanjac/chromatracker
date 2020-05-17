@@ -5,10 +5,10 @@
 
 #define MAX_SLICES 100
 
-typedef enum {SMP_NORMAL, SMP_LOOP, SMP_SUSTAIN} PlaybackMode;
-typedef enum {LOOP_FORWARD, LOOP_PINGPONG} LoopType;
+enum PlaybackMode {SMP_NORMAL, SMP_LOOP, SMP_SUSTAIN};
+enum LoopType {LOOP_FORWARD, LOOP_PINGPONG};
 
-typedef struct {
+struct InstSample {
     StereoFrame * wave; // TODO allow mono
     int wave_len;
     float c5_freq;
@@ -21,7 +21,7 @@ typedef struct {
     // future instrument properties
     Uint8 default_pitch;
     Uint8 default_velocity;
-} InstSample;
+};
 
 void init_inst_sample(InstSample * sample);
 void free_inst_sample(InstSample * sample);
