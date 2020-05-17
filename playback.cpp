@@ -53,9 +53,9 @@ void init_song_playback(SongPlayback * playback, Song * song, int out_freq) {
 }
 
 void free_song_playback(SongPlayback * playback) {
-    delete playback->channels;
+    delete [] playback->channels;
     playback->channels = NULL;
-    delete playback->tracks;
+    delete [] playback->tracks;
     playback->tracks = NULL;
 }
 

@@ -16,6 +16,6 @@ void init_inst_sample(InstSample * sample) {
 }
 
 void free_inst_sample(InstSample * sample) {
-    delete sample->wave;
+    delete [] sample->wave;
     sample->wave = NULL;
 }

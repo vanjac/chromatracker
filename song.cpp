@@ -16,6 +16,7 @@ void free_song(Song * song) {
     for (int i = 0; i < MAX_INST; i++) {
         if (song->inst_table[i]) {
             free_inst_sample(song->inst_table[i]);
+            delete song->inst_table[i];
             song->inst_table[i] = NULL;
         }
     }
@@ -24,7 +25,7 @@ void free_song(Song * song) {
         for (int i = 0; i < song->num_tracks; i++) {
             free_track(&song->tracks[i]);
         }
-        delete song->tracks;
+        delete [] song->tracks;
         song->tracks = NULL;
     }
 }

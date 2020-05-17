@@ -18,7 +18,7 @@ void init_pattern(Pattern * pattern) {
 }
 
 void free_pattern(Pattern * pattern) {
-    delete pattern->events;
+    delete [] pattern->events;
     pattern->events = NULL;
 }
 
