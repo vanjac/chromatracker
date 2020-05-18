@@ -17,6 +17,7 @@
 
 // standard PAL rate
 #define AMIGA_C5_RATE 8287.1369
+#define MOD_DEFAULT_TEMPO 125
 
 #define PITCH_OFFSET 3*12
 #define NUM_MOD_PITCHES 12*5
@@ -46,13 +47,18 @@ struct ModTrackState {
         prev_glide(0), prev_vibrato(0), prev_tremolo(0), prev_offset(0) { }
 };
 
+struct ModSongState {
+    int tempo, ticks_per_row;
+    ModSongState() : tempo(MOD_DEFAULT_TEMPO), ticks_per_row(MOD_TICKS_PER_ROW) { }
+};
+
 static ModSampleInfo sample_info[NUM_SAMPLES + 1]; // indices start at 1
 static Song * current_song;
 
 // return wave end
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
 static void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
-    int pattern_num, ModTrackState * state, int time);
+    int pattern_num, ModTrackState * state, ModSongState * song_state, int time);
 static int period_to_pitch(int period);
 static Uint8 velocity_units(int volume);
 static Uint8 panning_units(int panning);
@@ -114,6 +120,8 @@ void load_mod(const char * filename, Song * song) {
         put_instrument(song, info->inst_id, sample);
     }
 
+    ModSongState song_state;
+
     for (int i = 0; i < max_pattern + 1; i++) {
 #ifdef DEBUG_EVENTS
         printf("Pattern %d\n", i);
@@ -134,7 +142,7 @@ void load_mod(const char * filename, Song * song) {
 #endif
             for (int t = 0; t < NUM_TRACKS; t++) {
                 read_pattern_cell(file, &song->tracks[t].patterns[i], i,
-                    &track_states[t], time);
+                    &track_states[t], &song_state, time);
             }
             time += TICKS_PER_ROW;
 #ifdef DEBUG_EVENTS
@@ -194,7 +202,7 @@ int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int
 
 
 void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
-        int pattern_num, ModTrackState * state, int time) {
+        int pattern_num, ModTrackState * state, ModSongState * song_state, int time) {
     /* from OpenMPT wiki  https://wiki.openmpt.org/Manual:_Patterns
 
     If there is no instrument number next to a note, the previously used sample
@@ -374,13 +382,15 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             }
             break;
         case 0xF:
-            if (value >= 0x20) {
-                event.instrument[0] = event.instrument[1]
-                    = EVENT_PLAYBACK;
-                event.p_effect = EFFECT_TEMPO;
-                event.v_effect = EFFECT_VELOCITY;
-                event.v_value = value;
-            } else { } // TODO set speed
+            if (value >= 0x20)
+                song_state->tempo = value;
+            else
+                song_state->ticks_per_row = value;
+            event.instrument[0] = event.instrument[1]
+                = EVENT_PLAYBACK;
+            event.p_effect = EFFECT_TEMPO;
+            event.v_effect = EFFECT_VELOCITY;
+            event.v_value = song_state->tempo * MOD_TICKS_PER_ROW / song_state->ticks_per_row;
             break;
     }
     state->prev_effect = effect;

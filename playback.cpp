@@ -7,6 +7,7 @@ static void set_playback_page(SongPlayback * playback, int page);
 static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
 static void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFrame * tick_buffer, int tick_buffer_len);
 static void process_effect(char effect, Uint8 value, ChannelPlayback * channel, bool glide);
+static int calc_tick_len(int tempo, int out_freq);
 static Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_semis);
 static float calc_slide_rate(Uint8 effect_value, int bias);
 
@@ -24,7 +25,7 @@ pattern(NULL), pattern_tick(0), event_i(0) { }
 SongPlayback::SongPlayback(int out_freq)
 : song(NULL), out_freq(out_freq),
 current_page(0), current_page_tick(0),
-tick_len(120<<16), tick_len_error(0),  // 125 bpm TODO
+tick_len(calc_tick_len(DEFAULT_TEMPO, out_freq)), tick_len_error(0),
 channels(NULL), num_channels(0),
 tracks(NULL), num_tracks(0) { }
 
@@ -188,7 +189,14 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
     ChannelPlayback * channel = track->channel;
 
     char inst_special = event.instrument[0];
-    if (inst_special == EVENT_NOTE_CUT) {
+    if (inst_special == EVENT_PLAYBACK) {
+        switch (event.p_effect) {
+            case EFFECT_TEMPO:
+                if (event.v_effect == EFFECT_VELOCITY)
+                    playback->tick_len = calc_tick_len(event.v_value, playback->out_freq);
+                break;
+        }
+    } else if (inst_special == EVENT_NOTE_CUT) {
         channel->note_state = PLAY_OFF;
     } else {
         if (!instrument_is_special(event)) {
@@ -268,6 +276,10 @@ void process_effect(char effect, Uint8 value, ChannelPlayback * channel, bool gl
     }
 }
 
+
+static int calc_tick_len(int tempo, int out_freq) {
+    return (Sint64)(1<<16) * out_freq * 60 / tempo / TICKS_PER_QUARTER;
+}
 
 Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_semis) {
     float note_rate = exp2f((pitch_semis - MIDDLE_C) / 12.0);

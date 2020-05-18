@@ -48,6 +48,8 @@ enum Effects {
 };
 
 #define TICKS_PER_QUARTER 192
+// same as MOD default tempo
+#define DEFAULT_TEMPO 125
 #define MIDDLE_C (5*12)
 #define MAX_VELOCITY 0x80
 
