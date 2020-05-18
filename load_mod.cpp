@@ -199,7 +199,9 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                 if (value == 0)
                     event.v_value = prev_glide; // memory
                 else
-                    event.v_value = pitch_slide_units(value);
+                    // TODO rate is doubled
+                    // better to be too fast than too slow
+                    event.v_value = pitch_slide_units(value * 2);
                 prev_glide = event.v_value;
                 break;
             case 0x4:
@@ -255,9 +257,13 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                 // continue previous effects...
                 // TODO these will get overwritten by pitch which is probably fine?
                 if (effect == 0x5) {
-                    event.p_effect = EFFECT_GLIDE;
-                    event.p_value = prev_glide;
+                    // glide is more important so put it in the pitch column
+                    event.p_effect = event.v_effect;
+                    event.p_value = event.v_value;
+                    event.v_effect = EFFECT_GLIDE;
+                    event.v_value = prev_glide;
                 } else if (effect == 0x6) {
+                    // vibrato is less important
                     event.p_effect = EFFECT_VIBRATO;
                     event.p_value = prev_vibrato;
                 }
@@ -342,9 +348,9 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         prev_effect = effect;
 
         if (period != 0) {
-            // note on
-            // TODO: note change if glide effect
-            if (sample_num) {
+            // note change if glide effect, otherwise note on
+            if (event.v_effect == EFFECT_GLIDE) { }
+            else if (sample_num) {
                 ModSampleInfo * info = &sample_info[sample_num];
                 event.instrument[0] = info->inst_id[0];
                 event.instrument[1] = info->inst_id[1];
@@ -473,6 +479,7 @@ Uint8 pitch_slide_units(int pitch_slide) {
 
 Uint8 pitch_fine_slide_units(int fine_slide) {
     // TODO!
+    // average between octaves 2 and 3
     float semis_per_row = (float)fine_slide * 12.0 / 214.0;
     float semis_per_quarter = semis_per_row * (TICKS_PER_QUARTER / TICKS_PER_ROW);
     return slide_hex_float(semis_per_quarter, PITCH_SLIDE_BIAS);

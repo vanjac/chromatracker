@@ -19,6 +19,7 @@ struct ChannelPlayback {
     float volume;
 
     float vel_slide, pitch_slide;
+    float glide_pitch; // negative if no glide
 
     ChannelPlayback();
 };

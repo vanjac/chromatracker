@@ -6,7 +6,7 @@
 static void set_playback_page(SongPlayback * playback, int page);
 static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
 static void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFrame * tick_buffer, int tick_buffer_len);
-static void process_effect(char effect, Uint8 value, ChannelPlayback * channel);
+static void process_effect(char effect, Uint8 value, ChannelPlayback * channel, bool glide);
 static Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_semis);
 static float calc_slide_rate(Uint8 effect_value, int bias);
 
@@ -15,7 +15,7 @@ ChannelPlayback::ChannelPlayback()
 : instrument(NULL), note_state(PLAY_OFF),
 pitch_semis(0.0), playback_rate(0), playback_pos(0),
 volume(1.0),
-vel_slide(0), pitch_slide(0) { }
+vel_slide(0), pitch_slide(0), glide_pitch(-1.0) { }
 
 TrackPlayback::TrackPlayback()
 : channel(NULL),
@@ -167,6 +167,16 @@ void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFr
     
     if (c->pitch_slide != 0.0) {
         c->pitch_semis += c->pitch_slide;
+        if (c->glide_pitch >= 0.0) {
+            // stop after glide
+            if (c->pitch_slide >= 0.0) {
+                if (c->pitch_semis > c->glide_pitch)
+                    c->pitch_semis = c->glide_pitch;
+            } else {
+                if (c->pitch_semis < c->glide_pitch)
+                    c->pitch_semis = c->glide_pitch;
+            }
+        }
         c->playback_rate = calc_playback_rate(playback->out_freq,
             c->instrument->c5_freq, c->pitch_semis);
     }
@@ -199,11 +209,11 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
             }
         }
 
-        // reset previous effects (TODO: special case for glide)
+        // reset previous effects
         channel->pitch_slide = 0.0;
         channel->vel_slide = 0.0;
-        process_effect(event.p_effect, event.p_value, channel);
-        process_effect(event.v_effect, event.v_value, channel);
+        process_effect(event.p_effect, event.p_value, channel, event.v_effect == EFFECT_GLIDE);
+        process_effect(event.v_effect, event.v_value, channel, false);
 
         if (channel->instrument)
             channel->playback_rate = calc_playback_rate(playback->out_freq,
@@ -212,20 +222,29 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
 }
 
 
-void process_effect(char effect, Uint8 value, ChannelPlayback * channel) {
+void process_effect(char effect, Uint8 value, ChannelPlayback * channel, bool glide) {
     switch (effect) {
         case EFFECT_PITCH:
-            // TODO check for glide
-            channel->pitch_semis = value;
+            if (glide)
+                channel->glide_pitch = value;
+            else
+                channel->pitch_semis = value;
             break;
         case EFFECT_VELOCITY:
             channel->volume = value / (float)MAX_VELOCITY;
             break;
         case EFFECT_PITCH_SLIDE_UP:
             channel->pitch_slide = calc_slide_rate(value, PITCH_SLIDE_BIAS);
+            channel->glide_pitch = -1.0;
             break;
         case EFFECT_PITCH_SLIDE_DOWN:
             channel->pitch_slide = -calc_slide_rate(value, PITCH_SLIDE_BIAS);
+            channel->glide_pitch = -1.0;
+            break;
+        case EFFECT_GLIDE:
+            channel->pitch_slide = calc_slide_rate(value, PITCH_SLIDE_BIAS);
+            if (channel->glide_pitch < channel->pitch_semis)
+                channel->pitch_slide *= -1;
             break;
         case EFFECT_TUNE:
             channel->pitch_semis += (value - 0x40) / (float)0x40;
