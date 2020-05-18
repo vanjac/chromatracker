@@ -221,15 +221,21 @@ void process_effect(char effect, Uint8 value, ChannelPlayback * channel) {
         case EFFECT_VELOCITY:
             channel->volume = value / (float)MAX_VELOCITY;
             break;
+        case EFFECT_PITCH_SLIDE_UP:
+            channel->pitch_slide = calc_slide_rate(value, PITCH_SLIDE_BIAS);
+            break;
+        case EFFECT_PITCH_SLIDE_DOWN:
+            channel->pitch_slide = -calc_slide_rate(value, PITCH_SLIDE_BIAS);
+            break;
+        case EFFECT_TUNE:
+            channel->pitch_semis += (value - 0x40) / (float)0x40;
+            break;
         case EFFECT_VEL_SLIDE_UP:
             // 2^7 = 128 = MAX_VELOCITY
             channel->vel_slide = calc_slide_rate(value, VELOCITY_SLIDE_BIAS + 7);
             break;
         case EFFECT_VEL_SLIDE_DOWN:
             channel->vel_slide = -calc_slide_rate(value, VELOCITY_SLIDE_BIAS + 7);
-            break;
-        case EFFECT_TUNE:
-            channel->pitch_semis += (value - 0x40) / (float)0x40;
             break;
         case EFFECT_SAMPLE_OFFSET:
             if (channel->instrument) {

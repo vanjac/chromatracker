@@ -468,19 +468,19 @@ Uint8 slide_hex_float(float slide, int bias) {
 
 Uint8 pitch_slide_units(int pitch_slide) {
     // TODO!
-    return pitch_slide;
+    return pitch_fine_slide_units(pitch_slide * (MOD_TICKS_PER_ROW - 1));
 }
 
 Uint8 pitch_fine_slide_units(int fine_slide) {
     // TODO!
-    return fine_slide;
+    float semis_per_row = (float)fine_slide * 12.0 / 214.0;
+    float semis_per_quarter = semis_per_row * (TICKS_PER_QUARTER / TICKS_PER_ROW);
+    return slide_hex_float(semis_per_quarter, PITCH_SLIDE_BIAS);
 }
 
 Uint8 velocity_slide_units(int volume_slide) {
     // TODO!
-    volume_slide = velocity_units(volume_slide);
-    int units_per_quarter = volume_slide * (MOD_TICKS_PER_ROW - 1) * (TICKS_PER_QUARTER / TICKS_PER_ROW);
-    return slide_hex_float(units_per_quarter, VELOCITY_SLIDE_BIAS);
+    return velocity_fine_slide_units(volume_slide * (MOD_TICKS_PER_ROW - 1));
 }
 
 Uint8 velocity_fine_slide_units(int fine_slide) {

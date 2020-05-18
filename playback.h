@@ -27,7 +27,7 @@ struct TrackPlayback {
     ChannelPlayback * channel;
     Pattern * pattern;
     int pattern_tick;
-    int event_i;
+    int event_i;  // next event
 
     TrackPlayback();
 };
