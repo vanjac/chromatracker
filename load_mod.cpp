@@ -113,7 +113,8 @@ int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int
     SDL_RWread(file, sample_name, sizeof(sample_name), 1);
 
     Uint16 word_len, word_rep_pt, word_rep_len;
-    Uint8 finetune, volume;
+    Sint8 finetune;
+    Uint8 volume;
     SDL_RWread(file, &word_len, 2, 1);
     SDL_RWread(file, &finetune, 1, 1);
     SDL_RWread(file, &volume, 1, 1);
@@ -141,6 +142,11 @@ int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int
     }
 
     sample->c5_freq = 8287.1369; // TODO
+    // convert signed nibble to signed byte
+    finetune <<= 4;
+    finetune >>= 4;
+    // finetune in steps of 1/8 semitone
+    sample->c5_freq *= exp2f(finetune / (12.0 * 8.0));
 
     return wave_start + sample->wave_len;
 }
