@@ -4,6 +4,8 @@
 #include "song.h"
 #include "instrument.h"
 
+//#define DEBUG_EVENTS
+
 #define SONG_TABLE_SIZE 128
 #define NUM_SAMPLES 31
 #define PATTERN_LEN 64
@@ -13,9 +15,12 @@
 #define NUM_TRACKS 4
 #define EVENT_SIZE 4
 
-// TODO: other tunings??
-#define NUM_TUNINGS 12*5
-static const Uint16 tuning0_table[NUM_TUNINGS] = {
+// standard PAL rate
+#define AMIGA_C5_RATE 8287.1369
+
+#define PITCH_OFFSET 3*12
+#define NUM_MOD_PITCHES 12*5
+static const Uint16 tuning0_table[NUM_MOD_PITCHES] = {
     1712,1616,1525,1440,1357,1281,1209,1141,1077,1017, 961, 907, // octave 0, nonstandard
      856, 808, 762, 720, 678, 640, 604, 570, 538, 508, 480, 453, // octave 1
      428, 404, 381, 360, 339, 320, 302, 285, 269, 254, 240, 226, // octave 2
@@ -35,7 +40,7 @@ static Song * current_song;
 // return wave end
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
 static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
-static int period_to_pitch(int period, int sample_num);
+static int period_to_pitch(int period);
 static Uint8 velocity_units(int volume);
 static Uint8 panning_units(int panning);
 static Uint8 panning_units_coarse(int panning);
@@ -141,7 +146,7 @@ int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int
         wave[i].l = wave[i].r = v;
     }
 
-    sample->c5_freq = 8287.1369; // TODO
+    sample->c5_freq = AMIGA_C5_RATE; 
     // convert signed nibble to signed byte
     finetune <<= 4;
     finetune >>= 4;
@@ -370,7 +375,7 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
             }
 
             event.p_effect = EFFECT_PITCH;
-            event.p_value = period_to_pitch(period, sample_num);
+            event.p_value = period_to_pitch(period);
         } else if (sample_num) {
             // override playback event. TODO move to a different track
             if (event.instrument[0] == EVENT_PLAYBACK)
@@ -394,9 +399,11 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
             pattern->events.push_back(event);
         }
 
+#ifdef DEBUG_EVENTS
         char event_str[EVENT_STR_LEN];
         event_to_string(event, event_str);
         printf("%.2X  %s", i, event_str);
+#endif
 
         if (effect == 0xE && sub_effect == 0x9) {
             // retrigger
@@ -408,20 +415,26 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
             }
             while (retrigger_event.time < event.time + TICKS_PER_ROW) {
                 pattern->events.push_back(retrigger_event);
+#ifdef DEBUG_EVENTS
                 event_to_string(retrigger_event, event_str);
                 printf("   %s", event_str);
+#endif
                 retrigger_event.time += value * MOD_TICK_SCALE;
             }
         } else if (effect == 0xE && sub_effect == 0xC) {
             // note cut
             Event cut_event {(Uint16)(event.time + value * MOD_TICK_SCALE),
                 {EVENT_NOTE_CUT, EVENT_NOTE_CUT}, EFFECT_NONE, 0, EFFECT_NONE, 0};
+#ifdef DEBUG_EVENTS
                 event_to_string(cut_event, event_str);
                 printf("   %s", event_str);
+#endif
             pattern->events.push_back(cut_event);
         }
 
+#ifdef DEBUG_EVENTS
         printf("\n");
+#endif
 
         if (sample_num)
             sample_num_memory = sample_num;
@@ -429,17 +442,34 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         // skip other tracks to next row
         SDL_RWseek(file, (NUM_TRACKS - 1) * EVENT_SIZE, RW_SEEK_CUR);
     }
+#ifdef DEBUG_EVENTS
     printf("\n\n");
+#endif
 }
 
 
-int period_to_pitch(int period, int sample_num) {
-    // TODO binary search + different tunings
-    for (int pitch = 0; pitch < NUM_TUNINGS; pitch++) {
-        if (tuning0_table[pitch] == period)
-            return pitch + 3 * 12;
+int period_to_pitch(int period) {
+    // binary search time
+    // periods are in decreasing order in the tuning table
+    int min = 0, max = NUM_MOD_PITCHES - 1;
+    while (min <= max) {
+        int i = (min + max) / 2;
+        int value = tuning0_table[i];
+        if (value > period)
+            min = i + 1;
+        else if (value < period)
+            max = i - 1;
+        else
+            return i + PITCH_OFFSET;
     }
-    return MIDDLE_C;
+
+    // guess from the closest value
+    int min_diff = abs(tuning0_table[min] - period);
+    int max_diff = abs(tuning0_table[max] - period);
+    if (max_diff < min_diff)
+        return max + PITCH_OFFSET;
+    else
+        return min + PITCH_OFFSET;
 }
 
 Uint8 velocity_units(int volume) {
