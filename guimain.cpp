@@ -21,13 +21,12 @@ void gui(SongPlayback * playback) {
     for (int i = 0; i < playback->num_tracks; i++) {
         TrackPlayback * track = &playback->tracks[i];
         ImGui::Text("Track %d", i);
-        ImGui::Text("Pattern: %d", playback->song->tracks[i].pages[playback->current_page]);
-        ImGui::Text("Pattern tick: 0x%X", track->pattern_tick);
-        ImGui::Text("Event: %d", track->event_i);
+        ImGui::Text("Pattern:%3d  0x%.4X", playback->song->tracks[i].pages[playback->current_page],
+            track->pattern_tick);
         if (track->pattern) {
             Event current_event = track->pattern->events[track->event_i];
             event_to_string(current_event, event_str);
-            ImGui::Text("%s", event_str);
+            ImGui::Text("Event:%3d  %s", track->event_i, event_str);
         }
         ImGui::NextColumn();
     }

@@ -8,6 +8,7 @@ static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
 static void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFrame * tick_buffer, int tick_buffer_len);
 static void process_effect(char effect, Uint8 value, ChannelPlayback * channel);
 static Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_semis);
+static float calc_slide_rate(Uint8 effect_value, int bias);
 
 
 ChannelPlayback::ChannelPlayback() 
@@ -220,6 +221,13 @@ void process_effect(char effect, Uint8 value, ChannelPlayback * channel) {
         case EFFECT_VELOCITY:
             channel->volume = value / (float)MAX_VELOCITY;
             break;
+        case EFFECT_VEL_SLIDE_UP:
+            // 2^7 = 128 = MAX_VELOCITY
+            channel->vel_slide = calc_slide_rate(value, VELOCITY_SLIDE_BIAS + 7);
+            break;
+        case EFFECT_VEL_SLIDE_DOWN:
+            channel->vel_slide = -calc_slide_rate(value, VELOCITY_SLIDE_BIAS + 7);
+            break;
         case EFFECT_TUNE:
             channel->pitch_semis += (value - 0x40) / (float)0x40;
             break;
@@ -239,4 +247,15 @@ void process_effect(char effect, Uint8 value, ChannelPlayback * channel) {
 Sint32 calc_playback_rate(int out_freq, float c5_freq, float pitch_semis) {
     float note_rate = exp2f((pitch_semis - MIDDLE_C) / 12.0);
     return (Sint32)roundf(note_rate * c5_freq / out_freq * 65536);
+}
+
+float calc_slide_rate(Uint8 effect_value, int bias) {
+    int exp = effect_value >> 4;
+    int mant = effect_value & 0xF;
+    exp += 127 - bias;
+    Uint32 float_bits = (exp << 23) | (mant << 19);
+    void * bit_ptr = &float_bits;
+    float slide = *((float *)bit_ptr);
+    slide /= TICKS_PER_QUARTER;
+    return slide;
 }

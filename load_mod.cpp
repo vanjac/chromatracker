@@ -478,14 +478,16 @@ Uint8 pitch_fine_slide_units(int fine_slide) {
 
 Uint8 velocity_slide_units(int volume_slide) {
     // TODO!
+    volume_slide = velocity_units(volume_slide);
     int units_per_quarter = volume_slide * (MOD_TICKS_PER_ROW - 1) * (TICKS_PER_QUARTER / TICKS_PER_ROW);
-    return slide_hex_float(units_per_quarter, 1);
+    return slide_hex_float(units_per_quarter, VELOCITY_SLIDE_BIAS);
 }
 
 Uint8 velocity_fine_slide_units(int fine_slide) {
     // TODO!
+    fine_slide = velocity_units(fine_slide);
     int units_per_quarter = fine_slide * (TICKS_PER_QUARTER / TICKS_PER_ROW);
-    return slide_hex_float(units_per_quarter, 1);
+    return slide_hex_float(units_per_quarter, VELOCITY_SLIDE_BIAS);
 }
 
 int sample_add_slice(InstSample * sample, int slice_point) {

@@ -51,6 +51,9 @@ enum Effects {
 #define MIDDLE_C (5*12)
 #define MAX_VELOCITY 0x80
 
+#define VELOCITY_SLIDE_BIAS 1
+#define PITCH_SLIDE_BIAS 4
+
 struct Event {
     Uint16 time; // in ticks
     char instrument[2];
