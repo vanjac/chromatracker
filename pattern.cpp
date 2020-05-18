@@ -9,12 +9,18 @@ static const char PLAYBACK_EVENT_NAMES[][4] = {
 static void effect_to_string(char effect, Uint8 value, char * str);
 
 
-int event_is_empty(Event event) {
+bool event_is_empty(Event event) {
     return !event.instrument[0] && event.p_effect == EFFECT_NONE
         && event.v_effect == EFFECT_NONE;
 }
 
-int instrument_is_special(Event event) {
+void clear_event(Event * event) {
+    event->instrument[0] = event->instrument[1] = EVENT_NOTE_CHANGE;
+    event->p_effect = event->v_effect = EFFECT_NONE;
+    event->p_value = event->v_value = 0;
+}
+
+bool instrument_is_special(Event event) {
     char c = event.instrument[0];
     return !( (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') );
 }

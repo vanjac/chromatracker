@@ -65,8 +65,9 @@ struct Event {
 
 #define EVENT_STR_LEN 11
 
-int event_is_empty(Event event);
-int instrument_is_special(Event event);
+bool event_is_empty(Event event);
+void clear_event(Event * event);
+bool instrument_is_special(Event event);
 void event_to_string(Event e, char * str);
 
 struct Pattern {
