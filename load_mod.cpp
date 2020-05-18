@@ -173,13 +173,13 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         int effect = bytes[2] & 0x0F;
         int value = bytes[3];
 
-        Event event = {(Uint16)(i * TICKS_PER_ROW), {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE},
-            EFFECT_NONE, 0, EFFECT_NONE, 0};
+        Event event {(Uint16)(i * TICKS_PER_ROW),
+            {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE}, EFFECT_NONE, 0, EFFECT_NONE, 0};
         
         int keep_empty_event = 0;
-
+        int sub_effect = 0;
         switch (effect) {
-            int speed, depth, slice_point, sub_effect;
+            int speed, depth, slice_point;
             case 0x0:
                 // clear previous effect
                 if (prev_effect != 0x0 && prev_effect != 0x9 && prev_effect != 0xB
@@ -376,7 +376,32 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
 
         char event_str[EVENT_STR_LEN];
         event_to_string(event, event_str);
-        printf("%.2X  %s\n", i, event_str);
+        printf("%.2X  %s", i, event_str);
+
+        if (effect == 0xE && sub_effect == 0x9) {
+            // retrigger
+            Event retrigger_event {event.time,
+                {EVENT_REPLAY, EVENT_REPLAY}, EFFECT_NONE, 0, EFFECT_NONE, 0};
+            if (!event_is_empty(event)) {
+                // skip first retrigger
+                retrigger_event.time += value * MOD_TICK_SCALE;
+            }
+            while (retrigger_event.time < event.time + TICKS_PER_ROW) {
+                pattern->events.push_back(retrigger_event);
+                event_to_string(retrigger_event, event_str);
+                printf("   %s", event_str);
+                retrigger_event.time += value * MOD_TICK_SCALE;
+            }
+        } else if (effect == 0xE && sub_effect == 0xC) {
+            // note cut
+            Event cut_event {(Uint16)(event.time + value * MOD_TICK_SCALE),
+                {EVENT_NOTE_CUT, EVENT_NOTE_CUT}, EFFECT_NONE, 0, EFFECT_NONE, 0};
+                event_to_string(cut_event, event_str);
+                printf("   %s", event_str);
+            pattern->events.push_back(cut_event);
+        }
+
+        printf("\n");
 
         if (sample_num)
             sample_num_memory = sample_num;
@@ -408,7 +433,9 @@ Uint8 panning_units(int panning) {
 }
 
 Uint8 panning_units_coarse(int panning) {
-    return panning_units((panning << 4) + panning);
+    if (panning > 0x8)
+        panning += 1;
+    return panning * 0x8;
 }
 
 Uint8 slide_hex_float(float slide, int bias) {
