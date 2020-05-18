@@ -21,6 +21,7 @@ enum Events {
 enum Effects {
     EFFECT_NONE             = 0,
     EFFECT_PITCH            = 1, // pitch column only
+    // also used for playback event value
     EFFECT_VELOCITY         = 2, // velocity column only
 
     EFFECT_PITCH_SLIDE_UP   = 'U',

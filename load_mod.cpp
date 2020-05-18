@@ -7,8 +7,9 @@
 #define SONG_TABLE_SIZE 128
 #define NUM_SAMPLES 31
 #define PATTERN_LEN 64
+#define MOD_TICK_SCALE 8
 #define MOD_TICKS_PER_ROW 6
-#define TICKS_PER_ROW (MOD_TICKS_PER_ROW * 8)
+#define TICKS_PER_ROW (MOD_TICKS_PER_ROW * MOD_TICK_SCALE)
 #define NUM_TRACKS 4
 #define EVENT_SIZE 4
 
@@ -35,10 +36,14 @@ static Song * current_song;
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
 static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
 static int period_to_pitch(int period, int sample_num);
-static Uint8 volume_to_velocity(int volume);
+static Uint8 velocity_units(int volume);
+static Uint8 panning_units(int panning);
+static Uint8 panning_units_coarse(int panning);
 static Uint8 slide_hex_float(float slide, int bias);
 static Uint8 pitch_slide_units(int pitch_slide);
+static Uint8 pitch_fine_slide_units(int fine_slide);
 static Uint8 velocity_slide_units(int volume_slide);
+static Uint8 velocity_fine_slide_units(int fine_slide);
 static int sample_add_slice(InstSample * sample, int slice_point);
 
 void load_mod(const char * filename, Song * song) {
@@ -103,7 +108,7 @@ void load_mod(const char * filename, Song * song) {
     SDL_RWclose(file);
 }
 
-static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start) {
+int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start) {
     char sample_name[22];
     SDL_RWread(file, sample_name, sizeof(sample_name), 1);
 
@@ -121,7 +126,7 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
         sample->loop_start = SDL_SwapBE16(word_rep_pt) * 2;
         sample->loop_end = sample->loop_start + word_rep_len * 2;
     }
-    sample->default_velocity = volume_to_velocity(volume);
+    sample->default_velocity = velocity_units(volume);
     info->finetune = finetune;
 
     static Sint8 wave8[65536 * 2];
@@ -141,7 +146,7 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
 }
 
 
-static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
+void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     /* from OpenMPT wiki  https://wiki.openmpt.org/Manual:_Patterns
 
     If there is no instrument number next to a note, the previously used sample
@@ -155,7 +160,6 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     pattern->events.reserve(PATTERN_LEN);
 
     int prev_effect = -1; // always reset at start
-    int prev_value = -1;
     Uint8 prev_glide = 0;
     Uint8 prev_vibrato = 0;
     Uint8 prev_tremolo = 0;
@@ -175,7 +179,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         int keep_empty_event = 0;
 
         switch (effect) {
-            int speed, depth, slice_point;
+            int speed, depth, slice_point, sub_effect;
             case 0x0:
                 // clear previous effect
                 if (prev_effect != 0x0 && prev_effect != 0x9 && prev_effect != 0xB
@@ -185,9 +189,11 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
             case 0x1:
                 event.v_effect = EFFECT_PITCH_SLIDE_UP;
                 event.v_value = pitch_slide_units(value);
+                break;
             case 0x2:
                 event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
                 event.v_value = pitch_slide_units(value);
+                break;
             case 0x3:
                 event.v_effect = EFFECT_GLIDE;
                 if (value == 0)
@@ -208,6 +214,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                     prev_vibrato = event.v_value;
                 }
                 break;
+            // 0x5 and 0x6 are combined with A below
             case 0x7:
                 event.v_effect = EFFECT_TREMOLO;
                 if (value == 0)
@@ -218,6 +225,11 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                     event.v_value = (speed << 4) | depth;
                     prev_tremolo = event.v_value;
                 }
+                break;
+            case 0x8:
+                event.v_effect = EFFECT_PAN;
+                event.v_value = panning_units(value);
+                break;
             case 0x9:
                 event.v_effect = EFFECT_SAMPLE_OFFSET;
                 slice_point = value * 256;
@@ -253,7 +265,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
             // TODO Position jump
             case 0xC:
                 event.v_effect = EFFECT_VELOCITY;
-                event.v_value = volume_to_velocity(value);
+                event.v_value = velocity_units(value);
                 break;
             case 0xD: // pattern break
                 // TODO jump to row
@@ -265,7 +277,57 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                 }
                 break;
             case 0xE:
-                // TODO
+                sub_effect = value >> 4;
+                value &= 0xF;
+                switch (sub_effect) {
+                    case 0x1:
+                        event.v_effect = EFFECT_PITCH_SLIDE_UP;
+                        event.v_value = pitch_fine_slide_units(value);
+                        break;
+                    case 0x2:
+                        event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
+                        event.v_value = pitch_fine_slide_units(value);
+                        break;
+                    case 0x5:
+                        // TODO does this affect the period value?
+                        // also repeated effects should not accumulate
+                        event.v_effect = EFFECT_TUNE;
+                        event.v_value = value; // TODO
+                        break;
+                    case 0x6:
+                        event.instrument[0] = event.instrument[1]
+                            = EVENT_PLAYBACK;
+                        event.p_effect = EFFECT_REPEAT;
+                        if (value != 0) {
+                            event.v_effect = EFFECT_VELOCITY;
+                            event.v_value = value;
+                        }
+                        break;
+                    case 0x8:
+                        event.v_effect = EFFECT_PAN;
+                        event.v_value = panning_units_coarse(value);
+                        break;
+                    // 0x9 is checked after writing event
+                    case 0xA:
+                        event.v_effect = EFFECT_VEL_SLIDE_UP;
+                        event.v_value = velocity_fine_slide_units(value);
+                        break;
+                    case 0xB:
+                        event.v_effect = EFFECT_VEL_SLIDE_DOWN;
+                        event.v_value = velocity_fine_slide_units(value);
+                        break;
+                    // 0xC is checked after writing event
+                    case 0xD: // note delay
+                        event.time += value * MOD_TICK_SCALE;
+                        break;
+                    case 0xE:
+                        event.instrument[0] = event.instrument[1]
+                            = EVENT_PLAYBACK;
+                        event.p_effect = EFFECT_PAUSE;
+                        event.v_effect = EFFECT_VELOCITY;
+                        event.v_value = value * 16 * TICKS_PER_ROW / TICKS_PER_QUARTER;
+                        break;
+                }
                 break;
             case 0xF:
                 if (value >= 0x20) {
@@ -274,12 +336,10 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
                     event.p_effect = EFFECT_TEMPO;
                     event.v_effect = EFFECT_VELOCITY;
                     event.v_value = value;
-                    break;
                 } else { } // TODO set speed
                 break;
         }
         prev_effect = effect;
-        prev_value = value;
 
         if (period != 0) {
             // note on
@@ -328,7 +388,7 @@ static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
 }
 
 
-static int period_to_pitch(int period, int sample_num) {
+int period_to_pitch(int period, int sample_num) {
     // TODO binary search + different tunings
     for (int pitch = 0; pitch < NUM_TUNINGS; pitch++) {
         if (tuning0_table[pitch] == period)
@@ -337,11 +397,21 @@ static int period_to_pitch(int period, int sample_num) {
     return MIDDLE_C;
 }
 
-static Uint8 volume_to_velocity(int volume) {
+Uint8 velocity_units(int volume) {
     return volume * 2;
 }
 
-static Uint8 slide_hex_float(float slide, int bias) {
+Uint8 panning_units(int panning) {
+    if (panning > 0x80)
+        panning += 1; // round up
+    return panning / 2;
+}
+
+Uint8 panning_units_coarse(int panning) {
+    return panning_units((panning << 4) + panning);
+}
+
+Uint8 slide_hex_float(float slide, int bias) {
     if (slide <= 0)
         return 0;
     void * bit_ptr = &slide;
@@ -369,18 +439,29 @@ static Uint8 slide_hex_float(float slide, int bias) {
 }
 
 
-static Uint8 pitch_slide_units(int pitch_slide) {
+Uint8 pitch_slide_units(int pitch_slide) {
     // TODO!
     return pitch_slide;
 }
 
-static Uint8 velocity_slide_units(int volume_slide) {
+Uint8 pitch_fine_slide_units(int fine_slide) {
+    // TODO!
+    return fine_slide;
+}
+
+Uint8 velocity_slide_units(int volume_slide) {
     // TODO!
     int units_per_quarter = volume_slide * (MOD_TICKS_PER_ROW - 1) * (TICKS_PER_QUARTER / TICKS_PER_ROW);
     return slide_hex_float(units_per_quarter, 1);
 }
 
-static int sample_add_slice(InstSample * sample, int slice_point) {
+Uint8 velocity_fine_slide_units(int fine_slide) {
+    // TODO!
+    int units_per_quarter = fine_slide * (TICKS_PER_QUARTER / TICKS_PER_ROW);
+    return slide_hex_float(units_per_quarter, 1);
+}
+
+int sample_add_slice(InstSample * sample, int slice_point) {
     for (int i = 0; i < sample->num_slices; i++) {
         if (sample->slices[i] == slice_point)
             return i;
