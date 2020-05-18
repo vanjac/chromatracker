@@ -4,7 +4,7 @@
 #include "song.h"
 #include "instrument.h"
 
-//#define DEBUG_EVENTS
+#define DEBUG_EVENTS
 
 #define SONG_TABLE_SIZE 128
 #define NUM_SAMPLES 31
@@ -41,6 +41,9 @@ struct ModTrackState {
     Uint8 prev_vibrato;
     Uint8 prev_tremolo;
     Uint8 prev_offset;
+    ModTrackState() : prev_sample_num(0),
+        prev_effect(-1), // always reset effect at start
+        prev_glide(0), prev_vibrato(0), prev_tremolo(0), prev_offset(0) { }
 };
 
 static ModSampleInfo sample_info[NUM_SAMPLES + 1]; // indices start at 1
@@ -48,7 +51,6 @@ static Song * current_song;
 
 // return wave end
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
-static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
 static void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
     int pattern_num, ModTrackState * state, int time);
 static int period_to_pitch(int period);
@@ -113,12 +115,35 @@ void load_mod(const char * filename, Song * song) {
     }
 
     for (int i = 0; i < max_pattern + 1; i++) {
-        int pattern_pos = pattern_size * i + 1084;
+#ifdef DEBUG_EVENTS
+        printf("Pattern %d\n", i);
+#endif
         for (int t = 0; t < NUM_TRACKS; t++) {
-            printf("Pattern %d Track %d\n", i, t);
-            SDL_RWseek(file, 1084 + pattern_size * i + NUM_TRACKS * t, RW_SEEK_SET);
-            read_pattern(file, &song->tracks[t].patterns[i], i);
+            Pattern * p = &song->tracks[t].patterns[i];
+            p->length = PATTERN_LEN * TICKS_PER_ROW;
+            p->events.reserve(PATTERN_LEN); // estimate
         }
+
+        SDL_RWseek(file, 1084 + pattern_size * i, RW_SEEK_SET);
+
+        ModTrackState track_states[NUM_TRACKS];
+        int time = 0;
+        for (int row = 0; row < PATTERN_LEN; row++) {
+#ifdef DEBUG_EVENTS
+            printf("%.2X  ", row);
+#endif
+            for (int t = 0; t < NUM_TRACKS; t++) {
+                read_pattern_cell(file, &song->tracks[t].patterns[i], i,
+                    &track_states[t], time);
+            }
+            time += TICKS_PER_ROW;
+#ifdef DEBUG_EVENTS
+            printf("\n");
+#endif
+        }
+#ifdef DEBUG_EVENTS
+        printf("\n\n");
+#endif
     }
 
     SDL_RWclose(file);
@@ -168,7 +193,8 @@ int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int
 }
 
 
-void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
+void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
+        int pattern_num, ModTrackState * state, int time) {
     /* from OpenMPT wiki  https://wiki.openmpt.org/Manual:_Patterns
 
     If there is no instrument number next to a note, the previously used sample
@@ -178,28 +204,6 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     volume slide effect to create a gated sound).
     */
 
-    pattern->length = PATTERN_LEN * TICKS_PER_ROW;
-    pattern->events.reserve(PATTERN_LEN);
-
-    ModTrackState state { .prev_sample_num = 0,
-        .prev_effect = -1, // always reset effect at start
-        .prev_glide = 0, .prev_vibrato = 0, .prev_tremolo = 0, .prev_offset = 0 };
-    int time = 0;
-    for (int i = 0; i < PATTERN_LEN; i++) {
-        read_pattern_cell(file, pattern, pattern_num, &state, time);
-        // skip other tracks to next row
-        SDL_RWseek(file, (NUM_TRACKS - 1) * EVENT_SIZE, RW_SEEK_CUR);
-
-        time += TICKS_PER_ROW;
-    }
-#ifdef DEBUG_EVENTS
-    printf("\n\n");
-#endif
-}
-
-
-void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
-        int pattern_num, ModTrackState * state, int time) {
     Uint8 bytes[EVENT_SIZE];
     SDL_RWread(file, bytes, 1, EVENT_SIZE);
     int period = ((bytes[0] & 0x0F) << 8) | bytes[1];
@@ -425,7 +429,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
 #ifdef DEBUG_EVENTS
     char event_str[EVENT_STR_LEN];
     event_to_string(event, event_str);
-    printf("%.2X  %s", i, event_str);
+    printf("%s   ", event_str);
 #endif
 
     if (effect == 0xE && sub_effect == 0x9) {
@@ -440,7 +444,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             pattern->events.push_back(retrigger_event);
 #ifdef DEBUG_EVENTS
             event_to_string(retrigger_event, event_str);
-            printf("   %s", event_str);
+            printf("%s   ", event_str);
 #endif
             retrigger_event.time += value * MOD_TICK_SCALE;
         }
@@ -450,14 +454,10 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             {EVENT_NOTE_CUT, EVENT_NOTE_CUT}, EFFECT_NONE, 0, EFFECT_NONE, 0};
 #ifdef DEBUG_EVENTS
             event_to_string(cut_event, event_str);
-            printf("   %s", event_str);
+            printf("%s   ", event_str);
 #endif
         pattern->events.push_back(cut_event);
     }
-
-#ifdef DEBUG_EVENTS
-    printf("\n");
-#endif
 
     if (sample_num)
         state->prev_sample_num = sample_num;
