@@ -34,12 +34,23 @@ struct ModSampleInfo {
     Uint8 finetune;
 };
 
+struct ModTrackState {
+    int prev_sample_num;
+    int prev_effect;
+    Uint8 prev_glide;
+    Uint8 prev_vibrato;
+    Uint8 prev_tremolo;
+    Uint8 prev_offset;
+};
+
 static ModSampleInfo sample_info[NUM_SAMPLES + 1]; // indices start at 1
 static Song * current_song;
 
 // return wave end
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
 static void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num);
+static void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
+    int pattern_num, ModTrackState * state, int time);
 static int period_to_pitch(int period);
 static Uint8 velocity_units(int volume);
 static Uint8 panning_units(int panning);
@@ -170,281 +181,286 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
     pattern->length = PATTERN_LEN * TICKS_PER_ROW;
     pattern->events.reserve(PATTERN_LEN);
 
-    int prev_effect = -1; // always reset at start
-    Uint8 prev_glide = 0;
-    Uint8 prev_vibrato = 0;
-    Uint8 prev_tremolo = 0;
-    Uint8 prev_offset = 0;
-    int sample_num_memory = 0;
+    ModTrackState state { .prev_sample_num = 0,
+        .prev_effect = -1, // always reset effect at start
+        .prev_glide = 0, .prev_vibrato = 0, .prev_tremolo = 0, .prev_offset = 0 };
+    int time = 0;
     for (int i = 0; i < PATTERN_LEN; i++) {
-        Uint8 bytes[EVENT_SIZE];
-        SDL_RWread(file, bytes, 1, EVENT_SIZE);
-        int period = ((bytes[0] & 0x0F) << 8) | bytes[1];
-        int sample_num = (bytes[0] & 0xF0) | (bytes[2] >> 4);
-        int effect = bytes[2] & 0x0F;
-        int value = bytes[3];
-
-        Event event {(Uint16)(i * TICKS_PER_ROW),
-            {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE}, EFFECT_NONE, 0, EFFECT_NONE, 0};
-        
-        int keep_empty_event = 0;
-        int sub_effect = 0;
-        switch (effect) {
-            int speed, depth, slice_point;
-            case 0x0:
-                // clear previous effect
-                if (prev_effect != 0x0 && prev_effect != 0x9 && prev_effect != 0xB
-                    && prev_effect != 0xC && prev_effect != 0xD && prev_effect != 0xF)
-                    keep_empty_event = 1;
-                break;
-            case 0x1:
-                event.v_effect = EFFECT_PITCH_SLIDE_UP;
-                event.v_value = pitch_slide_units(value);
-                break;
-            case 0x2:
-                event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
-                event.v_value = pitch_slide_units(value);
-                break;
-            case 0x3:
-                event.v_effect = EFFECT_GLIDE;
-                if (value == 0)
-                    event.v_value = prev_glide; // memory
-                else
-                    // TODO rate is doubled
-                    // better to be too fast than too slow
-                    event.v_value = pitch_slide_units(value * 2);
-                prev_glide = event.v_value;
-                break;
-            case 0x4:
-                event.v_effect = EFFECT_VIBRATO;
-                if (value == 0)
-                    event.v_value = prev_vibrato;
-                else {
-                    speed = value >> 4; // TODO
-                    depth = value & 0xF;
-                    depth /= 2;
-                    event.v_value = (speed << 4) | depth;
-                    prev_vibrato = event.v_value;
-                }
-                break;
-            // 0x5 and 0x6 are combined with A below
-            case 0x7:
-                event.v_effect = EFFECT_TREMOLO;
-                if (value == 0)
-                    event.v_value = prev_tremolo;
-                else {
-                    speed = value >> 4; // TODO
-                    depth = value & 0xF; // TODO
-                    event.v_value = (speed << 4) | depth;
-                    prev_tremolo = event.v_value;
-                }
-                break;
-            case 0x8:
-                event.v_effect = EFFECT_PAN;
-                event.v_value = panning_units(value);
-                break;
-            case 0x9:
-                event.v_effect = EFFECT_SAMPLE_OFFSET;
-                slice_point = value * 256;
-                // search for existing slice point
-                if (value == 0)
-                    event.v_value = prev_offset;
-                if (sample_num)
-                    event.v_value = sample_add_slice(sample_info[sample_num].sample, slice_point);
-                else if (sample_num_memory)
-                    event.v_value = sample_add_slice(sample_info[sample_num_memory].sample, slice_point);
-                prev_offset = event.v_value;
-                break;
-            case 0xA:
-            case 0x5:
-            case 0x6:
-                if (value & 0xF0) {
-                    event.v_effect = EFFECT_VEL_SLIDE_UP;
-                    event.v_value = velocity_slide_units(value >> 4);
-                } else {
-                    event.v_effect = EFFECT_VEL_SLIDE_DOWN;
-                    event.v_value = velocity_slide_units(value & 0x0F);
-                }
-                // continue previous effects...
-                // TODO these will get overwritten by pitch which is probably fine?
-                if (effect == 0x5) {
-                    // glide is more important so put it in the pitch column
-                    event.p_effect = event.v_effect;
-                    event.p_value = event.v_value;
-                    event.v_effect = EFFECT_GLIDE;
-                    event.v_value = prev_glide;
-                } else if (effect == 0x6) {
-                    // vibrato is less important
-                    event.p_effect = EFFECT_VIBRATO;
-                    event.p_value = prev_vibrato;
-                }
-                break;
-            // TODO Position jump
-            case 0xC:
-                event.v_effect = EFFECT_VELOCITY;
-                event.v_value = velocity_units(value);
-                break;
-            case 0xD: // pattern break
-                // TODO jump to row
-                // find each page that uses this pattern
-                for (int i = 0; i < current_song->num_pages; i++) {
-                    if (current_song->tracks[0].pages[i] == pattern_num) {
-                        current_song->page_lengths[i] = event.time + TICKS_PER_ROW; // after this row
-                    }
-                }
-                break;
-            case 0xE:
-                sub_effect = value >> 4;
-                value &= 0xF;
-                switch (sub_effect) {
-                    case 0x1:
-                        event.v_effect = EFFECT_PITCH_SLIDE_UP;
-                        event.v_value = pitch_fine_slide_units(value);
-                        break;
-                    case 0x2:
-                        event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
-                        event.v_value = pitch_fine_slide_units(value);
-                        break;
-                    case 0x5:
-                        // TODO does this affect the period value?
-                        // also repeated effects should not accumulate
-                        event.v_effect = EFFECT_TUNE;
-                        event.v_value = value; // TODO
-                        break;
-                    case 0x6:
-                        event.instrument[0] = event.instrument[1]
-                            = EVENT_PLAYBACK;
-                        event.p_effect = EFFECT_REPEAT;
-                        if (value != 0) {
-                            event.v_effect = EFFECT_VELOCITY;
-                            event.v_value = value;
-                        }
-                        break;
-                    case 0x8:
-                        event.v_effect = EFFECT_PAN;
-                        event.v_value = panning_units_coarse(value);
-                        break;
-                    // 0x9 is checked after writing event
-                    case 0xA:
-                        event.v_effect = EFFECT_VEL_SLIDE_UP;
-                        event.v_value = velocity_fine_slide_units(value);
-                        break;
-                    case 0xB:
-                        event.v_effect = EFFECT_VEL_SLIDE_DOWN;
-                        event.v_value = velocity_fine_slide_units(value);
-                        break;
-                    // 0xC is checked after writing event
-                    case 0xD: // note delay
-                        event.time += value * MOD_TICK_SCALE;
-                        break;
-                    case 0xE:
-                        event.instrument[0] = event.instrument[1]
-                            = EVENT_PLAYBACK;
-                        event.p_effect = EFFECT_PAUSE;
-                        event.v_effect = EFFECT_VELOCITY;
-                        event.v_value = value * 16 * TICKS_PER_ROW / TICKS_PER_QUARTER;
-                        break;
-                }
-                break;
-            case 0xF:
-                if (value >= 0x20) {
-                    event.instrument[0] = event.instrument[1]
-                        = EVENT_PLAYBACK;
-                    event.p_effect = EFFECT_TEMPO;
-                    event.v_effect = EFFECT_VELOCITY;
-                    event.v_value = value;
-                } else { } // TODO set speed
-                break;
-        }
-        prev_effect = effect;
-
-        if (period != 0) {
-            // override playback event. TODO move to a different track
-            if (event.instrument[0] == EVENT_PLAYBACK)
-                clear_event(&event);
-
-            // note change if glide effect, otherwise note on
-            if (event.v_effect == EFFECT_GLIDE) { }
-            else if (sample_num) {
-                ModSampleInfo * info = &sample_info[sample_num];
-                event.instrument[0] = info->inst_id[0];
-                event.instrument[1] = info->inst_id[1];
-            } else {
-                event.instrument[0] = event.instrument[1]
-                    = EVENT_REPLAY;
-            }
-
-            event.p_effect = EFFECT_PITCH;
-            event.p_value = period_to_pitch(period);
-        } else if (sample_num) {
-            // override playback event. TODO move to a different track
-            if (event.instrument[0] == EVENT_PLAYBACK)
-                clear_event(&event);
-
-            // reset note velocity
-            if (event.v_effect != EFFECT_VELOCITY) {
-                // keep existing effect
-                event.p_effect = event.v_effect;
-                event.p_value = event.v_value;
-                event.v_effect = EFFECT_VELOCITY;
-                event.v_value = sample_info[sample_num].sample->default_velocity;
-            }
-        }
-
-        if (!event_is_empty(event))
-            pattern->events.push_back(event);
-        else if (keep_empty_event) {
-            event.instrument[0] = event.instrument[1]
-                = EVENT_CANCEL_EFFECTS;
-            pattern->events.push_back(event);
-        }
-
-#ifdef DEBUG_EVENTS
-        char event_str[EVENT_STR_LEN];
-        event_to_string(event, event_str);
-        printf("%.2X  %s", i, event_str);
-#endif
-
-        if (effect == 0xE && sub_effect == 0x9) {
-            // retrigger
-            Event retrigger_event {event.time,
-                {EVENT_REPLAY, EVENT_REPLAY}, EFFECT_NONE, 0, EFFECT_NONE, 0};
-            if (!event_is_empty(event)) {
-                // skip first retrigger
-                retrigger_event.time += value * MOD_TICK_SCALE;
-            }
-            while (retrigger_event.time < event.time + TICKS_PER_ROW) {
-                pattern->events.push_back(retrigger_event);
-#ifdef DEBUG_EVENTS
-                event_to_string(retrigger_event, event_str);
-                printf("   %s", event_str);
-#endif
-                retrigger_event.time += value * MOD_TICK_SCALE;
-            }
-        } else if (effect == 0xE && sub_effect == 0xC) {
-            // note cut
-            Event cut_event {(Uint16)(event.time + value * MOD_TICK_SCALE),
-                {EVENT_NOTE_CUT, EVENT_NOTE_CUT}, EFFECT_NONE, 0, EFFECT_NONE, 0};
-#ifdef DEBUG_EVENTS
-                event_to_string(cut_event, event_str);
-                printf("   %s", event_str);
-#endif
-            pattern->events.push_back(cut_event);
-        }
-
-#ifdef DEBUG_EVENTS
-        printf("\n");
-#endif
-
-        if (sample_num)
-            sample_num_memory = sample_num;
-
+        read_pattern_cell(file, pattern, pattern_num, &state, time);
         // skip other tracks to next row
         SDL_RWseek(file, (NUM_TRACKS - 1) * EVENT_SIZE, RW_SEEK_CUR);
+
+        time += TICKS_PER_ROW;
     }
 #ifdef DEBUG_EVENTS
     printf("\n\n");
 #endif
+}
+
+
+void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
+        int pattern_num, ModTrackState * state, int time) {
+    Uint8 bytes[EVENT_SIZE];
+    SDL_RWread(file, bytes, 1, EVENT_SIZE);
+    int period = ((bytes[0] & 0x0F) << 8) | bytes[1];
+    int sample_num = (bytes[0] & 0xF0) | (bytes[2] >> 4);
+    int effect = bytes[2] & 0x0F;
+    int value = bytes[3];
+
+    Event event {(Uint16)time,
+        {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE}, EFFECT_NONE, 0, EFFECT_NONE, 0};
+    
+    int keep_empty_event = 0;
+    int sub_effect = 0;
+    switch (effect) {
+        int speed, depth, slice_point;
+        case 0x0:
+            // clear previous effect
+            if (state->prev_effect != 0x0 && state->prev_effect != 0x9 && state->prev_effect != 0xB
+                && state->prev_effect != 0xC && state->prev_effect != 0xD && state->prev_effect != 0xF)
+                keep_empty_event = 1;
+            break;
+        case 0x1:
+            event.v_effect = EFFECT_PITCH_SLIDE_UP;
+            event.v_value = pitch_slide_units(value);
+            break;
+        case 0x2:
+            event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
+            event.v_value = pitch_slide_units(value);
+            break;
+        case 0x3:
+            event.v_effect = EFFECT_GLIDE;
+            if (value == 0)
+                event.v_value = state->prev_glide; // memory
+            else
+                // TODO rate is doubled
+                // better to be too fast than too slow
+                event.v_value = pitch_slide_units(value * 2);
+            state->prev_glide = event.v_value;
+            break;
+        case 0x4:
+            event.v_effect = EFFECT_VIBRATO;
+            if (value == 0)
+                event.v_value = state->prev_vibrato;
+            else {
+                speed = value >> 4; // TODO
+                depth = value & 0xF;
+                depth /= 2;
+                event.v_value = (speed << 4) | depth;
+                state->prev_vibrato = event.v_value;
+            }
+            break;
+        // 0x5 and 0x6 are combined with A below
+        case 0x7:
+            event.v_effect = EFFECT_TREMOLO;
+            if (value == 0)
+                event.v_value = state->prev_tremolo;
+            else {
+                speed = value >> 4; // TODO
+                depth = value & 0xF; // TODO
+                event.v_value = (speed << 4) | depth;
+                state->prev_tremolo = event.v_value;
+            }
+            break;
+        case 0x8:
+            event.v_effect = EFFECT_PAN;
+            event.v_value = panning_units(value);
+            break;
+        case 0x9:
+            event.v_effect = EFFECT_SAMPLE_OFFSET;
+            slice_point = value * 256;
+            // search for existing slice point
+            if (value == 0)
+                event.v_value = state->prev_offset;
+            if (sample_num)
+                event.v_value = sample_add_slice(sample_info[sample_num].sample, slice_point);
+            else if (state->prev_sample_num)
+                event.v_value = sample_add_slice(sample_info[state->prev_sample_num].sample, slice_point);
+            state->prev_offset = event.v_value;
+            break;
+        case 0xA:
+        case 0x5:
+        case 0x6:
+            if (value & 0xF0) {
+                event.v_effect = EFFECT_VEL_SLIDE_UP;
+                event.v_value = velocity_slide_units(value >> 4);
+            } else {
+                event.v_effect = EFFECT_VEL_SLIDE_DOWN;
+                event.v_value = velocity_slide_units(value & 0x0F);
+            }
+            // continue previous effects...
+            // TODO these will get overwritten by pitch which is probably fine?
+            if (effect == 0x5) {
+                // glide is more important so put it in the pitch column
+                event.p_effect = event.v_effect;
+                event.p_value = event.v_value;
+                event.v_effect = EFFECT_GLIDE;
+                event.v_value = state->prev_glide;
+            } else if (effect == 0x6) {
+                // vibrato is less important
+                event.p_effect = EFFECT_VIBRATO;
+                event.p_value = state->prev_vibrato;
+            }
+            break;
+        // TODO Position jump
+        case 0xC:
+            event.v_effect = EFFECT_VELOCITY;
+            event.v_value = velocity_units(value);
+            break;
+        case 0xD: // pattern break
+            // TODO jump to row
+            // find each page that uses this pattern
+            for (int i = 0; i < current_song->num_pages; i++) {
+                if (current_song->tracks[0].pages[i] == pattern_num) {
+                    current_song->page_lengths[i] = event.time + TICKS_PER_ROW; // after this row
+                }
+            }
+            break;
+        case 0xE:
+            sub_effect = value >> 4;
+            value &= 0xF;
+            switch (sub_effect) {
+                case 0x1:
+                    event.v_effect = EFFECT_PITCH_SLIDE_UP;
+                    event.v_value = pitch_fine_slide_units(value);
+                    break;
+                case 0x2:
+                    event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
+                    event.v_value = pitch_fine_slide_units(value);
+                    break;
+                case 0x5:
+                    // TODO does this affect the period value?
+                    // also repeated effects should not accumulate
+                    event.v_effect = EFFECT_TUNE;
+                    event.v_value = value; // TODO
+                    break;
+                case 0x6:
+                    event.instrument[0] = event.instrument[1]
+                        = EVENT_PLAYBACK;
+                    event.p_effect = EFFECT_REPEAT;
+                    if (value != 0) {
+                        event.v_effect = EFFECT_VELOCITY;
+                        event.v_value = value;
+                    }
+                    break;
+                case 0x8:
+                    event.v_effect = EFFECT_PAN;
+                    event.v_value = panning_units_coarse(value);
+                    break;
+                // 0x9 is checked after writing event
+                case 0xA:
+                    event.v_effect = EFFECT_VEL_SLIDE_UP;
+                    event.v_value = velocity_fine_slide_units(value);
+                    break;
+                case 0xB:
+                    event.v_effect = EFFECT_VEL_SLIDE_DOWN;
+                    event.v_value = velocity_fine_slide_units(value);
+                    break;
+                // 0xC is checked after writing event
+                case 0xD: // note delay
+                    event.time += value * MOD_TICK_SCALE;
+                    break;
+                case 0xE:
+                    event.instrument[0] = event.instrument[1]
+                        = EVENT_PLAYBACK;
+                    event.p_effect = EFFECT_PAUSE;
+                    event.v_effect = EFFECT_VELOCITY;
+                    event.v_value = value * 16 * TICKS_PER_ROW / TICKS_PER_QUARTER;
+                    break;
+            }
+            break;
+        case 0xF:
+            if (value >= 0x20) {
+                event.instrument[0] = event.instrument[1]
+                    = EVENT_PLAYBACK;
+                event.p_effect = EFFECT_TEMPO;
+                event.v_effect = EFFECT_VELOCITY;
+                event.v_value = value;
+            } else { } // TODO set speed
+            break;
+    }
+    state->prev_effect = effect;
+
+    if (period != 0) {
+        // override playback event. TODO move to a different track
+        if (event.instrument[0] == EVENT_PLAYBACK)
+            clear_event(&event);
+
+        // note change if glide effect, otherwise note on
+        if (event.v_effect == EFFECT_GLIDE) { }
+        else if (sample_num) {
+            ModSampleInfo * info = &sample_info[sample_num];
+            event.instrument[0] = info->inst_id[0];
+            event.instrument[1] = info->inst_id[1];
+        } else {
+            event.instrument[0] = event.instrument[1]
+                = EVENT_REPLAY;
+        }
+
+        event.p_effect = EFFECT_PITCH;
+        event.p_value = period_to_pitch(period);
+    } else if (sample_num) {
+        // override playback event. TODO move to a different track
+        if (event.instrument[0] == EVENT_PLAYBACK)
+            clear_event(&event);
+
+        // reset note velocity
+        if (event.v_effect != EFFECT_VELOCITY) {
+            // keep existing effect
+            event.p_effect = event.v_effect;
+            event.p_value = event.v_value;
+            event.v_effect = EFFECT_VELOCITY;
+            event.v_value = sample_info[sample_num].sample->default_velocity;
+        }
+    }
+
+    if (!event_is_empty(event))
+        pattern->events.push_back(event);
+    else if (keep_empty_event) {
+        event.instrument[0] = event.instrument[1]
+            = EVENT_CANCEL_EFFECTS;
+        pattern->events.push_back(event);
+    }
+
+#ifdef DEBUG_EVENTS
+    char event_str[EVENT_STR_LEN];
+    event_to_string(event, event_str);
+    printf("%.2X  %s", i, event_str);
+#endif
+
+    if (effect == 0xE && sub_effect == 0x9) {
+        // retrigger
+        Event retrigger_event {event.time,
+            {EVENT_REPLAY, EVENT_REPLAY}, EFFECT_NONE, 0, EFFECT_NONE, 0};
+        if (!event_is_empty(event)) {
+            // skip first retrigger
+            retrigger_event.time += value * MOD_TICK_SCALE;
+        }
+        while (retrigger_event.time < event.time + TICKS_PER_ROW) {
+            pattern->events.push_back(retrigger_event);
+#ifdef DEBUG_EVENTS
+            event_to_string(retrigger_event, event_str);
+            printf("   %s", event_str);
+#endif
+            retrigger_event.time += value * MOD_TICK_SCALE;
+        }
+    } else if (effect == 0xE && sub_effect == 0xC) {
+        // note cut
+        Event cut_event {(Uint16)(event.time + value * MOD_TICK_SCALE),
+            {EVENT_NOTE_CUT, EVENT_NOTE_CUT}, EFFECT_NONE, 0, EFFECT_NONE, 0};
+#ifdef DEBUG_EVENTS
+            event_to_string(cut_event, event_str);
+            printf("   %s", event_str);
+#endif
+        pattern->events.push_back(cut_event);
+    }
+
+#ifdef DEBUG_EVENTS
+    printf("\n");
+#endif
+
+    if (sample_num)
+        state->prev_sample_num = sample_num;
 }
 
 
