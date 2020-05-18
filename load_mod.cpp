@@ -348,6 +348,10 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
         prev_effect = effect;
 
         if (period != 0) {
+            // override playback event. TODO move to a different track
+            if (event.instrument[0] == EVENT_PLAYBACK)
+                clear_event(&event);
+
             // note change if glide effect, otherwise note on
             if (event.v_effect == EFFECT_GLIDE) { }
             else if (sample_num) {
@@ -362,6 +366,10 @@ void read_pattern(SDL_RWops * file, Pattern * pattern, int pattern_num) {
             event.p_effect = EFFECT_PITCH;
             event.p_value = period_to_pitch(period, sample_num);
         } else if (sample_num) {
+            // override playback event. TODO move to a different track
+            if (event.instrument[0] == EVENT_PLAYBACK)
+                clear_event(&event);
+
             // reset note velocity
             if (event.v_effect != EFFECT_VELOCITY) {
                 // keep existing effect
