@@ -34,6 +34,11 @@ void callback(void * userdata, Uint8 * stream, int len);
 
 
 int main(int argv, char ** argc) {
+    if (argv <= 1) {
+        printf("Please specify file path\n");
+        return 1;
+    }
+
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     SDL_Window * window = SDL_CreateWindow("chromatracker",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -89,7 +94,7 @@ int main(int argv, char ** argc) {
         return 1;
     }
 
-    load_mod("mod.resonance", &song);
+    load_mod(argc[1], &song);
 
     set_playback_song(&playback, &song);
 
