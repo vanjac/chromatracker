@@ -37,15 +37,13 @@ struct ModSampleInfo {
 };
 
 struct ModTrackState {
+    int cur_period, glide_direction; // used only for simulating amiga pitch slides
     int cur_sample_num;
     int prev_effect;
-    Uint8 glide_mem;
-    Uint8 vibrato_mem;
-    Uint8 tremolo_mem;
-    Uint8 offset_mem;
-    ModTrackState() : cur_sample_num(0),
+    Uint8 glide_value, vibrato_mem, tremolo_mem, offset_mem;
+    ModTrackState() : cur_period(0), glide_direction(0), cur_sample_num(0),
         prev_effect(-1), // always reset effect at start
-        glide_mem(0), vibrato_mem(0), tremolo_mem(0), offset_mem(0) { }
+        glide_value(0), vibrato_mem(0), tremolo_mem(0), offset_mem(0) { }
 };
 
 struct ModSongState {
@@ -61,13 +59,14 @@ static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * in
 static void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
     int pattern_num, ModTrackState * state, ModSongState * song_state, int time);
 static int period_to_pitch(int period);
+static float calc_period_to_pitch_exact(int period);
 static Uint8 velocity_units(int volume);
 static Uint8 panning_units(int panning);
 static Uint8 panning_units_coarse(int panning);
 static Uint8 slide_hex_float(float slide, int bias);
-static Uint8 pitch_slide_units(int pitch_slide, int ticks_per_row);
-static Uint8 pitch_fine_slide_units(int fine_slide);
-static Uint8 velocity_slide_units(int volume_slide, int ticks_per_row);
+static Uint8 pitch_slide_units(int pitch_slide, ModTrackState * state, ModSongState * song_state, int effect);
+static Uint8 pitch_fine_slide_units(int fine_slide, ModTrackState * state, int effect);
+static Uint8 velocity_slide_units(int volume_slide, ModSongState * song_state);
 static Uint8 velocity_fine_slide_units(int fine_slide);
 static int sample_add_slice(InstSample * sample, int slice_point);
 
@@ -228,6 +227,12 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
     int effect = bytes[2] & 0x0F;
     int value = bytes[3];
 
+    if (period) {
+        if (effect == 0x3)
+            state->glide_direction = period - state->cur_period;
+        else
+            state->cur_period = period;
+    }
     if (sample_num)
         state->cur_sample_num = sample_num;
 
@@ -245,21 +250,17 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             break;
         case 0x1:
             event.v_effect = EFFECT_PITCH_SLIDE_UP;
-            event.v_value = pitch_slide_units(value, song_state->ticks_per_row);
+            event.v_value = pitch_slide_units(value, state, song_state, 0x1);
             break;
         case 0x2:
             event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
-            event.v_value = pitch_slide_units(value, song_state->ticks_per_row);
+            event.v_value = pitch_slide_units(value, state, song_state, 0x2);
             break;
         case 0x3:
             event.v_effect = EFFECT_GLIDE;
-            if (value == 0)
-                event.v_value = state->glide_mem; // memory
-            else
-                // TODO rate is doubled
-                // better to be too fast than too slow
-                event.v_value = pitch_slide_units(value * 2, song_state->ticks_per_row);
-            state->glide_mem = event.v_value;
+            if (value != 0)
+                state->glide_value = value;  // memory
+            event.v_value = pitch_slide_units(state->glide_value, state, song_state, 0x3);
             break;
         case 0x4:
             event.v_effect = EFFECT_VIBRATO;
@@ -306,10 +307,10 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         case 0x6:
             if (value & 0xF0) {
                 event.v_effect = EFFECT_VEL_SLIDE_UP;
-                event.v_value = velocity_slide_units(value >> 4, song_state->ticks_per_row);
+                event.v_value = velocity_slide_units(value >> 4, song_state);
             } else {
                 event.v_effect = EFFECT_VEL_SLIDE_DOWN;
-                event.v_value = velocity_slide_units(value & 0x0F, song_state->ticks_per_row);
+                event.v_value = velocity_slide_units(value & 0x0F, song_state);
             }
             // continue previous effects...
             // TODO these will get overwritten by pitch which is probably fine?
@@ -318,7 +319,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                 event.p_effect = event.v_effect;
                 event.p_value = event.v_value;
                 event.v_effect = EFFECT_GLIDE;
-                event.v_value = state->glide_mem;
+                event.v_value = pitch_slide_units(state->glide_value, state, song_state, 0x3);
             } else if (effect == 0x6) {
                 // vibrato is less important
                 event.p_effect = EFFECT_VIBRATO;
@@ -345,11 +346,11 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             switch (sub_effect) {
                 case 0x1:
                     event.v_effect = EFFECT_PITCH_SLIDE_UP;
-                    event.v_value = pitch_fine_slide_units(value);
+                    event.v_value = pitch_fine_slide_units(value, state, 0x1);
                     break;
                 case 0x2:
                     event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
-                    event.v_value = pitch_fine_slide_units(value);
+                    event.v_value = pitch_fine_slide_units(value, state, 0x2);
                     break;
                 case 0x5:
                     // this effect only does something if there is a pitch in the note column
@@ -411,6 +412,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                 = EVENT_PLAYBACK;
             event.p_effect = EFFECT_TEMPO;
             event.v_effect = EFFECT_VELOCITY;
+            // TODO limit of 255 (could be greater with lower ticks per row)
             event.v_value = song_state->tempo * MOD_DEFAULT_TICKS_PER_ROW / song_state->ticks_per_row;
             break;
     }
@@ -519,6 +521,12 @@ int period_to_pitch(int period) {
         return min + PITCH_OFFSET;
 }
 
+float calc_period_to_pitch_exact(int period) {
+    if (period == 0)
+        return NUM_MOD_PITCHES + PITCH_OFFSET; // max pitch
+    return log2((float)tuning0_table[0] / period) * 12.0 + PITCH_OFFSET;
+}
+
 Uint8 velocity_units(int volume) {
     return volume * 2;
 }
@@ -563,20 +571,38 @@ Uint8 slide_hex_float(float slide, int bias) {
 }
 
 
-Uint8 pitch_slide_units(int pitch_slide, int ticks_per_row) {
-    return pitch_fine_slide_units(pitch_slide * (ticks_per_row - 1));
+Uint8 pitch_slide_units(int pitch_slide, ModTrackState * state, ModSongState * song_state, int effect) {
+    return pitch_fine_slide_units(pitch_slide * (song_state->ticks_per_row - 1), state, effect);
 }
 
-Uint8 pitch_fine_slide_units(int fine_slide) {
-    // TODO!
-    // average between octaves 2 and 3
-    float semis_per_row = (float)fine_slide * 12.0 / 214.0;
-    float semis_per_quarter = semis_per_row * (TICKS_PER_QUARTER / ROW_TIME);
+Uint8 pitch_fine_slide_units(int fine_slide, ModTrackState * state, int effect) {
+    if (state->cur_period < 1) // upper frequency limit
+        state->cur_period = 1;
+    int prev_pitch = calc_period_to_pitch_exact(state->cur_period);
+    switch (effect) {
+        case 1:
+            state->cur_period -= fine_slide; // pitch up, period down
+            break;
+        case 2:
+            state->cur_period += fine_slide; // pitch down, period up
+            break;
+        case 3:
+            // simulated glide doesn't stop at target note
+            if (state->glide_direction > 0)
+                state->cur_period += fine_slide;
+            else
+                state->cur_period -= fine_slide;
+            break;
+    }
+    if (state->cur_period < 1) // upper frequency limit
+        state->cur_period = 1;
+    int cur_pitch = calc_period_to_pitch_exact(state->cur_period);
+    float semis_per_quarter = abs(cur_pitch - prev_pitch) * (TICKS_PER_QUARTER / ROW_TIME);
     return slide_hex_float(semis_per_quarter, PITCH_SLIDE_BIAS);
 }
 
-Uint8 velocity_slide_units(int volume_slide, int ticks_per_row) {
-    return velocity_fine_slide_units(volume_slide * (ticks_per_row - 1));
+Uint8 velocity_slide_units(int volume_slide, ModSongState * song_state) {
+    return velocity_fine_slide_units(volume_slide * (song_state->ticks_per_row - 1));
 }
 
 Uint8 velocity_fine_slide_units(int fine_slide) {
