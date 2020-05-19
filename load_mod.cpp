@@ -12,6 +12,7 @@
 #define MOD_DEFAULT_TICKS_PER_ROW 6
 
 #define SONG_TABLE_SIZE 128
+#define MAX_PATTERNS 128
 #define NUM_SAMPLES 31
 #define PATTERN_LEN 64
 #define ROW_TIME  (8 * MOD_DEFAULT_TICKS_PER_ROW)
@@ -120,28 +121,36 @@ void load_mod(const char * filename, Song * song) {
         put_instrument(song, info->inst_id, sample);
     }
 
+    // state persists between patterns
     ModSongState song_state;
+    ModTrackState track_states[NUM_TRACKS];
+    bool pattern_read[MAX_PATTERNS] = {false};
 
-    for (int i = 0; i < max_pattern + 1; i++) {
+    // read patterns in order of first appearance in sequence list
+    // to roughly preserve state between patterns
+    for (int j = 0; j < song_length; j++) {
+        int pat_num = song_table[j];
+        if (pattern_read[pat_num])
+            continue;
+        pattern_read[pat_num] = true;
 #ifdef DEBUG_EVENTS
-        printf("Pattern %d\n", i);
+        printf("Pattern %d\n", pat_num);
 #endif
         for (int t = 0; t < NUM_TRACKS; t++) {
-            Pattern * p = &song->tracks[t].patterns[i];
+            Pattern * p = &song->tracks[t].patterns[pat_num];
             p->length = PATTERN_LEN * ROW_TIME;
             p->events.reserve(PATTERN_LEN); // estimate
         }
 
-        SDL_RWseek(file, 1084 + pattern_size * i, RW_SEEK_SET);
+        SDL_RWseek(file, 1084 + pattern_size * pat_num, RW_SEEK_SET);
 
-        ModTrackState track_states[NUM_TRACKS];
         int time = 0;
         for (int row = 0; row < PATTERN_LEN; row++) {
 #ifdef DEBUG_EVENTS
             printf("%.2X  ", row);
 #endif
             for (int t = 0; t < NUM_TRACKS; t++) {
-                read_pattern_cell(file, &song->tracks[t].patterns[i], i,
+                read_pattern_cell(file, &song->tracks[t].patterns[pat_num], pat_num,
                     &track_states[t], &song_state, time);
             }
             time += ROW_TIME;
