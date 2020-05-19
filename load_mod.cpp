@@ -37,15 +37,15 @@ struct ModSampleInfo {
 };
 
 struct ModTrackState {
-    int prev_sample_num;
+    int cur_sample_num;
     int prev_effect;
-    Uint8 prev_glide;
-    Uint8 prev_vibrato;
-    Uint8 prev_tremolo;
-    Uint8 prev_offset;
-    ModTrackState() : prev_sample_num(0),
+    Uint8 glide_mem;
+    Uint8 vibrato_mem;
+    Uint8 tremolo_mem;
+    Uint8 offset_mem;
+    ModTrackState() : cur_sample_num(0),
         prev_effect(-1), // always reset effect at start
-        prev_glide(0), prev_vibrato(0), prev_tremolo(0), prev_offset(0) { }
+        glide_mem(0), vibrato_mem(0), tremolo_mem(0), offset_mem(0) { }
 };
 
 struct ModSongState {
@@ -186,6 +186,9 @@ int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int
         sample->loop_end = sample->loop_start + word_rep_len * 2;
     }
     sample->default_velocity = velocity_units(volume);
+    // convert signed nibble to signed byte
+    finetune <<= 4;
+    finetune >>= 4;
     info->finetune = finetune;
 
     static Sint8 wave8[65536 * 2];
@@ -199,10 +202,7 @@ int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int
         wave[i].l = wave[i].r = v;
     }
 
-    sample->c5_freq = AMIGA_C5_RATE; 
-    // convert signed nibble to signed byte
-    finetune <<= 4;
-    finetune >>= 4;
+    sample->c5_freq = AMIGA_C5_RATE;
     // finetune in steps of 1/8 semitone
     sample->c5_freq *= exp2f(finetune / (12.0 * 8.0));
 
@@ -228,13 +228,15 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
     int effect = bytes[2] & 0x0F;
     int value = bytes[3];
 
+    if (sample_num)
+        state->cur_sample_num = sample_num;
+
     Event event {(Uint16)time,
         {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE}, EFFECT_NONE, 0, EFFECT_NONE, 0};
     
     int keep_empty_event = 0;
     int sub_effect = 0;
     switch (effect) {
-        int speed, depth, slice_point;
         case 0x0:
             // clear previous effect
             if (state->prev_effect != 0x0 && state->prev_effect != 0x9 && state->prev_effect != 0xB
@@ -252,35 +254,35 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         case 0x3:
             event.v_effect = EFFECT_GLIDE;
             if (value == 0)
-                event.v_value = state->prev_glide; // memory
+                event.v_value = state->glide_mem; // memory
             else
                 // TODO rate is doubled
                 // better to be too fast than too slow
                 event.v_value = pitch_slide_units(value * 2, song_state->ticks_per_row);
-            state->prev_glide = event.v_value;
+            state->glide_mem = event.v_value;
             break;
         case 0x4:
             event.v_effect = EFFECT_VIBRATO;
             if (value == 0)
-                event.v_value = state->prev_vibrato;
+                event.v_value = state->vibrato_mem;
             else {
-                speed = value >> 4; // TODO
-                depth = value & 0xF;
+                int speed = value >> 4; // TODO
+                int depth = value & 0xF;
                 depth /= 2;
                 event.v_value = (speed << 4) | depth;
-                state->prev_vibrato = event.v_value;
+                state->vibrato_mem = event.v_value;
             }
             break;
         // 0x5 and 0x6 are combined with A below
         case 0x7:
             event.v_effect = EFFECT_TREMOLO;
             if (value == 0)
-                event.v_value = state->prev_tremolo;
+                event.v_value = state->tremolo_mem;
             else {
-                speed = value >> 4; // TODO
-                depth = value & 0xF; // TODO
+                int speed = value >> 4; // TODO
+                int depth = value & 0xF; // TODO
                 event.v_value = (speed << 4) | depth;
-                state->prev_tremolo = event.v_value;
+                state->tremolo_mem = event.v_value;
             }
             break;
         case 0x8:
@@ -288,17 +290,17 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             event.v_value = panning_units(value);
             break;
         case 0x9:
+        {
             event.v_effect = EFFECT_SAMPLE_OFFSET;
-            slice_point = value * 256;
+            int slice_point = value * 256;
             // search for existing slice point
             if (value == 0)
-                event.v_value = state->prev_offset;
-            if (sample_num)
-                event.v_value = sample_add_slice(sample_info[sample_num].sample, slice_point);
-            else if (state->prev_sample_num)
-                event.v_value = sample_add_slice(sample_info[state->prev_sample_num].sample, slice_point);
-            state->prev_offset = event.v_value;
+                event.v_value = state->offset_mem;
+            else if (state->cur_sample_num)
+                event.v_value = sample_add_slice(sample_info[state->cur_sample_num].sample, slice_point);
+            state->offset_mem = event.v_value;
             break;
+        }
         case 0xA:
         case 0x5:
         case 0x6:
@@ -316,11 +318,11 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                 event.p_effect = event.v_effect;
                 event.p_value = event.v_value;
                 event.v_effect = EFFECT_GLIDE;
-                event.v_value = state->prev_glide;
+                event.v_value = state->glide_mem;
             } else if (effect == 0x6) {
                 // vibrato is less important
                 event.p_effect = EFFECT_VIBRATO;
-                event.p_value = state->prev_vibrato;
+                event.p_value = state->vibrato_mem;
             }
             break;
         // TODO Position jump
@@ -350,9 +352,20 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                     event.v_value = pitch_fine_slide_units(value);
                     break;
                 case 0x5:
-                    // TODO repeated effects should not accumulate
-                    event.v_effect = EFFECT_TUNE;
-                    event.v_value = value; // TODO
+                    // this effect only does something if there is a pitch in the note column
+                    // which solves the problem that EFFECT_TUNE accumulates over multiple uses
+                    if (period != 0 && state->cur_sample_num) {
+                        Sint8 signed_finetune = value << 4;
+                        signed_finetune >>= 4;
+                        int tune_diff = signed_finetune - sample_info[state->cur_sample_num].finetune;
+                        int value = tune_diff * 8 + 0x40;
+                        if (value < 0)
+                            value = 0;
+                        if (value > 0xFF)
+                            value = 0xFF;
+                        event.v_effect = EFFECT_TUNE;
+                        event.v_value = value;
+                    }
                     break;
                 case 0x6:
                     event.instrument[0] = event.instrument[1]
@@ -479,9 +492,6 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
 #endif
         pattern->events.push_back(cut_event);
     }
-
-    if (sample_num)
-        state->prev_sample_num = sample_num;
 }
 
 
