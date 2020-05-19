@@ -6,18 +6,18 @@
 
 #define DEBUG_EVENTS
 
-#define SONG_TABLE_SIZE 128
-#define NUM_SAMPLES 31
-#define PATTERN_LEN 64
-#define MOD_TICK_SCALE 8
-#define MOD_TICKS_PER_ROW 6
-#define TICKS_PER_ROW (MOD_TICKS_PER_ROW * MOD_TICK_SCALE)
-#define NUM_TRACKS 4
-#define EVENT_SIZE 4
-
 // standard PAL rate
 #define AMIGA_C5_RATE 8287.1369
 #define MOD_DEFAULT_TEMPO 125
+#define MOD_DEFAULT_TICKS_PER_ROW 6
+
+#define SONG_TABLE_SIZE 128
+#define NUM_SAMPLES 31
+#define PATTERN_LEN 64
+#define ROW_TIME  (8 * MOD_DEFAULT_TICKS_PER_ROW)
+#define NUM_TRACKS 4
+#define EVENT_SIZE 4
+
 
 #define PITCH_OFFSET 3*12
 #define NUM_MOD_PITCHES 12*5
@@ -49,7 +49,7 @@ struct ModTrackState {
 
 struct ModSongState {
     int tempo, ticks_per_row;
-    ModSongState() : tempo(MOD_DEFAULT_TEMPO), ticks_per_row(MOD_TICKS_PER_ROW) { }
+    ModSongState() : tempo(MOD_DEFAULT_TEMPO), ticks_per_row(MOD_DEFAULT_TICKS_PER_ROW) { }
 };
 
 static ModSampleInfo sample_info[NUM_SAMPLES + 1]; // indices start at 1
@@ -64,9 +64,9 @@ static Uint8 velocity_units(int volume);
 static Uint8 panning_units(int panning);
 static Uint8 panning_units_coarse(int panning);
 static Uint8 slide_hex_float(float slide, int bias);
-static Uint8 pitch_slide_units(int pitch_slide);
+static Uint8 pitch_slide_units(int pitch_slide, int ticks_per_row);
 static Uint8 pitch_fine_slide_units(int fine_slide);
-static Uint8 velocity_slide_units(int volume_slide);
+static Uint8 velocity_slide_units(int volume_slide, int ticks_per_row);
 static Uint8 velocity_fine_slide_units(int fine_slide);
 static int sample_add_slice(InstSample * sample, int slice_point);
 
@@ -99,7 +99,7 @@ void load_mod(const char * filename, Song * song) {
         int pat_num = song_table[i];
         if (pat_num > max_pattern)
             max_pattern = pat_num;
-        song->page_lengths[i] = PATTERN_LEN * TICKS_PER_ROW;
+        song->page_lengths[i] = PATTERN_LEN * ROW_TIME;
         for (int t = 0; t < NUM_TRACKS; t++) {
             song->tracks[t].pages[i] = pat_num;
         }
@@ -128,7 +128,7 @@ void load_mod(const char * filename, Song * song) {
 #endif
         for (int t = 0; t < NUM_TRACKS; t++) {
             Pattern * p = &song->tracks[t].patterns[i];
-            p->length = PATTERN_LEN * TICKS_PER_ROW;
+            p->length = PATTERN_LEN * ROW_TIME;
             p->events.reserve(PATTERN_LEN); // estimate
         }
 
@@ -144,7 +144,7 @@ void load_mod(const char * filename, Song * song) {
                 read_pattern_cell(file, &song->tracks[t].patterns[i], i,
                     &track_states[t], &song_state, time);
             }
-            time += TICKS_PER_ROW;
+            time += ROW_TIME;
 #ifdef DEBUG_EVENTS
             printf("\n");
 #endif
@@ -234,11 +234,11 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             break;
         case 0x1:
             event.v_effect = EFFECT_PITCH_SLIDE_UP;
-            event.v_value = pitch_slide_units(value);
+            event.v_value = pitch_slide_units(value, song_state->ticks_per_row);
             break;
         case 0x2:
             event.v_effect = EFFECT_PITCH_SLIDE_DOWN;
-            event.v_value = pitch_slide_units(value);
+            event.v_value = pitch_slide_units(value, song_state->ticks_per_row);
             break;
         case 0x3:
             event.v_effect = EFFECT_GLIDE;
@@ -247,7 +247,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             else
                 // TODO rate is doubled
                 // better to be too fast than too slow
-                event.v_value = pitch_slide_units(value * 2);
+                event.v_value = pitch_slide_units(value * 2, song_state->ticks_per_row);
             state->prev_glide = event.v_value;
             break;
         case 0x4:
@@ -295,10 +295,10 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         case 0x6:
             if (value & 0xF0) {
                 event.v_effect = EFFECT_VEL_SLIDE_UP;
-                event.v_value = velocity_slide_units(value >> 4);
+                event.v_value = velocity_slide_units(value >> 4, song_state->ticks_per_row);
             } else {
                 event.v_effect = EFFECT_VEL_SLIDE_DOWN;
-                event.v_value = velocity_slide_units(value & 0x0F);
+                event.v_value = velocity_slide_units(value & 0x0F, song_state->ticks_per_row);
             }
             // continue previous effects...
             // TODO these will get overwritten by pitch which is probably fine?
@@ -324,7 +324,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             // find each page that uses this pattern
             for (int i = 0; i < current_song->num_pages; i++) {
                 if (current_song->tracks[0].pages[i] == pattern_num) {
-                    current_song->page_lengths[i] = event.time + TICKS_PER_ROW; // after this row
+                    current_song->page_lengths[i] = event.time + ROW_TIME; // after this row
                 }
             }
             break;
@@ -341,8 +341,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                     event.v_value = pitch_fine_slide_units(value);
                     break;
                 case 0x5:
-                    // TODO does this affect the period value?
-                    // also repeated effects should not accumulate
+                    // TODO repeated effects should not accumulate
                     event.v_effect = EFFECT_TUNE;
                     event.v_value = value; // TODO
                     break;
@@ -370,14 +369,14 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                     break;
                 // 0xC is checked after writing event
                 case 0xD: // note delay
-                    event.time += value * MOD_TICK_SCALE;
+                    event.time += value * ROW_TIME / song_state->ticks_per_row;
                     break;
                 case 0xE:
                     event.instrument[0] = event.instrument[1]
                         = EVENT_PLAYBACK;
                     event.p_effect = EFFECT_PAUSE;
                     event.v_effect = EFFECT_VELOCITY;
-                    event.v_value = value * 16 * TICKS_PER_ROW / TICKS_PER_QUARTER;
+                    event.v_value = value * 16 * ROW_TIME / TICKS_PER_QUARTER;
                     break;
             }
             break;
@@ -390,7 +389,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                 = EVENT_PLAYBACK;
             event.p_effect = EFFECT_TEMPO;
             event.v_effect = EFFECT_VELOCITY;
-            event.v_value = song_state->tempo * MOD_TICKS_PER_ROW / song_state->ticks_per_row;
+            event.v_value = song_state->tempo * MOD_DEFAULT_TICKS_PER_ROW / song_state->ticks_per_row;
             break;
     }
     state->prev_effect = effect;
@@ -444,23 +443,26 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
 
     if (effect == 0xE && sub_effect == 0x9) {
         // retrigger
+        // Different trackers interpret retriggers without a note differently.
+        // FastTracker/MilkyTracker skips the first tick.
+        // OpenMPT emulates this behavior in XM mode, and does something strange in MOD mode.
         Event retrigger_event {event.time,
             {EVENT_REPLAY, EVENT_REPLAY}, EFFECT_NONE, 0, EFFECT_NONE, 0};
         if (!event_is_empty(event)) {
             // skip first retrigger
-            retrigger_event.time += value * MOD_TICK_SCALE;
+            retrigger_event.time += value * ROW_TIME / song_state->ticks_per_row;
         }
-        while (retrigger_event.time < event.time + TICKS_PER_ROW) {
+        while (retrigger_event.time < event.time + ROW_TIME) {
             pattern->events.push_back(retrigger_event);
 #ifdef DEBUG_EVENTS
             event_to_string(retrigger_event, event_str);
             printf("%s   ", event_str);
 #endif
-            retrigger_event.time += value * MOD_TICK_SCALE;
+            retrigger_event.time += value * ROW_TIME / song_state->ticks_per_row;
         }
     } else if (effect == 0xE && sub_effect == 0xC) {
         // note cut
-        Event cut_event {(Uint16)(event.time + value * MOD_TICK_SCALE),
+        Event cut_event {(Uint16)(event.time + value * ROW_TIME / song_state->ticks_per_row),
             {EVENT_NOTE_CUT, EVENT_NOTE_CUT}, EFFECT_NONE, 0, EFFECT_NONE, 0};
 #ifdef DEBUG_EVENTS
             event_to_string(cut_event, event_str);
@@ -542,28 +544,25 @@ Uint8 slide_hex_float(float slide, int bias) {
 }
 
 
-Uint8 pitch_slide_units(int pitch_slide) {
-    // TODO!
-    return pitch_fine_slide_units(pitch_slide * (MOD_TICKS_PER_ROW - 1));
+Uint8 pitch_slide_units(int pitch_slide, int ticks_per_row) {
+    return pitch_fine_slide_units(pitch_slide * (ticks_per_row - 1));
 }
 
 Uint8 pitch_fine_slide_units(int fine_slide) {
     // TODO!
     // average between octaves 2 and 3
     float semis_per_row = (float)fine_slide * 12.0 / 214.0;
-    float semis_per_quarter = semis_per_row * (TICKS_PER_QUARTER / TICKS_PER_ROW);
+    float semis_per_quarter = semis_per_row * (TICKS_PER_QUARTER / ROW_TIME);
     return slide_hex_float(semis_per_quarter, PITCH_SLIDE_BIAS);
 }
 
-Uint8 velocity_slide_units(int volume_slide) {
-    // TODO!
-    return velocity_fine_slide_units(volume_slide * (MOD_TICKS_PER_ROW - 1));
+Uint8 velocity_slide_units(int volume_slide, int ticks_per_row) {
+    return velocity_fine_slide_units(volume_slide * (ticks_per_row - 1));
 }
 
 Uint8 velocity_fine_slide_units(int fine_slide) {
-    // TODO!
     fine_slide = velocity_units(fine_slide);
-    int units_per_quarter = fine_slide * (TICKS_PER_QUARTER / TICKS_PER_ROW);
+    int units_per_quarter = fine_slide * (TICKS_PER_QUARTER / ROW_TIME);
     return slide_hex_float(units_per_quarter, VELOCITY_SLIDE_BIAS);
 }
 
