@@ -209,6 +209,10 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
             case EFFECT_TEMPO:
                 if (event.v_effect == EFFECT_VELOCITY)
                     playback->tick_len = calc_tick_len(event.v_value, playback->out_freq);
+                else if (event.v_effect >= '0' && event.v_effect <= '9')
+                    // upper digit
+                    playback->tick_len = calc_tick_len(
+                        ((event.v_effect - '0') << 8) + event.v_value, playback->out_freq);
                 break;
         }
     } else if (inst_special == EVENT_NOTE_CUT) {

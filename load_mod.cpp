@@ -417,6 +417,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             }
             break;
         case 0xF:
+        {
             if (value >= 0x20)
                 song_state->tempo = value;
             else
@@ -425,9 +426,12 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                 = EVENT_PLAYBACK;
             event.p_effect = EFFECT_TEMPO;
             event.v_effect = EFFECT_VELOCITY;
-            // TODO limit of 255 (could be greater with lower ticks per row)
-            event.v_value = song_state->tempo * MOD_DEFAULT_TICKS_PER_ROW / song_state->ticks_per_row;
+            int tempo = song_state->tempo * MOD_DEFAULT_TICKS_PER_ROW / song_state->ticks_per_row;
+            if (tempo > 0xFF)
+                event.v_effect = '0' + (tempo >> 8); // upper digit
+            event.v_value = tempo & 0xFF;
             break;
+        }
     }
     state->prev_effect = effect;
 
