@@ -40,10 +40,12 @@ struct ModTrackState {
     int cur_period, glide_direction; // used only for simulating amiga pitch slides
     int cur_sample_num;
     int prev_effect;
-    Uint8 glide_value, vibrato_mem, tremolo_mem, offset_mem;
+    Uint8 glide_mem, offset_mem;
+    Uint8 vibrato_speed_mem, vibrato_depth_mem, tremolo_speed_mem, tremolo_depth_mem;
     ModTrackState() : cur_period(0), glide_direction(0), cur_sample_num(0),
         prev_effect(-1), // always reset effect at start
-        glide_value(0), vibrato_mem(0), tremolo_mem(0), offset_mem(0) { }
+        glide_mem(0), offset_mem(0),
+        vibrato_speed_mem(0), vibrato_depth_mem(0), tremolo_speed_mem(0), tremolo_depth_mem(0) { }
 };
 
 struct ModSongState {
@@ -68,6 +70,9 @@ static Uint8 pitch_slide_units(int pitch_slide, ModTrackState * state, ModSongSt
 static Uint8 pitch_fine_slide_units(int fine_slide, ModTrackState * state, int effect);
 static Uint8 velocity_slide_units(int volume_slide, ModSongState * song_state);
 static Uint8 velocity_fine_slide_units(int fine_slide);
+static Uint8 vibrato_speed_units(int speed);
+static Uint8 vibrato_depth_units(int depth, ModTrackState * state);
+static Uint8 tremolo_depth_units(int depth);
 static int sample_add_slice(InstSample * sample, int slice_point);
 
 void load_mod(const char * filename, Song * song) {
@@ -259,33 +264,39 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         case 0x3:
             event.v_effect = EFFECT_GLIDE;
             if (value != 0)
-                state->glide_value = value;  // memory
-            event.v_value = pitch_slide_units(state->glide_value, state, song_state, 0x3);
+                state->glide_mem = value;  // memory
+            event.v_value = pitch_slide_units(state->glide_mem, state, song_state, 0x3);
             break;
         case 0x4:
+        {
             event.v_effect = EFFECT_VIBRATO;
-            if (value == 0)
-                event.v_value = state->vibrato_mem;
-            else {
-                int speed = value >> 4; // TODO
-                int depth = value & 0xF;
-                depth /= 2;
-                event.v_value = (speed << 4) | depth;
-                state->vibrato_mem = event.v_value;
-            }
+            int speed = value >> 4; // TODO
+            int depth = value & 0xF;
+            if (speed != 0)
+                state->vibrato_speed_mem = speed;
+            if (depth != 0)
+                state->vibrato_depth_mem = depth;
+
+            event.v_value = vibrato_speed_units(state->vibrato_speed_mem)
+                | vibrato_depth_units(state->vibrato_depth_mem, state);
             break;
+        }
         // 0x5 and 0x6 are combined with A below
         case 0x7:
+        {
             event.v_effect = EFFECT_TREMOLO;
-            if (value == 0)
-                event.v_value = state->tremolo_mem;
-            else {
-                int speed = value >> 4; // TODO
-                int depth = value & 0xF; // TODO
-                event.v_value = (speed << 4) | depth;
-                state->tremolo_mem = event.v_value;
-            }
+            int speed = value >> 4; // TODO
+            int depth = value & 0xF;
+            if (speed != 0)
+                state->tremolo_speed_mem = speed;
+            if (depth != 0)
+                state->tremolo_depth_mem = depth;
+
+            // same speed units as vibrato
+            event.v_value = vibrato_speed_units(state->tremolo_speed_mem)
+                | tremolo_depth_units(state->tremolo_depth_mem);
             break;
+        }
         case 0x8:
             event.v_effect = EFFECT_PAN;
             event.v_value = panning_units(value);
@@ -293,11 +304,11 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         case 0x9:
         {
             event.v_effect = EFFECT_SAMPLE_OFFSET;
-            int slice_point = value * 256;
+            if (value != 0)
+                state->offset_mem = value;
+            int slice_point = state->offset_mem * 256;
             // search for existing slice point
-            if (value == 0)
-                event.v_value = state->offset_mem;
-            else if (state->cur_sample_num)
+            if (state->cur_sample_num)
                 event.v_value = sample_add_slice(sample_info[state->cur_sample_num].sample, slice_point);
             state->offset_mem = event.v_value;
             break;
@@ -319,11 +330,12 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                 event.p_effect = event.v_effect;
                 event.p_value = event.v_value;
                 event.v_effect = EFFECT_GLIDE;
-                event.v_value = pitch_slide_units(state->glide_value, state, song_state, 0x3);
+                event.v_value = pitch_slide_units(state->glide_mem, state, song_state, 0x3);
             } else if (effect == 0x6) {
                 // vibrato is less important
                 event.p_effect = EFFECT_VIBRATO;
-                event.p_value = state->vibrato_mem;
+                event.p_value = vibrato_speed_units(state->vibrato_speed_mem)
+                    | vibrato_depth_units(state->vibrato_depth_mem, state);
             }
             break;
         // TODO Position jump
@@ -356,6 +368,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                     // this effect only does something if there is a pitch in the note column
                     // which solves the problem that EFFECT_TUNE accumulates over multiple uses
                     if (period != 0 && state->cur_sample_num) {
+                        event.v_effect = EFFECT_TUNE;
                         Sint8 signed_finetune = value << 4;
                         signed_finetune >>= 4;
                         int tune_diff = signed_finetune - sample_info[state->cur_sample_num].finetune;
@@ -364,7 +377,6 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                             value = 0;
                         if (value > 0xFF)
                             value = 0xFF;
-                        event.v_effect = EFFECT_TUNE;
                         event.v_value = value;
                     }
                     break;
@@ -609,6 +621,18 @@ Uint8 velocity_fine_slide_units(int fine_slide) {
     fine_slide = velocity_units(fine_slide);
     int units_per_quarter = fine_slide * (TICKS_PER_QUARTER / ROW_TIME);
     return slide_hex_float(units_per_quarter, VELOCITY_SLIDE_BIAS);
+}
+
+Uint8 vibrato_speed_units(int speed) {
+    return speed << 4; // TODO
+}
+
+Uint8 vibrato_depth_units(int depth, ModTrackState * state) {
+    return depth;
+}
+
+Uint8 tremolo_depth_units(int depth) {
+    return depth;
 }
 
 int sample_add_slice(InstSample * sample, int slice_point) {
