@@ -1,5 +1,6 @@
 #include <math.h>
 #include "playback.h"
+#include "playback_lut.h"
 
 #define SAMPLE_MASTER_VOLUME 0.5
 
@@ -16,7 +17,8 @@ ChannelPlayback::ChannelPlayback()
 : instrument(NULL), note_state(PLAY_OFF),
 pitch_semis(0.0), playback_rate(0), playback_pos(0),
 volume(1.0),
-vel_slide(0), pitch_slide(0), glide_pitch(-1.0) { }
+vel_slide(0), pitch_slide(0), glide_pitch(-1.0),
+vibrato_i(0), vibrato_rate(0), vibrato_depth(0.0) { }
 
 TrackPlayback::TrackPlayback()
 : channel(NULL),
@@ -159,6 +161,7 @@ void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFr
     }
 
     // these control commands go after tick
+    bool recalc_rate = false;
 
     c->volume += c->vel_slide;
     if (c->volume > 1.0)
@@ -178,9 +181,21 @@ void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFr
                     c->pitch_semis = c->glide_pitch;
             }
         }
+        recalc_rate = true;
+    }
+
+    if (c->vibrato_rate > 0 && c->vibrato_depth > 0) {
+        c->vibrato_i += c->vibrato_rate;
+        c->vibrato_i %= MODULATION_SINE_POINTS;
+        recalc_rate = false; // special variation
+        float offset = c->vibrato_depth * MODULATION_SINE[c->vibrato_i];
+        c->playback_rate = calc_playback_rate(playback->out_freq,
+            c->instrument->c5_freq, c->pitch_semis + offset);
+    }
+
+    if (recalc_rate)
         c->playback_rate = calc_playback_rate(playback->out_freq,
             c->instrument->c5_freq, c->pitch_semis);
-    }
 }
 
 
@@ -220,8 +235,12 @@ void process_event(Event event, SongPlayback * playback, TrackPlayback * track, 
         // reset previous effects
         channel->pitch_slide = 0.0;
         channel->vel_slide = 0.0;
+        channel->vibrato_depth = 0;
+        channel->vibrato_rate = 0;
         process_effect(event.p_effect, event.p_value, channel, event.v_effect == EFFECT_GLIDE);
         process_effect(event.v_effect, event.v_value, channel, false);
+        if (channel->vibrato_i != 0 && channel->vibrato_depth == 0.0)
+            channel->vibrato_i = 0; // retrigger
 
         if (channel->instrument)
             channel->playback_rate = calc_playback_rate(playback->out_freq,
@@ -253,6 +272,10 @@ void process_effect(char effect, Uint8 value, ChannelPlayback * channel, bool gl
             channel->pitch_slide = calc_slide_rate(value, PITCH_SLIDE_BIAS);
             if (channel->glide_pitch < channel->pitch_semis)
                 channel->pitch_slide *= -1;
+            break;
+        case EFFECT_VIBRATO:
+            channel->vibrato_depth = (value & 0xF) / 8.0;
+            channel->vibrato_rate = value >> 4;
             break;
         case EFFECT_TUNE:
             channel->pitch_semis += (value - 0x40) / (float)0x40;

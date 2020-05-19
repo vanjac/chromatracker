@@ -12,7 +12,7 @@ void gui(SongPlayback * playback) {
     ImGui::PlotLines("Wave", (float *)tick_buffer, tick_buffer_len * 2, 0, NULL, -1.0, 1.0, ImVec2(200, 150));
 
     ImGui::Text("Page: %d", playback->current_page);
-    ImGui::Text("Page tick: 0x%X", playback->current_page_tick);
+    ImGui::Text("Page tick: %d", playback->current_page_tick);
 
     char event_str[EVENT_STR_LEN];
 

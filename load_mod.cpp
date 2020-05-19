@@ -70,7 +70,7 @@ static Uint8 pitch_slide_units(int pitch_slide, ModTrackState * state, ModSongSt
 static Uint8 pitch_fine_slide_units(int fine_slide, ModTrackState * state, int effect);
 static Uint8 velocity_slide_units(int volume_slide, ModSongState * song_state);
 static Uint8 velocity_fine_slide_units(int fine_slide);
-static Uint8 vibrato_speed_units(int speed);
+static Uint8 vibrato_speed_units(int speed, ModSongState * song_state);
 static Uint8 vibrato_depth_units(int depth, ModTrackState * state);
 static Uint8 tremolo_depth_units(int depth);
 static int sample_add_slice(InstSample * sample, int slice_point);
@@ -135,7 +135,7 @@ void load_mod(const char * filename, Song * song) {
     for (int j = 0; j < song_length; j++) {
         int pat_num = song_table[j];
         if (pattern_read[pat_num])
-            continue;
+            continue; // TODO: restore track/song states from pattern
         pattern_read[pat_num] = true;
 #ifdef DEBUG_EVENTS
         printf("Pattern %d\n", pat_num);
@@ -248,6 +248,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
     int sub_effect = 0;
     switch (effect) {
         case 0x0:
+            // TODO arpeggio
             // clear previous effect
             if (state->prev_effect != 0x0 && state->prev_effect != 0x9 && state->prev_effect != 0xB
                 && state->prev_effect != 0xC && state->prev_effect != 0xD && state->prev_effect != 0xF)
@@ -277,7 +278,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             if (depth != 0)
                 state->vibrato_depth_mem = depth;
 
-            event.v_value = vibrato_speed_units(state->vibrato_speed_mem)
+            event.v_value = vibrato_speed_units(state->vibrato_speed_mem, song_state)
                 | vibrato_depth_units(state->vibrato_depth_mem, state);
             break;
         }
@@ -293,7 +294,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                 state->tremolo_depth_mem = depth;
 
             // same speed units as vibrato
-            event.v_value = vibrato_speed_units(state->tremolo_speed_mem)
+            event.v_value = vibrato_speed_units(state->tremolo_speed_mem, song_state)
                 | tremolo_depth_units(state->tremolo_depth_mem);
             break;
         }
@@ -334,7 +335,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             } else if (effect == 0x6) {
                 // vibrato is less important
                 event.p_effect = EFFECT_VIBRATO;
-                event.p_value = vibrato_speed_units(state->vibrato_speed_mem)
+                event.p_value = vibrato_speed_units(state->vibrato_speed_mem, song_state)
                     | vibrato_depth_units(state->vibrato_depth_mem, state);
             }
             break;
@@ -449,6 +450,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         event.p_effect = EFFECT_PITCH;
         event.p_value = period_to_pitch(period);
     } else if (sample_num) {
+        // TODO check if sample num is different
         // override playback event. TODO move to a different track
         if (event.instrument[0] == EVENT_PLAYBACK)
             clear_event(&event);
@@ -590,7 +592,7 @@ Uint8 pitch_slide_units(int pitch_slide, ModTrackState * state, ModSongState * s
 Uint8 pitch_fine_slide_units(int fine_slide, ModTrackState * state, int effect) {
     if (state->cur_period < 1) // upper frequency limit
         state->cur_period = 1;
-    int prev_pitch = calc_period_to_pitch_exact(state->cur_period);
+    float prev_pitch = calc_period_to_pitch_exact(state->cur_period);
     switch (effect) {
         case 1:
             state->cur_period -= fine_slide; // pitch up, period down
@@ -608,7 +610,7 @@ Uint8 pitch_fine_slide_units(int fine_slide, ModTrackState * state, int effect) 
     }
     if (state->cur_period < 1) // upper frequency limit
         state->cur_period = 1;
-    int cur_pitch = calc_period_to_pitch_exact(state->cur_period);
+    float cur_pitch = calc_period_to_pitch_exact(state->cur_period);
     float semis_per_quarter = abs(cur_pitch - prev_pitch) * (TICKS_PER_QUARTER / ROW_TIME);
     return slide_hex_float(semis_per_quarter, PITCH_SLIDE_BIAS);
 }
@@ -623,12 +625,28 @@ Uint8 velocity_fine_slide_units(int fine_slide) {
     return slide_hex_float(units_per_quarter, VELOCITY_SLIDE_BIAS);
 }
 
-Uint8 vibrato_speed_units(int speed) {
-    return speed << 4; // TODO
+Uint8 vibrato_speed_units(int speed, ModSongState * song_state) {
+    // at 6 ticks per row should be about the same
+    int points_per_row = speed * (song_state->ticks_per_row - 1);
+    points_per_row *= (MODULATION_SINE_POINTS / 64); // *9
+    int points_per_tick = round((float)points_per_row / ROW_TIME);
+    if (points_per_tick > 0xF)
+        points_per_tick = 0xF;
+    return points_per_tick << 4; // speed goes in upper nibble
 }
 
 Uint8 vibrato_depth_units(int depth, ModTrackState * state) {
-    return depth;
+    // TODO cur_period could be wrong after glide
+    int period = state->cur_period;
+    if (period < depth + 1)
+        period = depth + 1;
+    float upper_pitch = calc_period_to_pitch_exact(period - depth);
+    float lower_pitch = calc_period_to_pitch_exact(period + depth);
+    float amplitude = (upper_pitch - lower_pitch) / 2;
+    int depth_units = round(amplitude * 8);
+    if (depth_units > 0xF)
+        depth_units = 0xF;
+    return depth_units;
 }
 
 Uint8 tremolo_depth_units(int depth) {

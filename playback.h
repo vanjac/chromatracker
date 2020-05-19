@@ -20,6 +20,8 @@ struct ChannelPlayback {
 
     float vel_slide, pitch_slide;
     float glide_pitch; // negative if no glide
+    int vibrato_i, vibrato_rate;
+    float vibrato_depth;
 
     ChannelPlayback();
 };

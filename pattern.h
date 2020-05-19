@@ -55,6 +55,7 @@ enum Effects {
 
 #define VELOCITY_SLIDE_BIAS 1
 #define PITCH_SLIDE_BIAS 4
+#define MODULATION_SINE_POINTS (TICKS_PER_QUARTER*3)
 
 struct Event {
     Uint16 time; // in ticks
