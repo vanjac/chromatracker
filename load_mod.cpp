@@ -271,7 +271,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         case 0x4:
         {
             event.v_effect = EFFECT_VIBRATO;
-            int speed = value >> 4; // TODO
+            int speed = value >> 4;
             int depth = value & 0xF;
             if (speed != 0)
                 state->vibrato_speed_mem = speed;
@@ -286,7 +286,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         case 0x7:
         {
             event.v_effect = EFFECT_TREMOLO;
-            int speed = value >> 4; // TODO
+            int speed = value >> 4;
             int depth = value & 0xF;
             if (speed != 0)
                 state->tremolo_speed_mem = speed;
