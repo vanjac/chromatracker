@@ -17,6 +17,7 @@ struct ChannelPlayback {
     Sint64 playback_pos; // fp 32.16 frame num
 
     float volume;
+    float pan; // 0.0 center, -1.0 left, 1.0 right
 
     float vel_slide, pitch_slide;
     float glide_pitch; // negative if no glide

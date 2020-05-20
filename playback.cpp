@@ -16,7 +16,7 @@ static float calc_slide_rate(Uint8 effect_value, int bias);
 ChannelPlayback::ChannelPlayback() 
 : instrument(NULL), note_state(PLAY_OFF),
 pitch_semis(0.0), playback_rate(0), playback_pos(0),
-volume(1.0),
+volume(1.0), pan(0.0),
 vel_slide(0), pitch_slide(0), glide_pitch(-1.0),
 vibrato_i(0), vibrato_rate(0), vibrato_depth(0.0) { }
 
@@ -47,6 +47,13 @@ void set_playback_song(SongPlayback * playback, Song * song) {
 
     for (int i = 0; i < playback->num_tracks; i++)
         playback->tracks[i].channel = &playback->channels[i];
+    // TODO default channel panning
+    for (int i = 0; i < playback->num_channels; i++) {
+        if (i % 4 == 0 || i % 4 == 3)
+            playback->channels[i].pan = -0.5;
+        else
+            playback->channels[i].pan = 0.5;
+    }
 
     set_playback_page(playback, 0);
 }
@@ -149,10 +156,21 @@ void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFr
             } 
         }
 
+        float left_vol = c->volume * SAMPLE_MASTER_VOLUME;
+        float right_vol = c->volume * SAMPLE_MASTER_VOLUME;
+        // TODO how does panning work?
+        if (c->pan >= 1)
+            left_vol = 0;
+        else if (c->pan > 0)
+            left_vol *= 1 - c->pan;
+        else if (c->pan <= -1)
+            right_vol = 0;
+        else if (c->pan < 0)
+            right_vol *= c->pan + 1;
         while (c->playback_pos < max_pos) {
             StereoFrame mix_frame = inst->wave[c->playback_pos >> 16];
-            write->l += mix_frame.l * c->volume * SAMPLE_MASTER_VOLUME;
-            write->r += mix_frame.r * c->volume * SAMPLE_MASTER_VOLUME;
+            write->l += mix_frame.l * left_vol;
+            write->r += mix_frame.r * right_vol;
             write++;
             c->playback_pos += c->playback_rate;
         }
