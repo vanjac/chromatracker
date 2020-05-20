@@ -2,7 +2,7 @@
 #include "playback.h"
 #include "playback_lut.h"
 
-#define SAMPLE_MASTER_VOLUME 0.5
+#define SAMPLE_MASTER_VOLUME 1.0
 
 static void set_playback_page(SongPlayback * playback, int page);
 static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
@@ -50,9 +50,9 @@ void set_playback_song(SongPlayback * playback, Song * song) {
     // TODO default channel panning
     for (int i = 0; i < playback->num_channels; i++) {
         if (i % 4 == 0 || i % 4 == 3)
-            playback->channels[i].pan = -0.5;
+            playback->channels[i].pan = 0.25;
         else
-            playback->channels[i].pan = 0.5;
+            playback->channels[i].pan = 0.75;
     }
 
     set_playback_page(playback, 0);
@@ -158,15 +158,14 @@ void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFr
 
         float left_vol = c->volume * SAMPLE_MASTER_VOLUME;
         float right_vol = c->volume * SAMPLE_MASTER_VOLUME;
-        // TODO how does panning work?
         if (c->pan >= 1)
-            left_vol = 0;
-        else if (c->pan > 0)
-            left_vol *= 1 - c->pan;
-        else if (c->pan <= -1)
-            right_vol = 0;
-        else if (c->pan < 0)
-            right_vol *= c->pan + 1;
+            c->pan = 1;
+        if (c->pan <= 0)
+            c->pan = 0;
+        // when centered both channels will be 0.5 amplitude
+        // TODO how does panning work?
+        left_vol *= 1 - c->pan;
+        right_vol *= c->pan;
         while (c->playback_pos < max_pos) {
             StereoFrame mix_frame = inst->wave[c->playback_pos >> 16];
             write->l += mix_frame.l * left_vol;
