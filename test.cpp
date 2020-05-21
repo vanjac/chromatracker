@@ -42,7 +42,7 @@ int main(int argv, char ** argc) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     SDL_Window * window = SDL_CreateWindow("chromatracker",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        640, 480,
+        800, 600,
         SDL_WINDOW_OPENGL);
     if (!window) {
         printf("Couldn't create window: %s\n", SDL_GetError());

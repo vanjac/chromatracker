@@ -10,8 +10,10 @@ static void effect_to_string(char effect, Uint8 value, char * str);
 
 
 bool event_is_empty(Event event) {
-    return !event.instrument[0] && event.p_effect == EFFECT_NONE
-        && event.v_effect == EFFECT_NONE;
+    char event_type = event.instrument[0];
+    // events that do nothing without effects
+    return (event_type == EVENT_NOTE_CHANGE || event_type == EVENT_PLAYBACK || event_type == EVENT_COMBINE)
+        && event.p_effect == EFFECT_NONE && event.v_effect == EFFECT_NONE;
 }
 
 void clear_event(Event * event) {

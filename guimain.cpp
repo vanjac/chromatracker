@@ -6,7 +6,7 @@ extern int tick_buffer_len;
 
 void gui(SongPlayback * playback) {
     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(640, 480));
+    ImGui::SetNextWindowSize(ImVec2(800, 600));
     ImGui::Begin("chromatracker", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
 
     ImGui::PlotLines("Wave", (float *)tick_buffer, tick_buffer_len * 2, 0, NULL, -1.0, 1.0, ImVec2(200, 150));

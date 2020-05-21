@@ -16,7 +16,7 @@
 #define NUM_SAMPLES 31
 #define PATTERN_LEN 64
 #define ROW_TIME  (8 * MOD_DEFAULT_TICKS_PER_ROW)
-#define NUM_TRACKS 4
+#define MOD_NUM_TRACKS 4
 #define EVENT_SIZE 4
 
 
@@ -59,7 +59,8 @@ static Song * current_song;
 // return wave end
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
 static void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
-    int pattern_num, ModTrackState * state, ModSongState * song_state, int time);
+    int time, int pattern_num, ModTrackState * state, ModSongState * song_state,
+    Event * playback_event_out);
 static int period_to_pitch(int period);
 static float calc_period_to_pitch_exact(int period);
 static Uint8 velocity_units(int volume);
@@ -86,7 +87,8 @@ void load_mod(const char * filename, Song * song) {
         return;
     }
 
-    song->tracks = vector<Track>(NUM_TRACKS);
+    // one extra track for playback events
+    song->tracks = vector<Track>(MOD_NUM_TRACKS + 1);
 
     // first find the number of patterns
     // by searching for the highest numbered pattern in the song table
@@ -105,12 +107,12 @@ void load_mod(const char * filename, Song * song) {
         if (pat_num > max_pattern)
             max_pattern = pat_num;
         song->page_lengths[i] = PATTERN_LEN * ROW_TIME;
-        for (int t = 0; t < NUM_TRACKS; t++) {
+        for (int t = 0; t < song->tracks.size(); t++) {
             song->tracks[t].pages[i] = pat_num;
         }
     }
 
-    int pattern_size = NUM_TRACKS * EVENT_SIZE * PATTERN_LEN;
+    int pattern_size = MOD_NUM_TRACKS * EVENT_SIZE * PATTERN_LEN;
 
     int wave_pos = pattern_size * (max_pattern + 1) + 1084;
     for (int i = 0; i < NUM_SAMPLES; i++) {
@@ -127,7 +129,7 @@ void load_mod(const char * filename, Song * song) {
 
     // state persists between patterns
     ModSongState song_state;
-    ModTrackState track_states[NUM_TRACKS];
+    ModTrackState track_states[MOD_NUM_TRACKS];
     bool pattern_read[MAX_PATTERNS] = {false};
 
     // read patterns in order of first appearance in sequence list
@@ -140,7 +142,7 @@ void load_mod(const char * filename, Song * song) {
 #ifdef DEBUG_EVENTS
         printf("Pattern %d\n", pat_num);
 #endif
-        for (int t = 0; t < NUM_TRACKS; t++) {
+        for (int t = 0; t < song->tracks.size(); t++) {
             Pattern * p = &song->tracks[t].patterns[pat_num];
             p->length = PATTERN_LEN * ROW_TIME;
             p->events.reserve(PATTERN_LEN); // estimate
@@ -153,10 +155,23 @@ void load_mod(const char * filename, Song * song) {
 #ifdef DEBUG_EVENTS
             printf("%.2X  ", row);
 #endif
-            for (int t = 0; t < NUM_TRACKS; t++) {
-                read_pattern_cell(file, &song->tracks[t].patterns[pat_num], pat_num,
-                    &track_states[t], &song_state, time);
+            // TODO only one playback event per row
+            Event playback_event {(Uint16)time,
+                {EVENT_PLAYBACK, EVENT_PLAYBACK}, EFFECT_NONE, 0, EFFECT_NONE, 0};
+            for (int t = 0; t < MOD_NUM_TRACKS; t++) {
+                read_pattern_cell(file, &song->tracks[t].patterns[pat_num], time, pat_num,
+                    &track_states[t], &song_state, &playback_event);
             }
+
+            if (!event_is_empty(playback_event)) {
+#ifdef DEBUG_EVENTS
+                char event_str[EVENT_STR_LEN];
+                event_to_string(playback_event, event_str);
+                printf("%s", event_str);
+#endif
+                song->tracks[MOD_NUM_TRACKS].patterns[pat_num].events.push_back(playback_event);
+            }
+
             time += ROW_TIME;
 #ifdef DEBUG_EVENTS
             printf("\n");
@@ -215,7 +230,8 @@ int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int
 
 
 void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
-        int pattern_num, ModTrackState * state, ModSongState * song_state, int time) {
+    int time, int pattern_num, ModTrackState * state, ModSongState * song_state,
+    Event * playback_event_out) {
     /* from OpenMPT wiki  https://wiki.openmpt.org/Manual:_Patterns
 
     If there is no instrument number next to a note, the previously used sample
@@ -382,12 +398,10 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                     }
                     break;
                 case 0x6:
-                    event.instrument[0] = event.instrument[1]
-                        = EVENT_PLAYBACK;
-                    event.p_effect = EFFECT_REPEAT;
+                    playback_event_out->p_effect = EFFECT_REPEAT;
                     if (value != 0) {
-                        event.v_effect = EFFECT_VELOCITY;
-                        event.v_value = value;
+                        playback_event_out->v_effect = EFFECT_VELOCITY;
+                        playback_event_out->v_value = value;
                     }
                     break;
                 case 0x8:
@@ -408,11 +422,9 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                     event.time += value * ROW_TIME / song_state->ticks_per_row;
                     break;
                 case 0xE:
-                    event.instrument[0] = event.instrument[1]
-                        = EVENT_PLAYBACK;
-                    event.p_effect = EFFECT_PAUSE;
-                    event.v_effect = EFFECT_VELOCITY;
-                    event.v_value = value * 16 * ROW_TIME / TICKS_PER_QUARTER;
+                    playback_event_out->p_effect = EFFECT_PAUSE;
+                    playback_event_out->v_effect = EFFECT_VELOCITY;
+                    playback_event_out->v_value = value * 16 * ROW_TIME / TICKS_PER_QUARTER;
                     break;
             }
             break;
@@ -422,24 +434,18 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
                 song_state->tempo = value;
             else
                 song_state->ticks_per_row = value;
-            event.instrument[0] = event.instrument[1]
-                = EVENT_PLAYBACK;
-            event.p_effect = EFFECT_TEMPO;
-            event.v_effect = EFFECT_VELOCITY;
+            playback_event_out->p_effect = EFFECT_TEMPO;
+            playback_event_out->v_effect = EFFECT_VELOCITY;
             int tempo = song_state->tempo * MOD_DEFAULT_TICKS_PER_ROW / song_state->ticks_per_row;
             if (tempo > 0xFF)
-                event.v_effect = '0' + (tempo >> 8); // upper digit
-            event.v_value = tempo & 0xFF;
+                playback_event_out->v_effect = '0' + (tempo >> 8); // upper digit
+            playback_event_out->v_value = tempo & 0xFF;
             break;
         }
     }
     state->prev_effect = effect;
 
     if (period != 0) {
-        // override playback event. TODO move to a different track
-        if (event.instrument[0] == EVENT_PLAYBACK)
-            clear_event(&event);
-
         // note change if glide effect, otherwise note on
         if (event.v_effect == EFFECT_GLIDE) { }
         else if (sample_num) {
@@ -455,10 +461,6 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         event.p_value = period_to_pitch(period);
     } else if (sample_num) {
         // TODO check if sample num is different
-        // override playback event. TODO move to a different track
-        if (event.instrument[0] == EVENT_PLAYBACK)
-            clear_event(&event);
-
         // reset note velocity
         if (event.v_effect != EFFECT_VELOCITY) {
             // keep existing effect
