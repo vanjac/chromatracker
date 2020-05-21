@@ -276,7 +276,7 @@ void process_effect(char effect, Uint8 value, ChannelPlayback * channel, bool gl
             if (glide)
                 channel->glide_pitch = value;
             else
-                channel->pitch_semis = value;
+                channel->glide_pitch = channel->pitch_semis = value;
             break;
         case EFFECT_VELOCITY:
             channel->volume = value / (float)MAX_VELOCITY;
