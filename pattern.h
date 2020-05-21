@@ -72,6 +72,10 @@ bool event_is_empty(Event event);
 void clear_event(Event * event);
 // return true if, given the previous event, the current event does nothing
 bool event_is_redundant(Event prev_event, Event cur_event);
+// types of effects defined in Song Specification
+bool effect_is_instant(Uint8 effect);
+bool effect_is_parameter(Uint8 effect);
+bool effect_is_continuous(Uint8 effect);
 bool instrument_is_special(Event event);
 void event_to_string(Event e, char * str);
 

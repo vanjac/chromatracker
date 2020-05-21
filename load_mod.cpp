@@ -37,7 +37,7 @@ struct ModSampleInfo {
 };
 
 struct ModTrackState {
-    int cur_period, glide_direction; // used only for simulating amiga pitch slides
+    int cur_period, glide_direction; // used for simulating amiga pitch slides
     int cur_sample_num;
     int prev_effect;
     Uint8 glide_mem, offset_mem;
@@ -263,9 +263,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
 
     int sub_effect = 0;
     switch (effect) {
-        case 0x0:
-            // TODO arpeggio
-            break;
+        // 0x0 is checked after writing event
         case 0x1:
             event.v_effect = EFFECT_PITCH_SLIDE_UP;
             event.v_value = pitch_slide_units(value, state, song_state, 0x1);
@@ -490,7 +488,33 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
     printf("%s   ", event_str);
 #endif
 
-    if (effect == 0xE && sub_effect == 0x9) {
+    if (effect == 0x0 && value != 0) {
+        // arpeggio
+        Event arpeggio_event {event.time,
+            {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE}, EFFECT_PITCH, 0, EFFECT_NONE, 0};
+        int note_cycle = 0;
+        if (!event_is_empty(event)) {
+            // skip first note
+            arpeggio_event.time += ROW_TIME / song_state->ticks_per_row;
+            note_cycle ++;
+        }
+        int base_note = round(calc_period_to_pitch_exact(state->cur_period));
+        while (arpeggio_event.time < event.time + ROW_TIME) {
+            arpeggio_event.p_value = base_note;
+            if (note_cycle == 1)
+                arpeggio_event.p_value += value >> 4;
+            else if (note_cycle == 2)
+                arpeggio_event.p_value += value & 0xF;
+            pattern->events.push_back(arpeggio_event);
+#ifdef DEBUG_EVENTS
+            event_to_string(arpeggio_event, event_str);
+            printf("%s   ", event_str);
+#endif
+            arpeggio_event.time += ROW_TIME / song_state->ticks_per_row;
+            note_cycle ++;
+            note_cycle %= 3;
+        }
+    } else if (effect == 0xE && sub_effect == 0x9) {
         // retrigger
         // Different trackers interpret retriggers without a note differently.
         // FastTracker/MilkyTracker skips the first tick.
@@ -613,6 +637,8 @@ Uint8 pitch_fine_slide_units(int fine_slide, ModTrackState * state, int effect) 
             break;
         case 3:
             // simulated glide doesn't stop at target note
+            // TODO it should eventually stop, because cur_period is also
+            // used by vibrato depth, arpeggio, and sample switching
             if (state->glide_direction > 0)
                 state->cur_period += fine_slide;
             else
@@ -647,7 +673,6 @@ Uint8 vibrato_speed_units(int speed, ModSongState * song_state) {
 }
 
 Uint8 vibrato_depth_units(int depth, ModTrackState * state) {
-    // TODO cur_period could be wrong after glide
     int period = state->cur_period;
     if (period < depth + 1)
         period = depth + 1;

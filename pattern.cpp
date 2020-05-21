@@ -8,10 +8,6 @@ static const char PLAYBACK_EVENT_NAMES[][4] = {
 
 static bool effect_is_redundant(Uint8 prev_effect, Uint8 prev_value,
     Uint8 cur_effect, Uint8 cur_value);
-// types of effects defined in Song Specification
-static bool effect_is_instant(Uint8 effect);
-static bool effect_is_parameter(Uint8 effect);
-static bool effect_is_continuous(Uint8 effect);
 static void effect_to_string(char effect, Uint8 value, char * str);
 
 
