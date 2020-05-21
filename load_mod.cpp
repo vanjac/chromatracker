@@ -16,7 +16,7 @@
 #define NUM_SAMPLES 31
 #define PATTERN_LEN 64
 #define ROW_TIME  (8 * MOD_DEFAULT_TICKS_PER_ROW)
-#define MOD_NUM_TRACKS 4
+#define MOD_NUM_CHANNELS 4
 #define EVENT_SIZE 4
 
 
@@ -36,13 +36,13 @@ struct ModSampleInfo {
     Uint8 finetune;
 };
 
-struct ModTrackState {
+struct ModChannelState {
     int cur_period, glide_direction; // used for simulating amiga pitch slides
     int cur_sample_num;
     int prev_effect;
     Uint8 glide_mem, offset_mem;
     Uint8 vibrato_speed_mem, vibrato_depth_mem, tremolo_speed_mem, tremolo_depth_mem;
-    ModTrackState() : cur_period(0), glide_direction(0), cur_sample_num(0),
+    ModChannelState() : cur_period(0), glide_direction(0), cur_sample_num(0),
         prev_effect(-1), // always reset effect at start
         glide_mem(0), offset_mem(0),
         vibrato_speed_mem(0), vibrato_depth_mem(0), tremolo_speed_mem(0), tremolo_depth_mem(0) { }
@@ -59,7 +59,7 @@ static Song * current_song;
 // return wave end
 static int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int wave_start);
 static void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
-    int time, int pattern_num, ModTrackState * state, ModSongState * song_state,
+    int time, int pattern_num, ModChannelState * state, ModSongState * song_state,
     Event * playback_event_out);
 static int period_to_pitch(int period);
 static float calc_period_to_pitch_exact(int period);
@@ -67,12 +67,12 @@ static Uint8 velocity_units(int volume);
 static Uint8 panning_units(int panning);
 static Uint8 panning_units_coarse(int panning);
 static Uint8 slide_hex_float(float slide, int bias);
-static Uint8 pitch_slide_units(int pitch_slide, ModTrackState * state, ModSongState * song_state, int effect);
-static Uint8 pitch_fine_slide_units(int fine_slide, ModTrackState * state, int effect);
+static Uint8 pitch_slide_units(int pitch_slide, ModChannelState * state, ModSongState * song_state, int effect);
+static Uint8 pitch_fine_slide_units(int fine_slide, ModChannelState * state, int effect);
 static Uint8 velocity_slide_units(int volume_slide, ModSongState * song_state);
 static Uint8 velocity_fine_slide_units(int fine_slide);
 static Uint8 vibrato_speed_units(int speed, ModSongState * song_state);
-static Uint8 vibrato_depth_units(int depth, ModTrackState * state);
+static Uint8 vibrato_depth_units(int depth, ModChannelState * state);
 static Uint8 tremolo_depth_units(int depth);
 static int sample_offset_units(InstSample * sample, int offset);
 
@@ -88,7 +88,7 @@ void load_mod(const char * filename, Song * song) {
     }
 
     // one extra track for playback events
-    song->tracks = vector<Track>(MOD_NUM_TRACKS + 1);
+    song->tracks = vector<Track>(MOD_NUM_CHANNELS + 1);
 
     // first find the number of patterns
     // by searching for the highest numbered pattern in the song table
@@ -112,7 +112,7 @@ void load_mod(const char * filename, Song * song) {
         }
     }
 
-    int pattern_size = MOD_NUM_TRACKS * EVENT_SIZE * PATTERN_LEN;
+    int pattern_size = MOD_NUM_CHANNELS * EVENT_SIZE * PATTERN_LEN;
 
     int wave_pos = pattern_size * (max_pattern + 1) + 1084;
     for (int i = 0; i < NUM_SAMPLES; i++) {
@@ -129,7 +129,7 @@ void load_mod(const char * filename, Song * song) {
 
     // state persists between patterns
     ModSongState song_state;
-    ModTrackState track_states[MOD_NUM_TRACKS];
+    ModChannelState channel_states[MOD_NUM_CHANNELS];
     bool pattern_read[MAX_PATTERNS] = {false};
 
     // read patterns in order of first appearance in sequence list
@@ -158,9 +158,9 @@ void load_mod(const char * filename, Song * song) {
             // TODO only one playback event per row
             Event playback_event {(Uint16)time,
                 {EVENT_PLAYBACK, EVENT_PLAYBACK}, EFFECT_NONE, 0, EFFECT_NONE, 0};
-            for (int t = 0; t < MOD_NUM_TRACKS; t++) {
+            for (int t = 0; t < MOD_NUM_CHANNELS; t++) {
                 read_pattern_cell(file, &song->tracks[t].patterns[pat_num], time, pat_num,
-                    &track_states[t], &song_state, &playback_event);
+                    &channel_states[t], &song_state, &playback_event);
             }
 
             if (!event_is_empty(playback_event)) {
@@ -169,7 +169,7 @@ void load_mod(const char * filename, Song * song) {
                 event_to_string(playback_event, event_str);
                 printf("%s", event_str);
 #endif
-                song->tracks[MOD_NUM_TRACKS].patterns[pat_num].events.push_back(playback_event);
+                song->tracks[MOD_NUM_CHANNELS].patterns[pat_num].events.push_back(playback_event);
             }
 
             time += ROW_TIME;
@@ -230,7 +230,7 @@ int read_sample(SDL_RWops * file, InstSample * sample, ModSampleInfo * info, int
 
 
 void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
-    int time, int pattern_num, ModTrackState * state, ModSongState * song_state,
+    int time, int pattern_num, ModChannelState * state, ModSongState * song_state,
     Event * playback_event_out) {
     /* from OpenMPT wiki  https://wiki.openmpt.org/Manual:_Patterns
 
@@ -620,11 +620,11 @@ Uint8 slide_hex_float(float slide, int bias) {
 }
 
 
-Uint8 pitch_slide_units(int pitch_slide, ModTrackState * state, ModSongState * song_state, int effect) {
+Uint8 pitch_slide_units(int pitch_slide, ModChannelState * state, ModSongState * song_state, int effect) {
     return pitch_fine_slide_units(pitch_slide * (song_state->ticks_per_row - 1), state, effect);
 }
 
-Uint8 pitch_fine_slide_units(int fine_slide, ModTrackState * state, int effect) {
+Uint8 pitch_fine_slide_units(int fine_slide, ModChannelState * state, int effect) {
     if (state->cur_period < 1) // upper frequency limit
         state->cur_period = 1;
     float prev_pitch = calc_period_to_pitch_exact(state->cur_period);
@@ -672,7 +672,7 @@ Uint8 vibrato_speed_units(int speed, ModSongState * song_state) {
     return points_per_tick << 4; // speed goes in upper nibble
 }
 
-Uint8 vibrato_depth_units(int depth, ModTrackState * state) {
+Uint8 vibrato_depth_units(int depth, ModChannelState * state) {
     int period = state->cur_period;
     if (period < depth + 1)
         period = depth + 1;
