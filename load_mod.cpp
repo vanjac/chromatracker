@@ -74,7 +74,7 @@ static Uint8 velocity_fine_slide_units(int fine_slide);
 static Uint8 vibrato_speed_units(int speed, ModSongState * song_state);
 static Uint8 vibrato_depth_units(int depth, ModTrackState * state);
 static Uint8 tremolo_depth_units(int depth);
-static int sample_add_slice(InstSample * sample, int slice_point);
+static int sample_offset_units(InstSample * sample, int offset);
 
 void load_mod(const char * filename, Song * song) {
     // http://coppershade.org/articles/More!/Topics/Protracker_File_Format/
@@ -320,18 +320,12 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             event.v_value = panning_units(value);
             break;
         case 0x9:
-        {
-            // TODO use fractional offset, not slice points
             event.v_effect = EFFECT_SAMPLE_OFFSET;
             if (value != 0)
                 state->offset_mem = value;
-            int slice_point = state->offset_mem * 256;
-            // search for existing slice point
             if (state->cur_sample_num)
-                event.v_value = sample_add_slice(sample_info[state->cur_sample_num].sample, slice_point);
-            state->offset_mem = event.v_value;
+                event.v_value = sample_offset_units(sample_info[state->cur_sample_num].sample, state->offset_mem);
             break;
-        }
         case 0xA:
         case 0x5:
         case 0x6:
@@ -664,16 +658,14 @@ Uint8 vibrato_depth_units(int depth, ModTrackState * state) {
 }
 
 Uint8 tremolo_depth_units(int depth) {
+    // TODO
     return depth;
 }
 
-int sample_add_slice(InstSample * sample, int slice_point) {
-    for (int i = 0; i < sample->num_slices; i++) {
-        if (sample->slices[i] == slice_point)
-            return i + 1;
-    }
-    // TODO check overflow
-    sample->slices[sample->num_slices] = slice_point;
-    sample->num_slices++;
-    return sample->num_slices;
+int sample_offset_units(InstSample * sample, int offset) {
+    offset *= 256; // units of 256 frames
+    int fraction = offset * 256 / sample->wave_len;
+    if (fraction > 0xFF)
+        fraction = 0xFF;
+    return fraction;
 }
