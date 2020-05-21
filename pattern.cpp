@@ -6,6 +6,12 @@ static const char PLAYBACK_EVENT_NAMES[][4] = {
     "   ", "Pit", "Vel",
     "Tmp", "Pau", "Jmp", "Rep", "Vol" };
 
+static bool effect_is_redundant(Uint8 prev_effect, Uint8 prev_value,
+    Uint8 cur_effect, Uint8 cur_value);
+// types of effects defined in Song Specification
+static bool effect_is_instant(Uint8 effect);
+static bool effect_is_parameter(Uint8 effect);
+static bool effect_is_continuous(Uint8 effect);
 static void effect_to_string(char effect, Uint8 value, char * str);
 
 
@@ -20,6 +26,48 @@ void clear_event(Event * event) {
     event->instrument[0] = event->instrument[1] = EVENT_NOTE_CHANGE;
     event->p_effect = event->v_effect = EFFECT_NONE;
     event->p_value = event->v_value = 0;
+}
+
+bool event_is_redundant(Event prev_event, Event cur_event) {
+    char cur_event_type = cur_event.instrument[0];
+    char prev_event_type = prev_event.instrument[0];
+
+    if (!instrument_is_special(cur_event) || cur_event_type == EVENT_REPLAY
+            || cur_event_type == EVENT_COMBINE || cur_event_type == EVENT_PLAYBACK)
+        return false;
+    if (cur_event_type != EVENT_NOTE_CHANGE && cur_event_type != prev_event_type)
+        return false;
+    return effect_is_redundant(prev_event.p_effect, prev_event.p_value,
+        cur_event.p_effect, cur_event.p_value)
+        && effect_is_redundant(prev_event.v_effect, prev_event.v_value,
+        cur_event.v_effect, cur_event.v_value);
+}
+
+bool effect_is_redundant(Uint8 prev_effect, Uint8 prev_value,
+        Uint8 cur_effect, Uint8 cur_value) {
+    if (cur_effect == EFFECT_NONE) {
+        // wouldn't interrupt previous effect
+        return !effect_is_continuous(prev_effect);
+    } else if (effect_is_instant(cur_effect) || effect_is_parameter(cur_effect)) {
+        // parameters could be changed by other effects
+        return false;
+    } else {
+        // continuous
+        return cur_effect == prev_effect && cur_value == prev_value;
+    } 
+}
+
+bool effect_is_instant(Uint8 effect) {
+    return effect == EFFECT_TUNE || effect == EFFECT_SAMPLE_OFFSET;
+}
+
+bool effect_is_parameter(Uint8 effect) {
+    return effect == EFFECT_PITCH || effect == EFFECT_VELOCITY
+        || effect == EFFECT_PAN || effect == EFFECT_BACKWARDS;
+}
+
+bool effect_is_continuous(Uint8 effect) {
+    return effect != EFFECT_NONE && !effect_is_instant(effect) && !effect_is_parameter(effect);
 }
 
 bool instrument_is_special(Event event) {

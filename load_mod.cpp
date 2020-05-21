@@ -471,6 +471,12 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         }
     }
 
+    if (pattern->events.size() > 0) {
+        Event prev_event = pattern->events[pattern->events.size() - 1];
+        if (event_is_redundant(prev_event, event))
+            clear_event(&event);
+    }
+
     if (!event_is_empty(event))
         pattern->events.push_back(event);
     else if (keep_empty_event) {
