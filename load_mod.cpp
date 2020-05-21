@@ -260,17 +260,11 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
 
     Event event {(Uint16)time,
         {EVENT_NOTE_CHANGE, EVENT_NOTE_CHANGE}, EFFECT_NONE, 0, EFFECT_NONE, 0};
-    
-    int keep_empty_event = 0;
+
     int sub_effect = 0;
     switch (effect) {
         case 0x0:
             // TODO arpeggio
-            // TODO improve keep_empty_event check
-            // clear previous effect
-            if (state->prev_effect != 0x0 && state->prev_effect != 0x9 && state->prev_effect != 0xB
-                && state->prev_effect != 0xC && state->prev_effect != 0xD && state->prev_effect != 0xF)
-                keep_empty_event = 1;
             break;
         case 0x1:
             event.v_effect = EFFECT_PITCH_SLIDE_UP;
@@ -475,18 +469,19 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         }
     }
 
+    bool redundant = false;
     if (pattern->events.size() > 0) {
         Event prev_event = pattern->events[pattern->events.size() - 1];
-        if (event_is_redundant(prev_event, event))
-            clear_event(&event);
+        redundant = event_is_redundant(prev_event, event);
     }
-
-    if (!event_is_empty(event))
+    if (!redundant) {
+        if (event_is_empty(event)) {
+            event.instrument[0] = event.instrument[1]
+                = EVENT_CANCEL_EFFECTS;
+        }
         pattern->events.push_back(event);
-    else if (keep_empty_event) {
-        event.instrument[0] = event.instrument[1]
-            = EVENT_CANCEL_EFFECTS;
-        pattern->events.push_back(event);
+    } else {
+        clear_event(&event);
     }
 
 #ifdef DEBUG_EVENTS

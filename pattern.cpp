@@ -35,7 +35,8 @@ bool event_is_redundant(Event prev_event, Event cur_event) {
     if (!instrument_is_special(cur_event) || cur_event_type == EVENT_REPLAY
             || cur_event_type == EVENT_COMBINE || cur_event_type == EVENT_PLAYBACK)
         return false;
-    if (cur_event_type != EVENT_NOTE_CHANGE && cur_event_type != prev_event_type)
+    if (cur_event_type != EVENT_NOTE_CHANGE && cur_event_type != EVENT_CANCEL_EFFECTS
+        && cur_event_type != prev_event_type)
         return false;
     return effect_is_redundant(prev_event.p_effect, prev_event.p_value,
         cur_event.p_effect, cur_event.p_value)
