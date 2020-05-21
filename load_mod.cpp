@@ -254,6 +254,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         else
             state->cur_period = period;
     }
+    int prev_sample_num = state->cur_sample_num;
     if (sample_num)
         state->cur_sample_num = sample_num;
 
@@ -456,9 +457,16 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
         event.p_effect = EFFECT_PITCH;
         event.p_value = period_to_pitch(period);
     } else if (sample_num) {
-        // TODO check if sample num is different
-        // reset note velocity
-        if (event.v_effect != EFFECT_VELOCITY) {
+        if (sample_num != prev_sample_num) {
+            // TODO there is no good equivalent for this
+            // it should switch the sample and volume while keeping pitch
+            ModSampleInfo * info = &sample_info[sample_num];
+            event.instrument[0] = info->inst_id[0];
+            event.instrument[1] = info->inst_id[1];
+            event.p_effect = EFFECT_PITCH;
+            event.p_value = round(calc_period_to_pitch_exact(state->cur_period));
+        } else if (event.v_effect != EFFECT_VELOCITY) {
+            // reset note velocity
             // keep existing effect
             event.p_effect = event.v_effect;
             event.p_value = event.v_value;
