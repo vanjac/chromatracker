@@ -16,7 +16,6 @@
 #define NUM_SAMPLES 31
 #define PATTERN_LEN 64
 #define ROW_TIME  (8 * MOD_DEFAULT_TICKS_PER_ROW)
-#define MOD_NUM_CHANNELS 4
 #define EVENT_SIZE 4
 
 
@@ -87,11 +86,22 @@ void load_mod(const char * filename, Song * song) {
         return;
     }
 
-    // one extra track for playback events
-    song->tracks = vector<Track>(MOD_NUM_CHANNELS + 1);
+    // get the number of channels
+    SDL_RWseek(file, 1080, RW_SEEK_SET);
+    char initials[5] ("    ");
+    SDL_RWread(file, &initials, 1, 4);
+    printf("%s\n", initials);
+    int num_channels = 4;
+    if (strcmp(initials, "6CHN") == 0)
+        num_channels = 6;
+    else if (strcmp(initials, "8CHN") == 0 || strcmp(initials, "FLT8") == 0)
+        num_channels = 8;
 
-    // first find the number of patterns
-    // by searching for the highest numbered pattern in the song table
+    // one extra track for playback events
+    song->tracks = vector<Track>(num_channels + 1);
+
+    // find the number of patterns by searching for the highest numbered
+    // pattern in the song table
     Uint8 song_length;
     SDL_RWseek(file, 950, RW_SEEK_SET);
     SDL_RWread(file, &song_length, 1, 1);
@@ -112,7 +122,7 @@ void load_mod(const char * filename, Song * song) {
         }
     }
 
-    int pattern_size = MOD_NUM_CHANNELS * EVENT_SIZE * PATTERN_LEN;
+    int pattern_size = num_channels * EVENT_SIZE * PATTERN_LEN;
 
     int wave_pos = pattern_size * (max_pattern + 1) + 1084;
     for (int i = 0; i < NUM_SAMPLES; i++) {
@@ -129,7 +139,7 @@ void load_mod(const char * filename, Song * song) {
 
     // state persists between patterns
     ModSongState song_state;
-    ModChannelState channel_states[MOD_NUM_CHANNELS];
+    ModChannelState channel_states[num_channels];
     bool pattern_read[MAX_PATTERNS] = {false};
 
     // read patterns in order of first appearance in sequence list
@@ -158,7 +168,7 @@ void load_mod(const char * filename, Song * song) {
             // TODO only one playback event per row
             Event playback_event {(Uint16)time,
                 {EVENT_PLAYBACK, EVENT_PLAYBACK}, EFFECT_NONE, 0, EFFECT_NONE, 0};
-            for (int t = 0; t < MOD_NUM_CHANNELS; t++) {
+            for (int t = 0; t < num_channels; t++) {
                 read_pattern_cell(file, &song->tracks[t].patterns[pat_num], time, pat_num,
                     &channel_states[t], &song_state, &playback_event);
             }
@@ -169,7 +179,7 @@ void load_mod(const char * filename, Song * song) {
                 event_to_string(playback_event, event_str);
                 printf("%s", event_str);
 #endif
-                song->tracks[MOD_NUM_CHANNELS].patterns[pat_num].events.push_back(playback_event);
+                song->tracks[num_channels].patterns[pat_num].events.push_back(playback_event);
             }
 
             time += ROW_TIME;
