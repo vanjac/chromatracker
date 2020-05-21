@@ -92,10 +92,15 @@ void load_mod(const char * filename, Song * song) {
     SDL_RWread(file, &initials, 1, 4);
     printf("%s\n", initials);
     int num_channels = 4;
-    if (strcmp(initials, "6CHN") == 0)
-        num_channels = 6;
-    else if (strcmp(initials, "8CHN") == 0 || strcmp(initials, "FLT8") == 0)
+    if (strcmp(initials + 1, "CHN") == 0) {
+        initials[1] = 0;
+        num_channels = atoi(initials);
+    } else if (strcmp(initials + 2, "CH") == 0) {
+        initials[2] = 0;
+        num_channels = atoi(initials);
+    } else if (strcmp(initials, "FLT8") == 0) {
         num_channels = 8;
+    }
 
     // one extra track for playback events
     song->tracks = vector<Track>(num_channels + 1);
