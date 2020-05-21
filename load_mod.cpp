@@ -265,6 +265,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
     switch (effect) {
         case 0x0:
             // TODO arpeggio
+            // TODO improve keep_empty_event check
             // clear previous effect
             if (state->prev_effect != 0x0 && state->prev_effect != 0x9 && state->prev_effect != 0xB
                 && state->prev_effect != 0xC && state->prev_effect != 0xD && state->prev_effect != 0xF)
@@ -320,6 +321,7 @@ void read_pattern_cell(SDL_RWops * file, Pattern * pattern,
             break;
         case 0x9:
         {
+            // TODO use fractional offset, not slice points
             event.v_effect = EFFECT_SAMPLE_OFFSET;
             if (value != 0)
                 state->offset_mem = value;
@@ -668,10 +670,10 @@ Uint8 tremolo_depth_units(int depth) {
 int sample_add_slice(InstSample * sample, int slice_point) {
     for (int i = 0; i < sample->num_slices; i++) {
         if (sample->slices[i] == slice_point)
-            return i;
+            return i + 1;
     }
     // TODO check overflow
     sample->slices[sample->num_slices] = slice_point;
     sample->num_slices++;
-    return sample->num_slices - 1;
+    return sample->num_slices;
 }

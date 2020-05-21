@@ -310,8 +310,11 @@ void process_effect(char effect, Uint8 value, ChannelPlayback * channel, bool gl
             break;
         case EFFECT_SAMPLE_OFFSET:
             if (channel->instrument) {
-                if (value < channel->instrument->num_slices) {
-                    channel->playback_pos = (Sint64)channel->instrument->slices[value] << 16;
+                if (value == 0)
+                    channel->playback_pos = 0;
+                else if (value <= channel->instrument->num_slices) {
+                    // index from 0
+                    channel->playback_pos = (Sint64)channel->instrument->slices[value - 1] << 16;
                 } else {
                     channel->playback_pos = ((Sint64)channel->instrument->wave_len * value / 256) << 16;
                 }
