@@ -2,7 +2,7 @@
 #include "playback.h"
 #include "playback_lut.h"
 
-#define SAMPLE_MASTER_VOLUME 1.0
+#define SAMPLE_MASTER_VOLUME 0.5
 
 static void set_playback_page(SongPlayback * playback, int page);
 static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
