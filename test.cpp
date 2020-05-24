@@ -43,7 +43,7 @@ int main(int argv, char ** argc) {
     SDL_Window * window = SDL_CreateWindow("chromatracker",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         800, 600,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     if (!window) {
         printf("Couldn't create window: %s\n", SDL_GetError());
         SDL_Quit();
@@ -148,7 +148,8 @@ int main(int argv, char ** argc) {
         ImGui_ImplSDL2_NewFrame(window);
         ImGui::NewFrame();
         int width, height;
-        SDL_GetWindowSize(window, &width, &height);
+        // this is in pixel coordinates, scaled by dpi scaling
+        SDL_GL_GetDrawableSize(window, &width, &height);
         gui(&playback, width, height);
         ImGui::Render();
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
