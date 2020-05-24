@@ -39,6 +39,8 @@ struct TrackPlayback {
 struct SongPlayback {
     Song * song;
 
+    bool is_playing;
+
     int current_page;
     int current_page_tick;
 
@@ -57,8 +59,11 @@ struct SongPlayback {
 };
 
 void set_playback_song(SongPlayback * playback, Song * song);
+void set_playback_page(SongPlayback * playback, int page);
+void process_song_tick(SongPlayback * playback);
 // return tick length (num frames written to buffer)
-int process_tick(SongPlayback * playback, StereoFrame * tick_buffer);
+int process_audio_tick(SongPlayback * playback, StereoFrame * tick_buffer);
+void all_tracks_off(SongPlayback * playback);
 void process_event(Event event, SongPlayback * playback, TrackPlayback * track, int tick_delay);
 
 #endif

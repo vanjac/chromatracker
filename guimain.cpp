@@ -11,7 +11,32 @@ void gui(SongPlayback * playback) {
 
     ImGui::PlotLines("Wave", (float *)tick_buffer, tick_buffer_len * 2, 0, NULL, -1.0, 1.0, ImVec2(200, 150));
 
+    if (playback->is_playing) {
+        if (ImGui::Button("Pause")) {
+            playback->is_playing = false;
+            all_tracks_off(playback);
+        }
+    } else {
+        if (ImGui::Button("Play")) {
+            playback->is_playing = true;
+        }
+    }
     ImGui::Text("Page: %d", playback->current_page);
+    ImGui::SameLine();
+    if (ImGui::Button("<<")) {
+        all_tracks_off(playback);
+        set_playback_page(playback, 0);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("<") && playback->current_page > 0) {
+        all_tracks_off(playback);
+        set_playback_page(playback, playback->current_page - 1);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(">")) {
+        all_tracks_off(playback);
+        set_playback_page(playback, playback->current_page + 1);
+    }
     ImGui::Text("Page tick: %d", playback->current_page_tick);
 
     char event_str[EVENT_STR_LEN];

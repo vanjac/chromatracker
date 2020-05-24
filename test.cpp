@@ -258,7 +258,8 @@ void callback(void * userdata, Uint8 * stream, int len) {
         if (frame_stream >= frame_stream_end)
             break;
 
-        tick_buffer_len = process_tick(&playback, tick_buffer);
+        process_song_tick(&playback);
+        tick_buffer_len = process_audio_tick(&playback, tick_buffer);
         tick_buffer_pos = 0;
     }
 }

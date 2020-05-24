@@ -4,7 +4,6 @@
 
 #define SAMPLE_MASTER_VOLUME 0.5
 
-static void set_playback_page(SongPlayback * playback, int page);
 static void process_tick_track(TrackPlayback * track, SongPlayback * playback);
 static void process_tick_channel(ChannelPlayback * c, SongPlayback * playback, StereoFrame * tick_buffer, int tick_buffer_len);
 static void process_effect(char effect, Uint8 value, ChannelPlayback * channel, bool glide);
@@ -25,7 +24,7 @@ TrackPlayback::TrackPlayback()
 pattern(NULL), pattern_tick(0), event_i(0) { }
 
 SongPlayback::SongPlayback(int out_freq)
-: song(NULL), out_freq(out_freq),
+: song(NULL), is_playing(false), out_freq(out_freq),
 current_page(0), current_page_tick(0),
 tick_len(calc_tick_len(DEFAULT_TEMPO, out_freq)), tick_len_error(0),
 channels(NULL), num_channels(0),
@@ -60,7 +59,7 @@ void set_playback_song(SongPlayback * playback, Song * song) {
 
 void set_playback_page(SongPlayback * playback, int page) {
     Song * song = playback->song;
-    if (song->num_pages == 0)
+    if (song->num_pages == 0 || page < 0)
         return;
     page %= song->num_pages;
     playback->current_page = page;
@@ -75,7 +74,10 @@ void set_playback_page(SongPlayback * playback, int page) {
 }
 
 
-int process_tick(SongPlayback * playback, StereoFrame * tick_buffer) {
+void process_song_tick(SongPlayback * playback) {
+    if (!playback->is_playing)
+        return;
+
     // process page
     Song * song = playback->song;
     if (playback->current_page_tick >= song->page_lengths[playback->current_page]) {
@@ -86,9 +88,9 @@ int process_tick(SongPlayback * playback, StereoFrame * tick_buffer) {
     // process events
     for (int i = 0; i < playback->num_tracks; i++)
         process_tick_track(&playback->tracks[i], playback);
+}
 
-    // process audio
-
+int process_audio_tick(SongPlayback * playback, StereoFrame * tick_buffer) {
     int tick_buffer_len = playback->tick_len >> 16;
     playback->tick_len_error += playback->tick_len & 0xFFFF;
     if (playback->tick_len_error >= (1<<16)) {
@@ -107,6 +109,12 @@ int process_tick(SongPlayback * playback, StereoFrame * tick_buffer) {
     return tick_buffer_len;
 }
 
+void all_tracks_off(SongPlayback * playback) {
+    // TODO use note off instead of cut
+    Event off_event = {0, {EVENT_NOTE_CUT, EVENT_NOTE_CUT}, EFFECT_NONE, 0, EFFECT_NONE, 0};
+    for (int i = 0; i < playback->num_tracks; i++)
+        process_event(off_event, playback, &playback->tracks[i], 0);
+}
 
 void process_tick_track(TrackPlayback * track, SongPlayback * playback) {
     Pattern * pattern = track->pattern;
