@@ -4,7 +4,7 @@
 #include "song.h"
 #include "instrument.h"
 
-#define DEBUG_EVENTS
+//#define DEBUG_EVENTS
 
 // standard PAL rate
 #define AMIGA_C5_RATE 8287.1369

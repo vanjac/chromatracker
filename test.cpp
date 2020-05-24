@@ -43,7 +43,7 @@ int main(int argv, char ** argc) {
     SDL_Window * window = SDL_CreateWindow("chromatracker",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         800, 600,
-        SDL_WINDOW_OPENGL);
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!window) {
         printf("Couldn't create window: %s\n", SDL_GetError());
         SDL_Quit();
@@ -147,7 +147,9 @@ int main(int argv, char ** argc) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame(window);
         ImGui::NewFrame();
-        gui(&playback);
+        int width, height;
+        SDL_GetWindowSize(window, &width, &height);
+        gui(&playback, width, height);
         ImGui::Render();
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
         glClearColor(0.0, 0.0, 0.0, 1.0);

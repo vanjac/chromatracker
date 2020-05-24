@@ -3,6 +3,6 @@
 
 #include "playback.h"
 
-void gui(SongPlayback * playback);
+void gui(SongPlayback * playback, int width, int height);
 
 #endif
