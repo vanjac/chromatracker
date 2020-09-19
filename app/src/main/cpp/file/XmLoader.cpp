@@ -209,6 +209,9 @@ void XmLoader::read_pattern(Pattern ** track_patterns, int num_tracks,
                 if (event_data.velocity == VELOCITY_NONE)
                     event_data.velocity = 1.0f;  // must specify velocity
             }
+            if (slot[3] == 0x3 || slot[2] >= 0xF0) {  // portamento
+                event_data.instrument = EVENT_NOTE_GLIDE;
+            }
             if (!event_data.is_empty()) {
                 int event_time = time;
                 if (slot[3] == 0xE && nibble1 == 0xD)
