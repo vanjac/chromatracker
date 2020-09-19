@@ -133,6 +133,8 @@ bool XmLoader::load_xm() {
                 + inst_header_size - 4;
 
         instruments[i]->name = read_string(22);
+        instruments[i]->id[0] = ((i + 1) / 10) + '0';
+        instruments[i]->id[1] = ((i + 1) % 10) + '0';
         LOGD("Instrument: %s", instruments[i]->name.c_str());
         uint8_t inst_type = read_uint8();
 

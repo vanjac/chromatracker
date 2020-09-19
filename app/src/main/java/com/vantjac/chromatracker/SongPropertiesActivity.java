@@ -53,9 +53,11 @@ public class SongPropertiesActivity extends AppCompatActivity {
         final long[] instruments = EditProperties.songGetInstruments(songPtr);
         String[] instrumentNames = new String[instruments.length];
         for (int i = 0; i < instruments.length; i++) {
-            long instrumentPtr = instruments[i];
-            if (instrumentPtr != 0)
-                instrumentNames[i] = i + ": " + EditProperties.instrumentGetName(instrumentPtr);
+            long instPtr = instruments[i];
+            if (instPtr != 0)
+                instrumentNames[i] = Character.toString(EditProperties.instrumentGetID0(instPtr))
+                        + Character.toString(EditProperties.instrumentGetID1(instPtr))
+                        + ": " + EditProperties.instrumentGetName(instPtr);
             else
                 instrumentNames[i] = "ERROR";
         }
