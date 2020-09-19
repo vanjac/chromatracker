@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">chromatracker</string>
+    <string name="title_activity_sample_properties">Sample Properties</string>
+    <string name="title_activity_instrument_properties">Instrument Properties</string>
+    <string name="title_activity_song_properties">Song Properties</string>
+    <string-array name="playback_mode">
+        <item>Once</item>
+        <item>Loop</item>
+        <item>Sustain Loop</item>
+    </string-array>
+    <string-array name="loop_type">
+        <item>Forward</item>
+        <item>Ping-pong</item>
+    </string-array>
+    <string-array name="new_note_action">
+        <item>Off</item>
+        <item>Cut</item>
+        <item>Continue</item>
+    </string-array>
+    <string-array name="sample_overlap_mode">
+        <item>Mix</item>
+        <item>Random</item>
+    </string-array>
+</resources>
