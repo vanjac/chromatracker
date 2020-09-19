@@ -214,7 +214,7 @@ void XmLoader::read_pattern(Pattern ** track_patterns, int num_tracks,
             }
             if (!event_data.is_empty()) {
                 int event_time = time;
-                if (slot[3] == 0xE && nibble1 == 0xD)
+                if (slot[3] == 0xE && nibble1 == 0xD && nibble2 < speed)
                     event_time += nibble2 * TICK_TIME;  // delay;
                 track_patterns[t]->events.emplace_back(event_time, event_data);
             }
@@ -256,7 +256,7 @@ void XmLoader::read_pattern(Pattern ** track_patterns, int num_tracks,
                             }
                             break;
                         case 0xC:  // note cut
-                            if (nibble2 != 0) {
+                            if (nibble2 != 0 && nibble2 < speed) {
                                 NoteEventData cut_event;
                                 cut_event.velocity = 0.0f;
                                 track_patterns[t]->events.emplace_back(
@@ -276,7 +276,7 @@ void XmLoader::read_pattern(Pattern ** track_patterns, int num_tracks,
                     }
                     break;
                 case 20:  // 'K' key off
-                    if (slot[4] != 0) {
+                    if (slot[4] != 0 && slot[4] < speed) {
                         NoteEventData off_event;
                         off_event.instrument = EVENT_NOTE_OFF;
                         track_patterns[t]->events.emplace_back(
