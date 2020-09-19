@@ -17,7 +17,8 @@ SongPlayback::SongPlayback(const Song * song, int out_frame_rate,
         tick_len(calc_tick_len(DEFAULT_TEMPO, out_frame_rate)),
         tick_len_error(0),
         page_itr(song->pages.end()),
-        page_time(0) { }
+        page_time(0),
+        jam_track(nullptr, random) { }
 
 void SongPlayback::play_from_beginning() {
     play_from(song->pages.begin(), 0);
@@ -70,6 +71,7 @@ void SongPlayback::stop_all_notes() {
     for (auto &track : this->tracks) {
         track.stop_all();
     }
+    jam_track.stop_all();
 }
 
 std::list<Page>::const_iterator SongPlayback::get_page() const {
@@ -78,6 +80,10 @@ std::list<Page>::const_iterator SongPlayback::get_page() const {
 
 int SongPlayback::get_page_time() const {
     return this->page_time;
+}
+
+TrackPlayback * SongPlayback::get_jam_track() {
+    return &this->jam_track;
 }
 
 int SongPlayback::process_tick(float *tick_buffer, int max_frames) {
@@ -97,6 +103,7 @@ int SongPlayback::process_tick(float *tick_buffer, int max_frames) {
     float amp = volume_control_to_amplitude(song->master_volume);
     for (auto &track : this->tracks)
         track.process_tick(tick_buffer, tick_frames, this->out_frame_rate, amp);
+    jam_track.process_tick(tick_buffer, tick_frames, this->out_frame_rate, amp);
 
     if (this->page_itr != song->pages.end()) {
         this->page_time++;

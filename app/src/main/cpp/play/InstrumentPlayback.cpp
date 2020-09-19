@@ -63,6 +63,7 @@ void InstrumentPlayback::start_note(const Instrument *instrument,
     update_pitch(out_frame_rate);
 }
 
+// could be called multiple times (eg. by NNA)
 void InstrumentPlayback::release_note() {
     for (auto &sample : this->samples) {
         sample.release_note();

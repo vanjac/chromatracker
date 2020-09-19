@@ -10,6 +10,7 @@ namespace chromatracker::play {
 
 class TrackPlayback {
 public:
+    // track can be null
     TrackPlayback(const Track *track,
             std::default_random_engine *random);
     void set_pattern(const Pattern *pattern, int time);  // null to stop pattern

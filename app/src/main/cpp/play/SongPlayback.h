@@ -18,6 +18,7 @@ public:
     void stop_all_notes();
     std::list<Page>::const_iterator get_page() const;
     int get_page_time() const;
+    TrackPlayback *get_jam_track();
     // return number of frames written
     int process_tick(float *tick_buffer, int max_frames);
 
@@ -37,6 +38,7 @@ private:
     int page_time;
 
     std::vector<TrackPlayback> tracks;
+    TrackPlayback jam_track;
 };
 
 }

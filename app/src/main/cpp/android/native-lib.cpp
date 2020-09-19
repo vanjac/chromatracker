@@ -24,7 +24,6 @@ public:
 
     ChromaPlayer() :
     song_play(&song, FRAME_RATE, &random),
-    jam_channel(&jam_track, &random),
     tick_buffer_pos(0),
     tick_buffer_len(0) {
         oboe::AudioStreamBuilder builder;
@@ -58,7 +57,7 @@ public:
     void note_event(const chromatracker::NoteEventData &data) {
         if (data.pitch != chromatracker::PITCH_NONE)
             LOGD("%s", chromatracker::pitch_to_string(data.pitch).c_str());
-        jam_channel.execute_event(chromatracker::Event(0, data), FRAME_RATE);
+        song_play.get_jam_track()->execute_event(chromatracker::Event(0, data), FRAME_RATE);
     }
 
     void song_start() {
@@ -101,8 +100,6 @@ public:
             tick_buffer_pos = 0;
         }
 
-        jam_channel.process_tick(output_data, num_frames, FRAME_RATE, 1.0f);
-
         // clip!!
         for (int i = 0; i < num_samples; i++) {
             if (output_data[i] > 1.0f)
@@ -123,8 +120,6 @@ private:
     oboe::ManagedStream out_stream;
     chromatracker::Song song;
     std::default_random_engine random;
-    chromatracker::Track jam_track;
-    chromatracker::play::TrackPlayback jam_channel;
     chromatracker::play::SongPlayback song_play;
 
     float tick_buffer[MAX_TICK_FRAMES * NUM_CHANNELS];

@@ -33,7 +33,7 @@ void TrackPlayback::process_tick(float *tick_buffer, int tick_frames,
 
     held_note.process_tick(tick_buffer, tick_frames, out_frame_rate, amp);
 
-    if (track->mute)
+    if (track != nullptr && track->mute)
         amp = 0.0f;
 
     for (int i = 0; i < released_notes.size(); i++) {

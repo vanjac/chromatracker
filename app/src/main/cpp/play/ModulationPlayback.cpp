@@ -12,9 +12,11 @@ void ADSRPlayback::start_note(const ADSR *adsr) {
 }
 
 void ADSRPlayback::release_note() {
-    this->release_level = current_value();
-    this->note_on = false;
-    this->state_time = 0;
+    if (this->note_on) {
+        this->release_level = current_value();
+        this->note_on = false;
+        this->state_time = 0;
+    }
 }
 
 float ADSRPlayback::process_tick() {
