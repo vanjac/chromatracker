@@ -12,6 +12,8 @@ TrackPlayback::TrackPlayback(const Track *track) :
 
 void TrackPlayback::set_pattern(const Pattern *pattern, int time) {
     this->current_pattern = pattern;
+    if (pattern != nullptr)
+        time %= pattern->length;
     this->pattern_time = time;
     search_current_event();
 }
