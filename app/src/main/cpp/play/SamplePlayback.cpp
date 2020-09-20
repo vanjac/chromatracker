@@ -21,7 +21,7 @@ void SamplePlayback::release_note() {
     this->note_on = false;
 }
 
-void SamplePlayback::set_pitch(float pitch, int out_frame_rate) {
+void SamplePlayback::set_pitch(float pitch, SongState *state) {
     if (sample == nullptr)
         return;
     pitch -= static_cast<float>(sample->base_key);
@@ -29,7 +29,7 @@ void SamplePlayback::set_pitch(float pitch, int out_frame_rate) {
     float note_rate = exp2f(pitch / 12.0f);
     this->playback_rate = static_cast<uint32_t>(roundf(
             note_rate * static_cast<float>(sample->wave_frame_rate)
-            / static_cast<float>(out_frame_rate) * 65536.0f));
+            / static_cast<float>(state->out_frame_rate) * 65536.0f));
 }
 
 bool SamplePlayback::is_playing() const {

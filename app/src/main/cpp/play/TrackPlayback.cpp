@@ -4,14 +4,11 @@
 
 namespace chromatracker::play {
 
-TrackPlayback::TrackPlayback(const Track *track,
-                             std::default_random_engine *random) :
+TrackPlayback::TrackPlayback(const Track *track) :
         track(track),
-        random(random),
         current_pattern(nullptr),
         pattern_time(0),
-        event_i(0),
-        held_note(random) { }
+        event_i(0) { }
 
 void TrackPlayback::set_pattern(const Pattern *pattern, int time) {
     this->current_pattern = pattern;
@@ -28,17 +25,17 @@ int TrackPlayback::get_pattern_time() const {
 }
 
 void TrackPlayback::process_tick(float *tick_buffer, int tick_frames,
-        int out_frame_rate, float amp) {
-    process_pattern_tick(out_frame_rate);
+        SongState *state, float amp) {
+    process_pattern_tick(state);
 
-    held_note.process_tick(tick_buffer, tick_frames, out_frame_rate, amp);
+    held_note.process_tick(tick_buffer, tick_frames, state, amp);
 
     if (track != nullptr && track->mute)
         amp = 0.0f;
 
     for (int i = 0; i < released_notes.size(); i++) {
         if (!released_notes[i].process_tick(
-                tick_buffer, tick_frames, out_frame_rate, amp)) {
+                tick_buffer, tick_frames, state, amp)) {
             // note is no longer playing. remove from released notes
             unsigned end_i = released_notes.size() - 1;
             if (i != end_i) {
@@ -53,7 +50,7 @@ void TrackPlayback::process_tick(float *tick_buffer, int tick_frames,
     }
 }
 
-void TrackPlayback::process_pattern_tick(int out_frame_rate) {
+void TrackPlayback::process_pattern_tick(SongState *state) {
     if (this->current_pattern == nullptr)
         return;
 
@@ -75,7 +72,7 @@ void TrackPlayback::process_pattern_tick(int out_frame_rate) {
     while (this->event_i < events.size()) {
         const Event &next_event = events[this->event_i];
         if (next_event.time == this->pattern_time) {
-            execute_event(next_event, out_frame_rate);
+            execute_event(next_event, state);
             this->event_i++;
         } else {
             break;
@@ -127,7 +124,7 @@ void TrackPlayback::search_current_event() {
     LOGD("%d", this->event_i);
 }
 
-void TrackPlayback::execute_event(const Event &event, int out_frame_rate) {
+void TrackPlayback::execute_event(const Event &event, SongState *state) {
     if (std::holds_alternative<NoteEventData>(event.data)) {
         const auto &data = std::get<NoteEventData>(event.data);
 
@@ -145,7 +142,7 @@ void TrackPlayback::execute_event(const Event &event, int out_frame_rate) {
                 released_notes.push_back(std::move(held_note));
                 //LOGI("ADD %u", released_notes.size());
             }
-            held_note.start_note(data.instrument, data.pitch, out_frame_rate);
+            held_note.start_note(data.instrument, data.pitch, state);
         }
 
         if (data.velocity != VELOCITY_NONE) {

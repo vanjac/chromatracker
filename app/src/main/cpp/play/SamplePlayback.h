@@ -2,6 +2,7 @@
 #define CHROMATRACKER_SAMPLEPLAYBACK_H
 
 #include "../InstSample.h"
+#include "State.h"
 
 namespace chromatracker::play {
 
@@ -11,7 +12,7 @@ public:
 
     void release_note();
     // call after start_note
-    void set_pitch(float pitch, int out_frame_rate);
+    void set_pitch(float pitch, SongState *state);
     bool is_playing() const;
     int get_frame_pos() const;
     // tick_buffer has OUT_CHANNELS channels

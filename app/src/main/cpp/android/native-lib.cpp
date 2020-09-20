@@ -3,7 +3,6 @@
 #include <string>
 #include <iostream>
 #include <fstream>
-#include <random>
 #include <oboe/Oboe.h>
 #include <media/NdkMediaCodec.h>
 #include <media/NdkMediaExtractor.h>
@@ -21,11 +20,10 @@
 
 class ChromaPlayer : public oboe::AudioStreamCallback {
 public:
-
     ChromaPlayer() :
-    song_play(&song, FRAME_RATE, &random),
-    tick_buffer_pos(0),
-    tick_buffer_len(0) {
+            song_play(&song, FRAME_RATE),
+            tick_buffer_pos(0),
+            tick_buffer_len(0) {
         oboe::AudioStreamBuilder builder;
         builder.setDirection(oboe::Direction::Output);
         builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
@@ -44,9 +42,6 @@ public:
         chromatracker::file::XmLoader loader("/sdcard/Download/MOD.xm", &song);
         loader.load_xm();
 
-        std::random_device rand_dev;
-        random.seed(rand_dev());
-
         result = out_stream->requestStart();
         if (result != oboe::Result::OK) {
             LOGE("Failed to start stream: %s", oboe::convertToText(result));
@@ -57,7 +52,7 @@ public:
     void note_event(const chromatracker::NoteEventData &data) {
         if (data.pitch != chromatracker::PITCH_NONE)
             LOGD("%s", chromatracker::pitch_to_string(data.pitch).c_str());
-        song_play.get_jam_track()->execute_event(chromatracker::Event(0, data), FRAME_RATE);
+        song_play.jam_event(chromatracker::Event(0, data));
     }
 
     void song_start() {
@@ -119,7 +114,6 @@ private:
 
     oboe::ManagedStream out_stream;
     chromatracker::Song song;
-    std::default_random_engine random;
     chromatracker::play::SongPlayback song_play;
 
     float tick_buffer[MAX_TICK_FRAMES * NUM_CHANNELS];

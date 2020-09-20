@@ -9,16 +9,14 @@ static int calc_tick_len(int tempo, int out_frame_rate) {
         / static_cast<int64_t>(tempo) / static_cast<int64_t>(TICKS_PER_BEAT));
 }
 
-SongPlayback::SongPlayback(const Song * song, int out_frame_rate,
-        std::default_random_engine *random) :
+SongPlayback::SongPlayback(const Song * song, int out_frame_rate) :
         song(song),
-        random(random),
-        out_frame_rate(out_frame_rate),
         tick_len(calc_tick_len(DEFAULT_TEMPO, out_frame_rate)),
         tick_len_error(0),
         page_itr(song->pages.end()),
         page_time(0),
-        jam_track(nullptr, random) { }
+        jam_track(nullptr),
+        state(out_frame_rate) { }
 
 void SongPlayback::play_from_beginning() {
     play_from(song->pages.begin(), 0);
@@ -28,7 +26,7 @@ void SongPlayback::play_from(std::list<Page>::const_iterator itr, int time) {
     this->tracks.clear();
     this->tracks.reserve(song->tracks.size());
     for (const auto &track : song->tracks)
-        this->tracks.emplace_back(&track, random);
+        this->tracks.emplace_back(&track);
 
     // search upwards for previous tempo
     int tempo = DEFAULT_TEMPO;
@@ -39,17 +37,18 @@ void SongPlayback::play_from(std::list<Page>::const_iterator itr, int time) {
             break;
         }
     }
-    this->tick_len = calc_tick_len(tempo, this->out_frame_rate);
+    this->tick_len = calc_tick_len(tempo, state.out_frame_rate);
 
     this->page_itr = itr;
     this->page_time = time;
+    state.global_time = 0;
     update_page();
 }
 
 void SongPlayback::update_page() {
     if (this->page_itr->tempo != TEMPO_NONE) {
         this->tick_len = calc_tick_len(this->page_itr->tempo,
-                this->out_frame_rate);
+                state.out_frame_rate);
     }
 
     // TODO: what if tracks changed?
@@ -82,8 +81,8 @@ int SongPlayback::get_page_time() const {
     return this->page_time;
 }
 
-TrackPlayback * SongPlayback::get_jam_track() {
-    return &this->jam_track;
+void SongPlayback::jam_event(const chromatracker::Event &event) {
+    jam_track.execute_event(event, &state);
 }
 
 int SongPlayback::process_tick(float *tick_buffer, int max_frames) {
@@ -102,8 +101,8 @@ int SongPlayback::process_tick(float *tick_buffer, int max_frames) {
 
     float amp = volume_control_to_amplitude(song->master_volume);
     for (auto &track : this->tracks)
-        track.process_tick(tick_buffer, tick_frames, this->out_frame_rate, amp);
-    jam_track.process_tick(tick_buffer, tick_frames, this->out_frame_rate, amp);
+        track.process_tick(tick_buffer, tick_frames, &this->state, amp);
+    jam_track.process_tick(tick_buffer, tick_frames, &this->state, amp);
 
     if (this->page_itr != song->pages.end()) {
         this->page_time++;
@@ -115,6 +114,7 @@ int SongPlayback::process_tick(float *tick_buffer, int max_frames) {
             update_page();
         }
     }
+    state.global_time++;
 
     return tick_frames;
 }

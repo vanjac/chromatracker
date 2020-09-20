@@ -1,20 +1,20 @@
 #include "InstrumentPlayback.h"
 #include <cmath>
+#include <random>
 #include "../Units.h"
 #include "../Log.h"
 
 namespace chromatracker::play {
 
-InstrumentPlayback::InstrumentPlayback(std::default_random_engine *random) :
+InstrumentPlayback::InstrumentPlayback() :
 instrument(nullptr),
-random(random),
 velocity(1.0f),
 pitch(MIDDLE_C),
 glide_target(MIDDLE_C)
 { }
 
 void InstrumentPlayback::start_note(const Instrument *instrument,
-        int init_pitch, int out_frame_rate) {
+        int init_pitch, SongState *state) {
     this->instrument = instrument;
 
     this->pitch = static_cast<float>(init_pitch);
@@ -37,7 +37,7 @@ void InstrumentPlayback::start_note(const Instrument *instrument,
             return;
         std::uniform_int_distribution<std::default_random_engine::result_type>
                 dist(0, num_matching - 1);
-        int random_sample = dist(*random);
+        int random_sample = dist(state->random);
         // find the sample with index random_sample
         num_matching = 0;
         for (const auto &sample : instrument->samples) {
@@ -58,7 +58,7 @@ void InstrumentPlayback::start_note(const Instrument *instrument,
         }
     }
 
-    update_pitch(out_frame_rate);
+    update_pitch(state);
 }
 
 // could be called multiple times (eg. by NNA)
@@ -102,7 +102,7 @@ bool InstrumentPlayback::is_playing() const {
 }
 
 bool InstrumentPlayback::process_tick(float *tick_buffer, int tick_frames,
-        int out_frame_rate, float amp) {
+        SongState *state, float amp) {
     if (instrument == nullptr)
         return false;
     amp *= volume_control_to_amplitude(this->velocity)
@@ -123,7 +123,7 @@ bool InstrumentPlayback::process_tick(float *tick_buffer, int tick_frames,
     if (this->glide_target != this->pitch) {
         this->pitch += (this->glide_target - this->pitch)
                 * (1 - instrument->glide);
-        update_pitch(out_frame_rate);
+        update_pitch(state);
     }
 
     if (!this->volume_adsr.is_active()) {
@@ -133,9 +133,9 @@ bool InstrumentPlayback::process_tick(float *tick_buffer, int tick_frames,
     return true;
 }
 
-void InstrumentPlayback::update_pitch(int out_frame_rate) {
+void InstrumentPlayback::update_pitch(SongState *state) {
     for (auto &sample_play : this->samples) {
-        sample_play.set_pitch(this->pitch, out_frame_rate);
+        sample_play.set_pitch(this->pitch, state);
     }
 }
 

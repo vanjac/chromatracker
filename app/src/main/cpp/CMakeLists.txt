@@ -28,6 +28,7 @@ add_library(
         Pattern.cpp
         Song.cpp
 
+        play/State.cpp
         play/SamplePlayback.cpp
         play/InstrumentPlayback.cpp
         play/ModulationPlayback.cpp
