@@ -9,8 +9,6 @@ InstrumentPlayback::InstrumentPlayback(std::default_random_engine *random) :
 instrument(nullptr),
 random(random),
 velocity(1.0f),
-velocity_slide(0.0f),
-velocity_target(1.0f),
 pitch(MIDDLE_C),
 glide_target(MIDDLE_C)
 { }
@@ -78,13 +76,6 @@ void InstrumentPlayback::stop_note() {
 
 void InstrumentPlayback::set_velocity(float new_velocity) {
     this->velocity = new_velocity;
-    this->velocity_target = new_velocity;
-}
-
-void InstrumentPlayback::slide_velocity(float target_velocity, int ticks) {
-    this->velocity_target = target_velocity;
-    this->velocity_slide = (target_velocity - this->velocity)
-            / static_cast<float>(ticks);
 }
 
 void InstrumentPlayback::glide(int target_pitch) {
@@ -127,15 +118,6 @@ bool InstrumentPlayback::process_tick(float *tick_buffer, int tick_frames,
     if (!playing) {
         instrument = nullptr;
         return false;
-    }
-
-    this->velocity += this->velocity_slide;
-    if (this->velocity_slide > 0) {
-        if (this->velocity > this->velocity_target)
-            this->velocity = this->velocity_target;
-    } else if (this->velocity_slide < 0) {
-        if (this->velocity < this->velocity_target)
-            this->velocity = this->velocity_target;
     }
 
     if (this->glide_target != this->pitch) {

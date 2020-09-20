@@ -21,7 +21,6 @@ public:
     void release_note();
     void stop_note();
     void set_velocity(float new_velocity);
-    void slide_velocity(float target_velocity, int ticks);
     void glide(int target_pitch);
     void new_note_action();
     bool is_playing() const;
@@ -41,8 +40,6 @@ private:
     ADSRPlayback volume_adsr;
 
     float velocity;
-    float velocity_slide;  // signed
-    float velocity_target;
 
     float pitch;
     float glide_target;
