@@ -14,7 +14,6 @@ const Instrument *const EVENT_NOTE_OFF = reinterpret_cast<Instrument *>(1);
 
 const int PITCH_NONE = -1;
 const float VELOCITY_NONE = -1.0f;
-const float MOD_NONE = VELOCITY_NONE;
 
 struct NoteEventData {
     NoteEventData();  // empty glide event
@@ -27,9 +26,7 @@ struct NoteEventData {
     const Instrument * instrument;
     int pitch;
     float velocity;
-    float mod;
     bool velocity_slide;
-    bool mod_slide;
 };
 
 struct LabelEventData {

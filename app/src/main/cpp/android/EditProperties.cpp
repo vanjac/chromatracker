@@ -243,20 +243,10 @@ PROPERTY_GETTER(noteEventGetVelocity, NoteEventData, jfloat,
 PROPERTY_SETTER(noteEventSetVelocity, NoteEventData, jfloat,
         obj->velocity = value)
 
-PROPERTY_GETTER(noteEventGetMod, NoteEventData, jfloat,
-        obj->mod)
-PROPERTY_SETTER(noteEventSetMod, NoteEventData, jfloat,
-        obj->mod = value)
-
 PROPERTY_GETTER(noteEventGetVelocitySlide, NoteEventData, jboolean,
         obj->velocity_slide)
 PROPERTY_SETTER(noteEventSetVelocitySlide, NoteEventData, jboolean,
         obj->velocity_slide = value)
-
-PROPERTY_GETTER(noteEventGetModSlide, NoteEventData, jboolean,
-        obj->mod_slide)
-PROPERTY_SETTER(noteEventSetModSlide, NoteEventData, jboolean,
-        obj->mod_slide = value)
 
 /* LabelEventData */
 

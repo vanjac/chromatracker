@@ -6,23 +6,18 @@ NoteEventData::NoteEventData() :
 instrument(EVENT_NOTE_GLIDE),
 pitch(PITCH_NONE),
 velocity(VELOCITY_NONE),
-mod(MOD_NONE),
-velocity_slide(false),
-mod_slide(false) { }
+velocity_slide(false) { }
 
 NoteEventData::NoteEventData(Instrument *instrument,
         int pitch, float velocity) :
 instrument(instrument),
 pitch(pitch),
 velocity(velocity),
-mod(MOD_NONE),
-velocity_slide(false),
-mod_slide(false) { }
+velocity_slide(false) { }
 
 bool NoteEventData::is_empty() {
     return instrument == EVENT_NOTE_GLIDE && pitch == PITCH_NONE
-            && velocity == VELOCITY_NONE && mod == MOD_NONE
-            && (!velocity_slide) && (!mod_slide);
+            && velocity == VELOCITY_NONE && (!velocity_slide);
 }
 
 bool NoteEventData::is_note_on() {

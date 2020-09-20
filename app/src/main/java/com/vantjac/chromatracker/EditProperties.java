@@ -108,14 +108,8 @@ public class EditProperties {
     public static native float noteEventGetVelocity(long ptr);
     public static native void noteEventSetVelocity(long ptr, float value);
 
-    public static native float noteEventGetMod(long ptr);
-    public static native void noteEventSetMod(long ptr, float value);
-
     public static native boolean noteEventGetVelocitySlide(long ptr);
     public static native void noteEventSetVelocitySlide(long ptr, boolean value);
-
-    public static native boolean noteEventGetModSlide(long ptr);
-    public static native void noteEventSetModSlide(long ptr, boolean value);
 
     /* LabelEventData */
 
