@@ -5,25 +5,14 @@
 namespace chromatracker::play {
 
 TrackPlayback::TrackPlayback(const Track *track) :
-        track(track),
-        current_pattern(nullptr),
-        pattern_time(0),
-        event_i(0) { }
+        track(track) { }
 
 void TrackPlayback::set_pattern(const Pattern *pattern, int time) {
-    this->current_pattern = pattern;
-    if (pattern != nullptr)
-        time %= pattern->length;
-    this->pattern_time = time;
-    search_current_event();
+    this->cursor.set_lock(pattern, time);
 }
 
-const Pattern * TrackPlayback::get_pattern() const {
-    return this->current_pattern;
-}
-
-int TrackPlayback::get_pattern_time() const {
-    return this->pattern_time;
+const PatternCursor TrackPlayback::get_cursor() const {
+    return this->cursor;
 }
 
 void TrackPlayback::process_tick(float *tick_buffer, int tick_frames,
@@ -53,77 +42,19 @@ void TrackPlayback::process_tick(float *tick_buffer, int tick_frames,
 }
 
 void TrackPlayback::process_pattern_tick(SongState *state) {
-    if (this->current_pattern == nullptr)
+    if (this->cursor.is_null())
         return;
 
-    const std::vector<Event> &events = this->current_pattern->events;
-
-    // check if event_i is invalid
-    // this would happen if the events list changed while playing
-    // assumes events are in order
-    if (this->event_i < events.size()
-            && events[this->event_i].time < this->pattern_time)
-        search_current_event();
-    else if (this->event_i > 0 && this->event_i <= events.size()
-             && events[this->event_i - 1].time >= this->pattern_time)
-        search_current_event();
-    else if (this->event_i >= events.size() && !events.empty()
-            && events.back().time >= this->pattern_time)
-        search_current_event();
-
-    while (this->event_i < events.size()) {
-        const Event &next_event = events[this->event_i];
-        if (next_event.time == this->pattern_time) {
+    auto lock = this->cursor.lock();
+    const std::vector<Event> &events = this->cursor.get_events();
+    int event_i = this->cursor.get_event_i();
+    if (event_i < events.size()) {
+        const Event &next_event = events[event_i];
+        if (next_event.time == this->cursor.get_time())
             execute_event(next_event, state);
-            this->event_i++;
-        } else {
-            break;
-        }
     }
 
-    this->pattern_time++;
-    // loop
-    if (this->pattern_time >= this->current_pattern->length) {
-        this->pattern_time = 0;
-        this->event_i = 0;
-    }
-}
-
-void TrackPlayback::search_current_event() {
-    // TODO: test!
-    if (this->current_pattern == nullptr)
-        return;
-    if (this->pattern_time == 0) {
-        event_i = 0;
-        return;
-    }
-    const std::vector<Event> &events = this->current_pattern->events;
-    if (events.empty()) {
-        event_i = 0;
-        return;
-    }
-    LOGD("Lost playback position, searching");
-
-    // binary search
-    // find the first index >= pattern_time
-    int min = 0, max = events.size() - 1;
-    while (min <= max) {
-        int i = (min + max) / 2;
-        int time = events[i].time;
-        if (time > this->pattern_time) {
-            min = i + 1;
-        } else if (time < this->pattern_time) {
-            max = i - 1;
-        } else {
-            this->event_i = i;
-            LOGD("%d", this->event_i);
-            return;
-        }
-    }
-
-    // now min > max, pick the higher one
-    this->event_i = min;
-    LOGD("%d", this->event_i);
+    this->cursor.move(1);
 }
 
 void TrackPlayback::execute_event(const Event &event, SongState *state) {

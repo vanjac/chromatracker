@@ -27,6 +27,7 @@ add_library(
         Modulation.cpp
         Pattern.cpp
         Song.cpp
+        Cursor.cpp
 
         play/State.cpp
         play/SamplePlayback.cpp

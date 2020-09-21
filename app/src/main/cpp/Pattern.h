@@ -4,6 +4,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <mutex>
 #include "Instrument.h"
 
 namespace chromatracker {
@@ -42,11 +43,16 @@ struct Event {
     std::variant<NoteEventData, LabelEventData> data;
 };
 
+// PatternCursor is the thread-safe way to access Patterns
 struct Pattern {
     Pattern();
     char id[2];
     std::vector<Event> events;
     int length;  // ticks
+
+    // https://stackoverflow.com/questions/3239905/c-mutex-and-const-correctness
+    // controls access to events and length
+    mutable std::mutex mtx;
 };
 
 }
