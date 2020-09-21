@@ -2,8 +2,8 @@
 
 namespace chromatracker::file {
 
-FileUtils::FileUtils(const std::string &path)
-        : path(path), file(path) {}
+FileUtils::FileUtils(const std::string &path) :
+        path(path), file(path) {}
 
 uint8_t FileUtils::read_uint8() {
     uint8_t v = 0;

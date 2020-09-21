@@ -17,8 +17,8 @@ static const int CUE_CHUNK_SIZE = 52;
 // http://www-mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html
 
 
-WavLoader::WavLoader(const std::string &path, InstSample *sample)
-: FileUtils(path), sample(sample), format(0), frame_size(4) { }
+WavLoader::WavLoader(const std::string &path, InstSample *sample) :
+        FileUtils(path), sample(sample), format(0), frame_size(4) { }
 
 bool WavLoader::load_wav() {
     if (!file.good()) {

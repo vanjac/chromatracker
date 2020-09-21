@@ -7,11 +7,10 @@
 namespace chromatracker::play {
 
 InstrumentPlayback::InstrumentPlayback() :
-instrument(nullptr),
-velocity(1.0f),
-pitch(MIDDLE_C),
-glide_target(MIDDLE_C)
-{ }
+        instrument(nullptr),
+        velocity(1.0f),
+        pitch(MIDDLE_C),
+        glide_target(MIDDLE_C) { }
 
 void InstrumentPlayback::start_note(const Instrument *instrument,
         int init_pitch, SongState *state) {

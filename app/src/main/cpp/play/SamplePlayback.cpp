@@ -7,12 +7,12 @@
 namespace chromatracker::play {
 
 SamplePlayback::SamplePlayback(const InstSample *sample) :
-playing(true),
-sample(sample),
-note_on(true),
-backwards(false),
-playback_rate(0),
-playback_pos(0) {
+        playing(true),
+        sample(sample),
+        note_on(true),
+        backwards(false),
+        playback_rate(0),
+        playback_pos(0) {
     if (sample->playback_mode == PlaybackMode::ONCE)
         this->playback_pos = static_cast<uint64_t>(sample->loop_start) << 16u;
 }

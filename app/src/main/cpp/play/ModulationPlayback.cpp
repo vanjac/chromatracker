@@ -2,8 +2,8 @@
 
 namespace chromatracker::play {
 
-ADSRPlayback::ADSRPlayback()
-: adsr(nullptr), note_on(false), state_time(0), release_level(0.0f) { }
+ADSRPlayback::ADSRPlayback() :
+        adsr(nullptr), note_on(false), state_time(0), release_level(0.0f) { }
 
 void ADSRPlayback::start_note(const ADSR *adsr) {
     this->adsr = adsr;

@@ -12,8 +12,8 @@ namespace chromatracker::file {
 
 static const int ORDER_TABLE_SIZE = 256;
 
-XmLoader::XmLoader(const std::string &path, Song *song)
-: XiLoader(path, nullptr), song(song) { }
+XmLoader::XmLoader(const std::string &path, Song *song) :
+        XiLoader(path, nullptr), song(song) { }
 
 
 bool XmLoader::load_xm() {

@@ -9,8 +9,8 @@ namespace chromatracker::file {
 
 static const int XM_C5_RATE = 8363;
 
-XiLoader::XiLoader(const std::string &path, Instrument *instrument)
-: FileUtils(path), instrument(instrument) { }
+XiLoader::XiLoader(const std::string &path, Instrument *instrument) :
+        FileUtils(path), instrument(instrument) { }
 
 
 bool XiLoader::load_xi() {
