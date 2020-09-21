@@ -2,7 +2,7 @@
 
 namespace chromatracker {
 
-ADSR::ADSR()
-: attack(0), decay(0), sustain(1.0f), release(0) { }
+ADSR::ADSR() :
+        attack(0), decay(0), sustain(1.0f), release(0) { }
 
 }
