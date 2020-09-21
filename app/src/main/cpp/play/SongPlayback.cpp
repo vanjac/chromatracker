@@ -23,6 +23,10 @@ void SongPlayback::play_from_beginning() {
 }
 
 void SongPlayback::play_from(std::list<Page>::const_iterator itr, int time) {
+    this->page_itr = itr;
+    this->page_time = time;
+    state.global_time = 0;
+
     this->tracks.clear();
     this->tracks.reserve(song->tracks.size());
     for (const auto &track : song->tracks)
@@ -39,9 +43,6 @@ void SongPlayback::play_from(std::list<Page>::const_iterator itr, int time) {
     }
     this->tick_len = calc_tick_len(tempo, state.out_frame_rate);
 
-    this->page_itr = itr;
-    this->page_time = time;
-    state.global_time = 0;
     update_page();
 }
 
