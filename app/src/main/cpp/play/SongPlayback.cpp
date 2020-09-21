@@ -25,7 +25,7 @@ void SongPlayback::play_from_beginning() {
 void SongPlayback::play_from(std::list<Page>::const_iterator itr, int time) {
     this->page_itr = itr;
     this->page_time = time;
-    state.global_time = 0;
+    this->state.global_time = 0;
 
     this->tracks.clear();
     this->tracks.reserve(song->tracks.size());
@@ -41,7 +41,7 @@ void SongPlayback::play_from(std::list<Page>::const_iterator itr, int time) {
             break;
         }
     }
-    this->tick_len = calc_tick_len(tempo, state.out_frame_rate);
+    this->tick_len = calc_tick_len(tempo, this->state.out_frame_rate);
 
     update_page();
 }
@@ -49,7 +49,7 @@ void SongPlayback::play_from(std::list<Page>::const_iterator itr, int time) {
 void SongPlayback::update_page() {
     if (this->page_itr->tempo != TEMPO_NONE) {
         this->tick_len = calc_tick_len(this->page_itr->tempo,
-                state.out_frame_rate);
+                this->state.out_frame_rate);
     }
 
     // TODO: what if tracks changed?
@@ -83,7 +83,7 @@ int SongPlayback::get_page_time() const {
 }
 
 void SongPlayback::jam_event(const chromatracker::Event &event) {
-    jam_track.execute_event(event, &state);
+    jam_track.execute_event(event, &this->state);
 }
 
 int SongPlayback::process_tick(float *tick_buffer, int max_frames) {
@@ -115,7 +115,7 @@ int SongPlayback::process_tick(float *tick_buffer, int max_frames) {
             update_page();
         }
     }
-    state.global_time++;
+    this->state.global_time++;
 
     return tick_frames;
 }
