@@ -3,7 +3,9 @@
 
 #include <mutex>
 #include <vector>
+#include <list>
 #include "Pattern.h"
+#include "Song.h"
 
 namespace chromatracker {
 
@@ -45,6 +47,26 @@ private:
     // always >= 0
     // while locked, always <= events.size()
     int event_i;
+};
+
+
+class SongCursor {
+    // starts at beginning
+    SongCursor(const Song *song);
+    bool is_null();
+    void set_begin();
+    void set_null();
+    // return if page changed
+    bool move(int amount);
+
+private:
+    void set_tracks();
+
+    const Song *const song;
+    std::list<Page>::const_iterator page_itr;  // end() if not playing
+    int page_time;
+
+    std::vector<PatternCursor> tracks;
 };
 
 }

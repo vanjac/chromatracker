@@ -14,27 +14,27 @@ std::unique_lock<std::mutex> PatternCursor::lock() {
     if (is_null())
         return std::unique_lock<std::mutex>();  // no mutex
 
-    std::unique_lock<std::mutex> lock(this->pattern->mtx);
+    std::unique_lock<std::mutex> lock(pattern->mtx);
 
-    const std::vector<Event> &events = this->pattern->events;
+    const std::vector<Event> &events = pattern->events;
 
     // pattern length could have changed
-    while (this->time >= this->pattern->length) {
-        this->time -= this->pattern->length;
-        this->event_i = 0;  // more likely than whatever it is now
+    while (time >= pattern->length) {
+        time -= pattern->length;
+        event_i = 0;  // more likely than whatever it is now
     }
-    if (this->event_i > events.size())
-        this->event_i = events.size();
+    if (event_i > events.size())
+        event_i = events.size();
 
     // check if event_i is invalid
     // could happen if pattern has been modified elsewhere
-    if (this->event_i < events.size()
-        && events[this->event_i].time < this->time)
+    if (event_i < events.size()
+        && events[event_i].time < time)
         search_current_event();
-    else if (this->event_i > 0 && events[this->event_i - 1].time >= this->time)
+    else if (event_i > 0 && events[event_i - 1].time >= time)
         search_current_event();
-    else if (this->event_i >= events.size() && !events.empty()
-             && events.back().time >= this->time)
+    else if (event_i >= events.size() && !events.empty()
+             && events.back().time >= time)
         search_current_event();
 
     // event_i is in a good state
@@ -53,23 +53,23 @@ std::unique_lock<std::mutex> PatternCursor::set_lock(
 }
 
 bool PatternCursor::is_null() const {
-    return this->pattern == nullptr;
+    return pattern == nullptr;
 }
 
 const Pattern * PatternCursor::get_pattern() const {
-    return this->pattern;
+    return pattern;
 }
 
 const std::vector<Event> & PatternCursor::get_events() const {
-    return this->pattern->events;
+    return pattern->events;
 }
 
 int PatternCursor::get_time() const {
-    return this->time;
+    return time;
 }
 
 int PatternCursor::get_event_i() const {
-    return this->event_i;
+    return event_i;
 }
 
 void PatternCursor::set(const Pattern *pattern, int time) {
@@ -82,34 +82,34 @@ void PatternCursor::set(const Pattern *pattern, int time) {
 }
 
 void PatternCursor::move(int amount) {
-    this->time += amount;
+    time += amount;
     if (is_null() || amount == 0)
         return;
-    const std::vector<Event> &events = this->pattern->events;
+    const std::vector<Event> &events = pattern->events;
 
     if (amount > 0) {
-        while (this->time >= this->pattern->length) {
-            this->time -= this->pattern->length;
-            this->event_i = 0;
+        while (time >= pattern->length) {
+            time -= pattern->length;
+            event_i = 0;
         }
         if (events.empty())
             return;
-        while (this->event_i < events.size()) {
-            if (events[this->event_i].time < this->time)
-                this->event_i++;
+        while (event_i < events.size()) {
+            if (events[event_i].time < time)
+                event_i++;
             else
                 break;
         }
     } else {  // negative amount
-        while (this->time < 0) {
-            this->time += this->pattern->length;
-            this->event_i = events.size();
+        while (time < 0) {
+            time += pattern->length;
+            event_i = events.size();
         }
         if (events.empty())
             return;
-        while (this->event_i > 0) {
-            if (events[this->event_i - 1].time >= this->time)
-                this->event_i--;
+        while (event_i > 0) {
+            if (events[event_i - 1].time >= time)
+                event_i--;
             else
                 break;
         }
@@ -117,11 +117,11 @@ void PatternCursor::move(int amount) {
 }
 
 void PatternCursor::search_current_event() {
-    if (this->time == 0) {
+    if (time == 0) {
         event_i = 0;
         return;
     }
-    const std::vector<Event> &events = this->pattern->events;
+    const std::vector<Event> &events = pattern->events;
     if (events.empty()) {
         event_i = 0;
         return;
@@ -134,20 +134,86 @@ void PatternCursor::search_current_event() {
     while (min <= max) {
         int i = (min + max) / 2;
         int t = events[i].time;
-        if (t < this->time) {
+        if (t < time) {
             min = i + 1;
-        } else if (t > this->time) {
+        } else if (t > time) {
             max = i - 1;
         } else {
-            this->event_i = i;
-            LOGD("Cursor set to event %d of %d", this->event_i, events.size());
+            event_i = i;
+            LOGD("Cursor set to event %d of %d", event_i, events.size());
             return;
         }
     }
 
     // now min > max, pick the higher one
-    this->event_i = min;
-    LOGD("Cursor set to event %d of %d", this->event_i, events.size());
+    event_i = min;
+    LOGD("Cursor set to event %d of %d", event_i, events.size());
 }
+
+
+
+SongCursor::SongCursor(const Song *song) :
+        song(song),
+        page_itr(song->pages.end()),
+        page_time(0) { }
+
+bool SongCursor::is_null() {
+    return page_itr == song->pages.end();
+}
+
+void SongCursor::set_begin() {
+    page_itr = song->pages.begin();
+    page_time = 0;
+    this->tracks.clear();
+    this->tracks.reserve(song->tracks.size());
+    for (const auto &track : song->tracks)
+        this->tracks.emplace_back();
+    set_tracks();
+}
+
+void SongCursor::set_null() {
+    page_itr = song->pages.begin();
+    page_time = 0;
+    this->tracks.clear();
+}
+
+bool SongCursor::move(int amount) {
+    page_time += amount;
+    if (is_null())
+        return false;
+
+    bool new_page = false;
+    while (page_time >= page_itr->length) {
+        page_time -= page_itr->length;
+        page_itr++;
+        if (page_itr == song->pages.end())
+            page_itr = song->pages.begin();  // loop song
+        new_page = true;
+    }
+    while (page_time < 0) {
+        if (page_itr == song->pages.begin())
+            page_itr = song->pages.end();
+        page_itr--;
+        page_time += page_itr->length;
+        new_page = true;
+    }
+
+    if (new_page) {
+        set_tracks();
+    } else {
+        for (auto &track : tracks)
+            track.move(amount);
+    }
+
+    return new_page;
+}
+
+void SongCursor::set_tracks() {
+    // TODO: what if tracks changed?
+    for (int i = 0; i < tracks.size(); i++) {
+        tracks[i].set_lock(page_itr->track_patterns[i], page_time);
+    }
+}
+
 
 }
