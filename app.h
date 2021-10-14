@@ -4,6 +4,7 @@
 #include "edit/operation.h"
 #include "play/songplay.h"
 #include "ui/text.h"
+#include <atomic>
 #include <SDL2/SDL.h>
 
 namespace chromatracker {
@@ -64,7 +65,7 @@ private:
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)
     int tickBufferPos {0};
-    uint32_t audioCallbackTime {0};
+    std::atomic<uint32_t> audioCallbackTime {0};
 
     ui::TextRender text;
 };

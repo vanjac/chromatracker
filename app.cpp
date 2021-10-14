@@ -553,7 +553,11 @@ void App::prevCell()
 
 ticks App::calcTickDelay(uint32_t timestamp)
 {
-    timestamp -= audioCallbackTime;
+    if (audioCallbackTime > timestamp) {
+        timestamp = 0;
+    } else {
+        timestamp -= audioCallbackTime;
+    }
     float ticksPerSecond = player.currentTempo() * TICKS_PER_BEAT / 60.0;
     return timestamp / 1000.0 * ticksPerSecond;
 }
