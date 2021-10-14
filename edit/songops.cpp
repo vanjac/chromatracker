@@ -1,27 +1,54 @@
-#include "cursor.h"
+#include "songops.h"
 
 namespace chromatracker::edit::ops {
 
-void clearCell(Song *song, TrackCursor tcur, ticks size)
+ClearCell::ClearCell(TrackCursor tcur, ticks size)
+    : tcur(tcur)
+    , size(size)
+    , section(tcur.cursor.section->shared_from_this())
+{}
+
+bool ClearCell::doIt(Song *song)
 {
-    if (!tcur.cursor.valid())
-        return;
     std::unique_lock lock(tcur.cursor.section->mu);
+    TrackCursor endCur = tcur;
+    endCur.cursor.time += size;
     auto startIt = tcur.findEvent();
-    tcur.cursor.time += size; // don't use move() -- keep in same section
-    auto endIt = tcur.findEvent();
+    auto endIt = endCur.findEvent();
+    clearedEvents = vector<Event>(startIt, endIt);
     tcur.events().erase(startIt, endIt);
+    return !clearedEvents.empty();
 }
 
-void writeCell(Song *song, TrackCursor tcur, ticks size, Event event)
+void ClearCell::undoIt(Song *song)
 {
-    if (!tcur.cursor.valid())
-        return;
-    clearCell(song, tcur, size);
-    event.time = tcur.cursor.time;
+    std::unique_lock lock(tcur.cursor.section->mu);
+    auto insertIt = tcur.findEvent();
+    tcur.events().insert(insertIt, clearedEvents.begin(), clearedEvents.end());
+    clearedEvents.clear();
+}
+
+WriteCell::WriteCell(TrackCursor tcur, ticks size, Event event)
+    : event(event)
+    , ClearCell(tcur, size)
+{
+    this->event.time = tcur.cursor.time;
+}
+
+bool WriteCell::doIt(Song *song)
+{
+    ClearCell::doIt(song);
     std::unique_lock lock(tcur.cursor.section->mu);
     auto insertIt = tcur.findEvent();
     tcur.events().insert(insertIt, event);
+    return true;
+}
+
+void WriteCell::undoIt(Song *song)
+{
+    auto it = tcur.findEvent();
+    tcur.events().erase(it);
+    ClearCell::undoIt(song);
 }
 
 } // namespace

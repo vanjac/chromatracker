@@ -8,7 +8,7 @@
 
 namespace chromatracker {
 
-struct Sample
+struct Sample : std::enable_shared_from_this<Sample>
 {
     enum class InterpolationMode
     {

@@ -8,7 +8,7 @@
 
 namespace chromatracker {
 
-struct Track
+struct Track : std::enable_shared_from_this<Track>
 {
     mutable nevercopy<std::shared_mutex> mu;
     bool mute {false};
@@ -16,7 +16,7 @@ struct Track
     float pan {0.0};
 };
 
-struct Section
+struct Section : std::enable_shared_from_this<Section>
 {
     static const int NO_TEMPO; // keep previous
     static const int NO_METER;

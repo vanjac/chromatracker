@@ -1,6 +1,7 @@
 #pragma once
 #include <common.h>
 
+#include "edit/operation.h"
 #include "play/songplay.h"
 #include "ui/text.h"
 #include <SDL2/SDL.h>
@@ -26,6 +27,8 @@ private:
 
     void keyDown(const SDL_KeyboardEvent &e);
     void keyUp(const SDL_KeyboardEvent &e);
+
+    void doOperation(unique_ptr<edit::SongOp> op);
 
     void snapToGrid();
     void nextCell();
@@ -53,6 +56,8 @@ private:
 
     // main loop flags
     bool movedEditCur {false}; // TODO replace with accumulator to move play cur
+
+    vector<unique_ptr<edit::SongOp>> undoStack;
 
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)

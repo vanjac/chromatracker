@@ -394,6 +394,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_F10:
         if (e.repeat) break;
         {
+            // NOT undoable!
             std::unique_lock songLock(song.mu);
             if (editCur.track >= 0 && editCur.track < song.tracks.size()) {
                 Track *track = song.tracks[editCur.track].get();
@@ -405,10 +406,23 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_DELETE:
-        edit::ops::clearCell(&song, editCur, overwrite ? cellSize : 1);
+        {
+            auto op = std::make_unique<edit::ops::ClearCell>(
+                editCur, overwrite ? cellSize : 1);
+            doOperation(std::move(op));
+        }
         break;
     default:
         if (e.repeat) break;
+
+        if (e.keysym.sym == SDLK_z && e.keysym.mod & KMOD_CTRL) {
+            if (!undoStack.empty()) {
+                undoStack.back()->undoIt(&song);
+                undoStack.pop_back();
+            }
+            break;
+        }
+
         int key = pitchKeymap(e.keysym.sym);
         if (key >= 0) {
             play::JamEvent jam;
@@ -429,9 +443,11 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     isPlaying = player.cursor().valid();
                 }
                 if (record) {
-                    edit::ops::writeCell(&song, editCur,
+                    auto op = std::make_unique<edit::ops::WriteCell>(editCur,
                         (overwrite && !isPlaying) ? cellSize : 1, jam.event);
+                    doOperation(std::move(op));
                     // TODO if overwrite && isPlaying, clear events while held
+                    // TODO combine into single undo operation while playing
                 }
             }
         }
@@ -453,8 +469,17 @@ void App::keyUp(const SDL_KeyboardEvent &e)
             isPlaying = player.cursor().valid();
         }
         if (record && isPlaying) {
-            edit::ops::writeCell(&song, editCur, 1, jam.event);
+            auto op = std::make_unique<edit::ops::WriteCell>(
+                editCur, 1, jam.event);
+            doOperation(std::move(op));
         }
+    }
+}
+
+void App::doOperation(unique_ptr<edit::SongOp> op)
+{
+    if (op->doIt(&song)) {
+        undoStack.push_back(std::move(op));
     }
 }
 
