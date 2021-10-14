@@ -35,7 +35,7 @@ private:
     void prevCell();
 
     ticks calcTickDelay(uint32_t timestamp); // make sure player is locked
-    int pitchKeymap(SDL_Keycode key);
+    int pitchKeymap(SDL_Scancode key);
 
     SDL_Window *window;
     int winW, winH;

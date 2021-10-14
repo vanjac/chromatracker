@@ -284,7 +284,7 @@ void App::resizeWindow(int w, int h)
 void App::keyDown(const SDL_KeyboardEvent &e)
 {
     if (!e.repeat && !(e.keysym.mod & KMOD_CTRL)) {
-        int key = pitchKeymap(e.keysym.sym);
+        int key = pitchKeymap(e.keysym.scancode);
         if (key >= 0) {
             play::JamEvent jam;
             {
@@ -296,7 +296,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 jam.event.pitch = key + selectedOctave * OCTAVE;
                 jam.event.velocity = 1;
                 jam.event.time = calcTickDelay(e.timestamp);
-                jam.touchId = key;
+                jam.touchId = e.keysym.scancode;
                 bool isPlaying;
                 {
                     std::unique_lock playerLock(player.mu);
@@ -459,12 +459,12 @@ void App::keyDown(const SDL_KeyboardEvent &e)
 
 void App::keyUp(const SDL_KeyboardEvent &e)
 {
-    int key = pitchKeymap(e.keysym.sym);
+    int key = pitchKeymap(e.keysym.scancode);
     if (key >= 0) {
         play::JamEvent jam;
         jam.event.special = Event::Special::FadeOut;
         jam.event.time = calcTickDelay(e.timestamp);
-        jam.touchId = key;
+        jam.touchId = e.keysym.scancode;
         bool isPlaying;
         {
             std::unique_lock playerLock(player.mu);
@@ -585,70 +585,70 @@ void App::audioCallback(uint8_t *stream, int len) {
     }
 }
 
-int App::pitchKeymap(SDL_Keycode key) {
+int App::pitchKeymap(SDL_Scancode key) {
     switch(key) {
-    case SDLK_z:
+    case SDL_SCANCODE_Z:
         return 0;
-    case SDLK_s:
+    case SDL_SCANCODE_S:
         return 1;
-    case SDLK_x:
+    case SDL_SCANCODE_X:
         return 2;
-    case SDLK_d:
+    case SDL_SCANCODE_D:
         return 3;
-    case SDLK_c:
+    case SDL_SCANCODE_C:
         return 4;
-    case SDLK_v:
+    case SDL_SCANCODE_V:
         return 5;
-    case SDLK_g:
+    case SDL_SCANCODE_G:
         return 6;
-    case SDLK_b:
+    case SDL_SCANCODE_B:
         return 7;
-    case SDLK_h:
+    case SDL_SCANCODE_H:
         return 8;
-    case SDLK_n:
+    case SDL_SCANCODE_N:
         return 9;
-    case SDLK_j:
+    case SDL_SCANCODE_J:
         return 10;
-    case SDLK_m:
+    case SDL_SCANCODE_M:
         return 11;
-    case SDLK_COMMA:
-    case SDLK_q:
+    case SDL_SCANCODE_COMMA:
+    case SDL_SCANCODE_Q:
         return 12;
-    case SDLK_l:
-    case SDLK_2:
+    case SDL_SCANCODE_L:
+    case SDL_SCANCODE_2:
         return 13;
-    case SDLK_PERIOD:
-    case SDLK_w:
+    case SDL_SCANCODE_PERIOD:
+    case SDL_SCANCODE_W:
         return 14;
-    case SDLK_SEMICOLON:
-    case SDLK_3:
+    case SDL_SCANCODE_SEMICOLON:
+    case SDL_SCANCODE_3:
         return 15;
-    case SDLK_SLASH:
-    case SDLK_e:
+    case SDL_SCANCODE_SLASH:
+    case SDL_SCANCODE_E:
         return 16;
-    case SDLK_r:
+    case SDL_SCANCODE_R:
         return 17;
-    case SDLK_5:
+    case SDL_SCANCODE_5:
         return 18;
-    case SDLK_t:
+    case SDL_SCANCODE_T:
         return 19;
-    case SDLK_6:
+    case SDL_SCANCODE_6:
         return 20;
-    case SDLK_y:
+    case SDL_SCANCODE_Y:
         return 21;
-    case SDLK_7:
+    case SDL_SCANCODE_7:
         return 22;
-    case SDLK_u:
+    case SDL_SCANCODE_U:
         return 23;
-    case SDLK_i:
+    case SDL_SCANCODE_I:
         return 24;
-    case SDLK_9:
+    case SDL_SCANCODE_9:
         return 25;
-    case SDLK_o:
+    case SDL_SCANCODE_O:
         return 26;
-    case SDLK_0:
+    case SDL_SCANCODE_0:
         return 27;
-    case SDLK_p:
+    case SDL_SCANCODE_P:
         return 28;
     default:
         return -1;
