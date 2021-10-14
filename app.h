@@ -61,6 +61,7 @@ private:
     bool movedEditCur {false}; // TODO replace with accumulator to move play cur
 
     vector<unique_ptr<edit::SongOp>> undoStack;
+    vector<unique_ptr<edit::SongOp>> redoStack;
 
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)

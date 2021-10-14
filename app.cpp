@@ -328,7 +328,21 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         if (ctrl) {
             if (!undoStack.empty()) {
                 undoStack.back()->undoIt(&song);
+                redoStack.push_back(std::move(undoStack.back()));
                 undoStack.pop_back();
+            } else {
+                cout << "Nothing to undo\n";
+            }
+        }
+        break;
+    case SDLK_y:
+        if (ctrl) {
+            if (!redoStack.empty()) {
+                redoStack.back()->doIt(&song);
+                undoStack.push_back(std::move(redoStack.back()));
+                redoStack.pop_back();
+            } else {
+                cout << "Nothing to redo\n";
             }
         }
         break;
@@ -502,6 +516,7 @@ void App::doOperation(unique_ptr<edit::SongOp> op)
 {
     if (op->doIt(&song)) {
         undoStack.push_back(std::move(op));
+        redoStack.clear();
     }
 }
 
