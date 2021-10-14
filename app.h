@@ -9,7 +9,7 @@ namespace chromatracker {
 
 const int NUM_CHANNELS = 2;
 const int OUT_FRAME_RATE = 48000;
-const int MAX_TICK_FRAMES = 1024;
+const int MAX_TICK_FRAMES = 1024; // enough for 15 BPM at 48000Hz
 
 class App
 {
@@ -37,18 +37,19 @@ private:
     Song song;
     play::SongPlay player;
 
-    Cursor editCursor;
+    TrackCursor editCur;
+    ticks cellSize {TICKS_PER_BEAT / 4};
     int selectedSample {0};
     int selectedOctave {MIDDLE_OCTAVE};
-    int selectedTrack {0};
 
     // mode
     bool followPlayback {true};
+    bool overwrite {true};
+    bool record {false};
 
     // main loop flags
-    bool movedEditCursor {false};
+    bool movedEditCur {false};
 
-    // enough for 15 BPM at 48000Hz
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)
     int tickBufferPos {0};

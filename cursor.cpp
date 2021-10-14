@@ -111,8 +111,14 @@ vector<unique_ptr<Section>>::iterator Cursor::findSection()
         });
 }
 
-vector<Event>::iterator Cursor::findEvent(vector<Event> &events) const
+vector<Event> & TrackCursor::events() const
 {
+    return cursor.section->trackEvents[track];
+}
+
+vector<Event>::iterator TrackCursor::findEvent() const
+{
+    auto &events = this->events();
     if (time == 0 || events.empty())
         return events.begin();
 
@@ -122,9 +128,9 @@ vector<Event>::iterator Cursor::findEvent(vector<Event> &events) const
     while (min <= max) {
         int i = (min + max) / 2;
         int t = events[i].time;
-        if (t < time) {
+        if (t < cursor.time) {
             min = i + 1;
-        } else if (t > time) {
+        } else if (t > cursor.time) {
             max = i - 1;
         } else {
             return events.begin() + i;

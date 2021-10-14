@@ -110,12 +110,12 @@ frames SongPlay::processTick(float *tickBuffer, frames maxFrames,
             Section *section = _cursor.section;
             std::shared_lock sectionLock(section->mu);
             // process events
-            for (int i = 0; i < tracks.size(); i++) {
-                vector<Event> &trackEvents = section->trackEvents[i];
-                auto eventIt = _cursor.findEvent(trackEvents);
-                if (eventIt != trackEvents.end()
+            TrackCursor tcur{_cursor};
+            for (tcur.track; tcur.track < tracks.size(); tcur.track++) {
+                auto eventIt = tcur.findEvent();
+                if (eventIt != tcur.events().end()
                         && eventIt->time == _cursor.time)
-                    tracks[i].processEvent(*eventIt);
+                    tracks[tcur.track].processEvent(*eventIt);
             }
             if (section->tempo != Section::NO_TEMPO) {
                 _tempo = section->tempo;
