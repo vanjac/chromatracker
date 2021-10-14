@@ -7,13 +7,6 @@ namespace chromatracker {
 
 struct Cursor
 {
-    enum class Space
-    {
-        Song,
-        Playback,
-        SectionLoop,
-    };
-
     Song *song;
     Section *section;
     ticks time; // in section
