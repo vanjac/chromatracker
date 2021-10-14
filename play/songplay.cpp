@@ -47,10 +47,6 @@ void SongPlay::fadeAll()
     for (auto &track : tracks) {
         track.processEvent(fadeEvent);
     }
-    for (auto &track : jamTracks) {
-        track.processEvent(fadeEvent);
-    }
-    jamTouches.clear();
 }
 
 void SongPlay::queueJamEvent(const JamEvent &jam)
@@ -160,6 +156,9 @@ frames SongPlay::processTick(float *tickBuffer, frames maxFrames,
     }
 
     _cursor.move(1, Cursor::Space::Playback);
+    if (!_cursor.valid()) {
+        fadeAll();
+    }
     return tickFrames;
 }
 
