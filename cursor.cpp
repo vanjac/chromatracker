@@ -103,7 +103,7 @@ void Cursor::move(ticks amount, Space space)
     }
 }
 
-vector<unique_ptr<Section>>::iterator Cursor::findSection()
+vector<unique_ptr<Section>>::iterator Cursor::findSection() const
 {
     return std::find_if(song->sections.begin(), song->sections.end(),
         [&](std::unique_ptr<Section> &elem) {

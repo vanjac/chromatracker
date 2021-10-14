@@ -101,16 +101,6 @@ void App::main(const vector<string> args)
                 editCur.cursor.move(-event.wheel.y * 12, Cursor::Space::Song);
                 movedEditCur = true;
                 break;
-            case SDL_MOUSEMOTION:
-                if (event.motion.state & SDL_BUTTON_LMASK) {
-                    float vel = (event.motion.x / 800.0f);
-                    if (vel > 1) vel = 1;
-                    if (vel < 0) vel = 0;
-                    std::unique_lock songLock(song.mu);
-                    song.volume = velocityToAmplitude(vel);
-                    song.volume *= 0.5;
-                }
-                break;
             }
         }
 
@@ -302,12 +292,40 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         if (e.keysym.mod & KMOD_CTRL) {
             std::unique_lock songLock(song.mu);
             if (!song.sections.empty()) {
-                editCur.cursor = Cursor(&song, song.sections[0].get());
-            } else {
-                editCur.cursor = Cursor(&song);
+                editCur.cursor.section = song.sections[0].get();
             }
-        } else {
-            editCur.cursor.time = 0;
+        }
+        editCur.cursor.time = 0;
+        movedEditCur = true;
+        break;
+    case SDLK_PAGEDOWN:
+        {
+            std::unique_lock songLock(song.mu);
+            auto sectionIt = editCur.cursor.findSection();
+            if (sectionIt != song.sections.end()) {
+                sectionIt++;
+            }
+            if (sectionIt != song.sections.end()) {
+                Section *section = sectionIt->get();
+                editCur.cursor.section = section;
+                if (editCur.cursor.time >= section->length)
+                    editCur.cursor.time = 0;
+            }
+        }
+        movedEditCur = true;
+        break;
+    case SDLK_PAGEUP:
+        {
+            std::unique_lock songLock(song.mu);
+            auto sectionIt = editCur.cursor.findSection();
+            if (sectionIt != song.sections.end()
+                    && sectionIt != song.sections.begin()) {
+                sectionIt--;
+                Section *section = sectionIt->get();
+                editCur.cursor.section = section;
+                if (editCur.cursor.time >= section->length)
+                    editCur.cursor.time = 0;
+            }
         }
         movedEditCur = true;
         break;
