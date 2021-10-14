@@ -26,80 +26,18 @@ bool Cursor::valid() const
     return song != nullptr && section != nullptr;
 }
 
-void Cursor::move(ticks amount, Space space)
+void Cursor::playStep()
 {
-    if (!valid())
-        return;
-    time += amount;
+    time++;
 
-    switch (space) {
-    case Space::Song:
-        if (amount >= 0) {
-            while (section) {
-                std::shared_lock lock(section->mu);
-                if (time >= section->length) {
-                    std::shared_lock lock(song->mu);
-                    auto it = findSection();
-                    if (it == song->sections.end()) {
-                        section = nullptr;
-                        break;
-                    }
-                    it++;
-                    if (it == song->sections.end()) {
-                        time = section->length;
-                        break;
-                    } else {
-                        time -= section->length;
-                        section = it->get();
-                    }
-                } else {
-                    break;
-                }
-            }
-        } else {
-            while (section && time < 0) {
-                std::shared_lock songLock(song->mu);
-                auto it = findSection();
-                if (it == song->sections.end()) {
-                    section = nullptr;
-                    break;
-                } else if (it == song->sections.begin()) {
-                    time = 0;
-                    break;
-                } else {
-                    section = (--it)->get();
-                    std::shared_lock sectionLock(section->mu);
-                    time += section->length;
-                }
-            }
-        }
-        break;
-    case Space::Playback:
-        if (amount >= 0) {
-            while (section) {
-                std::shared_lock lock(section->mu);
-                if (time >= section->length) {
-                    time -= section->length;
-                    section = section->next;
-                } else {
-                    break;
-                }
-            }
-        } else if (time < 0) {
-            // this should never happen
+    while (section) {
+        std::shared_lock lock(section->mu);
+        if (time >= section->length) {
+            section = section->next;
             time = 0;
+        } else {
+            break;
         }
-        break;
-    case Space::SectionLoop:
-        if (amount >= 0) {
-            std::shared_lock lock(section->mu);
-            time %= section->length;
-        } else if (time < 0) {
-            std::shared_lock lock(section->mu);
-            time %= section->length;
-            time += section->length;
-        }
-        break;
     }
 }
 
@@ -109,6 +47,27 @@ vector<unique_ptr<Section>>::iterator Cursor::findSection() const
         [&](std::unique_ptr<Section> &elem) {
             return elem.get() == section;
         });
+}
+
+Section * Cursor::nextSection() const
+{
+    std::shared_lock lock(song->mu);
+    auto it = findSection();
+    if (it == song->sections.end())
+        return nullptr;
+    it++;
+    if (it == song->sections.end())
+        return nullptr;
+    return it->get();
+}
+
+Section * Cursor::prevSection() const
+{
+    std::shared_lock lock(song->mu);
+    auto it = findSection();
+    if (it == song->sections.end() || it == song->sections.begin())
+        return nullptr;
+    return (--it)->get();
 }
 
 vector<Event> & TrackCursor::events() const

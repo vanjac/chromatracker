@@ -26,8 +26,12 @@ private:
 
     void keyDown(const SDL_KeyboardEvent &e);
     void keyUp(const SDL_KeyboardEvent &e);
-    ticks calcTickDelay(uint32_t timestamp); // make sure player is locked
 
+    void snapToGrid();
+    void nextCell();
+    void prevCell();
+
+    ticks calcTickDelay(uint32_t timestamp); // make sure player is locked
     int pitchKeymap(SDL_Keycode key);
 
     SDL_Window *window;

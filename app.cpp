@@ -98,9 +98,15 @@ void App::main(const vector<string> args)
                 keyUp(event.key);
                 break;
             case SDL_MOUSEWHEEL:
-                editCur.cursor.move(-event.wheel.y * cellSize,
-                                    Cursor::Space::Song);
-                movedEditCur = true;
+                if (event.wheel.y < 0) {
+                    for (int i = 0; i < -event.wheel.y; i++) {
+                        nextCell();
+                    }
+                } else if (event.wheel.y > 0) {
+                    for (int i = 0; i < event.wheel.y; i++) {
+                        prevCell();
+                    }
+                }
                 break;
             }
         }
@@ -300,6 +306,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             std::shared_lock songLock(song.mu);
             if (player.cursor().valid()) {
                 player.fadeAll();
+                snapToGrid();
             } else if (!song.sections.empty()) {
                 player.setCursor(editCur.cursor);
             }
@@ -323,14 +330,9 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_PAGEDOWN:
         {
-            std::unique_lock songLock(song.mu);
-            auto sectionIt = editCur.cursor.findSection();
-            if (sectionIt != song.sections.end()) {
-                sectionIt++;
-            }
-            if (sectionIt != song.sections.end()) {
-                Section *section = sectionIt->get();
-                editCur.cursor.section = section;
+            Section *next = editCur.cursor.nextSection();
+            if (next) {
+                editCur.cursor.section = next;
                 editCur.cursor.time = 0;
                 movedEditCur = true;
             }
@@ -338,13 +340,9 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_PAGEUP:
         {
-            std::unique_lock songLock(song.mu);
-            auto sectionIt = editCur.cursor.findSection();
-            if (sectionIt != song.sections.end()
-                    && sectionIt != song.sections.begin()) {
-                sectionIt--;
-                Section *section = sectionIt->get();
-                editCur.cursor.section = section;
+            Section *prev = editCur.cursor.prevSection();
+            if (prev) {
+                editCur.cursor.section = prev;
                 editCur.cursor.time = 0;
                 movedEditCur = true;
             }
@@ -382,13 +380,10 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_DOWN:
-        // TODO snap to grid
-        editCur.cursor.move(cellSize, Cursor::Space::Song);
-        movedEditCur = true;
+        nextCell();
         break;
     case SDLK_UP:
-        editCur.cursor.move(-cellSize, Cursor::Space::Song);
-        movedEditCur = true;
+        prevCell();
         break;
     case SDLK_RIGHTBRACKET:
         cellSize *= (e.keysym.mod & KMOD_CTRL) ? 3 : 2;
@@ -451,6 +446,52 @@ void App::keyUp(const SDL_KeyboardEvent &e)
         jam.touchId = key;
         player.queueJamEvent(jam);
     }
+}
+
+void App::snapToGrid()
+{
+    editCur.cursor.time /= cellSize;
+    editCur.cursor.time *= cellSize;
+}
+
+void App::nextCell()
+{
+    snapToGrid();
+    editCur.cursor.time += cellSize;
+    ticks sectionLength;
+    {
+        std::shared_lock sectionLock(editCur.cursor.section->mu);
+        sectionLength = editCur.cursor.section->length;
+    }
+    if (editCur.cursor.time >= sectionLength) {
+        Section *next = editCur.cursor.nextSection();
+        if (next) {
+            editCur.cursor.section = next;
+            editCur.cursor.time = 0;
+        } else {
+            editCur.cursor.time = sectionLength - 1;
+            snapToGrid();
+        }
+    }
+    movedEditCur = true;
+}
+
+void App::prevCell()
+{
+    if (editCur.cursor.time % cellSize != 0) {
+        snapToGrid();
+    } else if (editCur.cursor.time < cellSize) {
+        Section *prev = editCur.cursor.prevSection();
+        if (prev) {
+            editCur.cursor.section = prev;
+            std::shared_lock sectionLock(prev->mu);
+            editCur.cursor.time = prev->length - 1;
+            snapToGrid();
+        }
+    } else {
+        editCur.cursor.time -= cellSize;
+    }
+    movedEditCur = true;
 }
 
 ticks App::calcTickDelay(uint32_t timestamp) {

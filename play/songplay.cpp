@@ -120,6 +120,10 @@ frames SongPlay::processTick(float *tickBuffer, frames maxFrames,
             }
         }
     }
+    _cursor.playStep();
+    if (!_cursor.valid()) {
+        fadeAll();
+    }
 
     for (int i = 0; i < numJamEvents; i++) {
         JamEvent *jam = &jamEvents[(i + jamEventI) % jamEvents.size()];
@@ -155,10 +159,6 @@ frames SongPlay::processTick(float *tickBuffer, frames maxFrames,
         track.processTick(tickBuffer, tickFrames, outFrameRate, amplitude);
     }
 
-    _cursor.move(1, Cursor::Space::Playback);
-    if (!_cursor.valid()) {
-        fadeAll();
-    }
     return tickFrames;
 }
 

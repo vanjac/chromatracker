@@ -23,10 +23,12 @@ struct Cursor
     Cursor(Song *song, Section *section);
 
     bool valid() const;
-    void move(ticks amount, Space space);
+    void playStep();
 
     // song mutex must be locked
     vector<unique_ptr<Section>>::iterator findSection() const;
+    Section * nextSection() const; // could be null
+    Section * prevSection() const; // could be null
 };
 
 struct TrackCursor
