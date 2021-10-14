@@ -40,9 +40,10 @@ struct Song
     // protects the song properties and vectors, but not contained objects
     mutable nevercopy<std::shared_mutex> mu;
 
-    vector<unique_ptr<Sample>> samples;
-    vector<unique_ptr<Track>> tracks;
-    vector<unique_ptr<Section>> sections;
+    // could be owned by Song OR by undo operations
+    vector<shared_ptr<Sample>> samples;
+    vector<shared_ptr<Track>> tracks;
+    vector<shared_ptr<Section>> sections;
 
     float volume {0.5};
 };

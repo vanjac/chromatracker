@@ -41,10 +41,10 @@ void Cursor::playStep()
     }
 }
 
-vector<unique_ptr<Section>>::iterator Cursor::findSection() const
+vector<shared_ptr<Section>>::iterator Cursor::findSection() const
 {
     return std::find_if(song->sections.begin(), song->sections.end(),
-        [&](std::unique_ptr<Section> &elem) {
+        [&](std::shared_ptr<Section> &elem) {
             return elem.get() == section;
         });
 }

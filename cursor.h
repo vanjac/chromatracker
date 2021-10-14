@@ -26,7 +26,7 @@ struct Cursor
     void playStep();
 
     // song mutex must be locked
-    vector<unique_ptr<Section>>::iterator findSection() const;
+    vector<shared_ptr<Section>>::iterator findSection() const;
     Section * nextSection() const; // could be null
     Section * prevSection() const; // could be null
 };
