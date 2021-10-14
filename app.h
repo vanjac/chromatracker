@@ -36,6 +36,7 @@ private:
 
     ticks calcTickDelay(uint32_t timestamp); // make sure player is locked
     int pitchKeymap(SDL_Scancode key);
+    int sampleKeymap(SDL_Scancode key);
 
     SDL_Window *window;
     int winW, winH;
@@ -48,6 +49,7 @@ private:
     ticks cellSize {TICKS_PER_BEAT / 4};
     int selectedSample {0};
     int selectedOctave {MIDDLE_OCTAVE};
+    int selectedPitch {MIDDLE_C};
 
     // mode
     bool followPlayback {true};

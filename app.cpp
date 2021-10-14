@@ -82,7 +82,7 @@ void App::main(const vector<string> args)
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            switch(event.type) {
+            switch (event.type) {
             case SDL_QUIT:
                 running = false;
                 break;
@@ -283,9 +283,17 @@ void App::resizeWindow(int w, int h)
 
 void App::keyDown(const SDL_KeyboardEvent &e)
 {
-    if (!e.repeat && !(e.keysym.mod & KMOD_CTRL)) {
-        int key = pitchKeymap(e.keysym.scancode);
-        if (key >= 0) {
+    bool ctrl = e.keysym.mod & KMOD_CTRL;
+    if (!e.repeat && !ctrl) {
+        int pitch = pitchKeymap(e.keysym.scancode);
+        int sample = sampleKeymap(e.keysym.scancode);
+        if (pitch >= 0) {
+            selectedPitch = pitch + selectedOctave * OCTAVE;
+        } else if (sample >= 0) {
+            selectedSample = sample + (selectedSample / 10) * 10;
+            cout << "Sample " <<(selectedSample + 1)<< "\n";
+        }
+        if (pitch >= 0 || sample >= 0) {
             play::JamEvent jam;
             {
                 std::unique_lock songLock(song.mu);
@@ -293,7 +301,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     jam.event.sample = song.samples[selectedSample].get();
             }
             if (jam.event.sample) {
-                jam.event.pitch = key + selectedOctave * OCTAVE;
+                jam.event.pitch = selectedPitch;
                 jam.event.velocity = 1;
                 jam.event.time = calcTickDelay(e.timestamp);
                 jam.touchId = e.keysym.scancode;
@@ -303,7 +311,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     player.queueJamEvent(jam);
                     isPlaying = player.cursor().valid();
                 }
-                if (record) {
+                if (record && pitch >= 0) {
                     auto op = std::make_unique<edit::ops::WriteCell>(editCur,
                         (overwrite && !isPlaying) ? cellSize : 1, jam.event);
                     doOperation(std::move(op));
@@ -317,7 +325,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
 
     switch (e.keysym.sym) {
     case SDLK_z:
-        if (e.keysym.mod & KMOD_CTRL) {
+        if (ctrl) {
             if (!undoStack.empty()) {
                 undoStack.back()->undoIt(&song);
                 undoStack.pop_back();
@@ -346,6 +354,14 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_KP_MINUS:
         selectedSample--;
+        cout << "Sample " <<(selectedSample + 1)<< "\n";
+        break;
+    case SDLK_KP_MULTIPLY:
+        selectedSample += 10;
+        cout << "Sample " <<(selectedSample + 1)<< "\n";
+        break;
+    case SDLK_KP_DIVIDE:
+        selectedSample -= 10;
         cout << "Sample " <<(selectedSample + 1)<< "\n";
         break;
     case SDLK_EQUALS:
@@ -377,7 +393,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     /* Navigation */
     case SDLK_HOME:
-        if (e.keysym.mod & KMOD_CTRL) {
+        if (ctrl) {
             std::unique_lock songLock(song.mu);
             if (!song.sections.empty()) {
                 editCur.cursor.section = song.sections[0].get();
@@ -407,7 +423,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_RIGHT:
-        if (e.keysym.mod & KMOD_CTRL) {
+        if (ctrl) {
             std::unique_lock songLock(song.mu);
             editCur.track = song.tracks.size() - 1;
         } else {
@@ -415,7 +431,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_LEFT:
-        if (e.keysym.mod & KMOD_CTRL) {
+        if (ctrl) {
             editCur.track = 0;
         } else {
             editCur.track--;
@@ -428,14 +444,14 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         prevCell();
         break;
     case SDLK_RIGHTBRACKET:
-        cellSize *= (e.keysym.mod & KMOD_CTRL) ? 3 : 2;
+        cellSize *= ctrl ? 3 : 2;
         break;
     case SDLK_LEFTBRACKET:
-        cellSize /= (e.keysym.mod & KMOD_CTRL) ? 3 : 2;
+        cellSize /= ctrl ? 3 : 2;
         break;
     /* Commands */
     case SDLK_m:
-        if (!e.repeat && e.keysym.mod & KMOD_CTRL) {
+        if (!e.repeat && ctrl) {
             // NOT undoable!
             std::unique_lock songLock(song.mu);
             if (editCur.track >= 0 && editCur.track < song.tracks.size()) {
@@ -459,8 +475,11 @@ void App::keyDown(const SDL_KeyboardEvent &e)
 
 void App::keyUp(const SDL_KeyboardEvent &e)
 {
-    int key = pitchKeymap(e.keysym.scancode);
-    if (key >= 0) {
+    if (e.keysym.mod & KMOD_CTRL)
+        return;
+    int pitch = pitchKeymap(e.keysym.scancode);
+    int sampleI = sampleKeymap(e.keysym.scancode);
+    if (pitch >= 0 || sampleI >= 0) {
         play::JamEvent jam;
         jam.event.special = Event::Special::FadeOut;
         jam.event.time = calcTickDelay(e.timestamp);
@@ -471,7 +490,7 @@ void App::keyUp(const SDL_KeyboardEvent &e)
             player.queueJamEvent(jam);
             isPlaying = player.cursor().valid();
         }
-        if (record && isPlaying) {
+        if (record && isPlaying && pitch >= 0) {
             auto op = std::make_unique<edit::ops::WriteCell>(
                 editCur, 1, jam.event);
             doOperation(std::move(op));
@@ -532,17 +551,20 @@ void App::prevCell()
     movedEditCur = true;
 }
 
-ticks App::calcTickDelay(uint32_t timestamp) {
+ticks App::calcTickDelay(uint32_t timestamp)
+{
     timestamp -= audioCallbackTime;
     float ticksPerSecond = player.currentTempo() * TICKS_PER_BEAT / 60.0;
     return timestamp / 1000.0 * ticksPerSecond;
 }
 
-void cAudioCallback(void * userdata, uint8_t *stream, int len) {
+void cAudioCallback(void * userdata, uint8_t *stream, int len)
+{
     ((App *)userdata)->audioCallback(stream, len);
 }
 
-void App::audioCallback(uint8_t *stream, int len) {
+void App::audioCallback(uint8_t *stream, int len)
+{
     audioCallbackTime = SDL_GetTicks();
     std::unique_lock lock(player.mu);
 
@@ -585,8 +607,9 @@ void App::audioCallback(uint8_t *stream, int len) {
     }
 }
 
-int App::pitchKeymap(SDL_Scancode key) {
-    switch(key) {
+int App::pitchKeymap(SDL_Scancode key)
+{
+    switch (key) {
     case SDL_SCANCODE_Z:
         return 0;
     case SDL_SCANCODE_S:
@@ -650,6 +673,34 @@ int App::pitchKeymap(SDL_Scancode key) {
         return 27;
     case SDL_SCANCODE_P:
         return 28;
+    default:
+        return -1;
+    }
+}
+
+int App::sampleKeymap(SDL_Scancode key)
+{
+    switch (key) {
+    case SDL_SCANCODE_KP_1:
+        return 0;
+    case SDL_SCANCODE_KP_2:
+        return 1;
+    case SDL_SCANCODE_KP_3:
+        return 2;
+    case SDL_SCANCODE_KP_4:
+        return 3;
+    case SDL_SCANCODE_KP_5:
+        return 4;
+    case SDL_SCANCODE_KP_6:
+        return 5;
+    case SDL_SCANCODE_KP_7:
+        return 6;
+    case SDL_SCANCODE_KP_8:
+        return 7;
+    case SDL_SCANCODE_KP_9:
+        return 8;
+    case SDL_SCANCODE_KP_0:
+        return 9;
     default:
         return -1;
     }
