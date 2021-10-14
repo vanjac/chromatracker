@@ -11,7 +11,7 @@
 
 namespace chromatracker {
 
-const float TIME_SCALE = 0.5;
+const float CELL_HEIGHT = 32;
 const float TRACK_SPACING = 100;
 const float TRACK_WIDTH = 80;
 
@@ -98,13 +98,16 @@ void App::main(const vector<string> args)
                 keyUp(event.key);
                 break;
             case SDL_MOUSEWHEEL:
-                editCur.cursor.move(-event.wheel.y * 12, Cursor::Space::Song);
+                editCur.cursor.move(-event.wheel.y * cellSize,
+                                    Cursor::Space::Song);
                 movedEditCur = true;
                 break;
             }
         }
 
         glClear(GL_COLOR_BUFFER_BIT);
+
+        float timeScale = CELL_HEIGHT / cellSize;
 
         sectionPositions.clear();
         {
@@ -113,7 +116,7 @@ void App::main(const vector<string> args)
             for (auto &section : song.sections) {
                 sectionPositions[section.get()] = y;
                 std::shared_lock sectionLock(section->mu);
-                y += section->length * TIME_SCALE + 48;
+                y += section->length * timeScale + 48;
             }
         }
 
@@ -133,7 +136,7 @@ void App::main(const vector<string> args)
         float scroll = winH / 2;
         if (editCur.cursor.valid()) {
             scroll -= sectionPositions[editCur.cursor.section]
-                + editCur.cursor.time * TIME_SCALE;
+                + editCur.cursor.time * timeScale;
         }
 
         {
@@ -141,7 +144,7 @@ void App::main(const vector<string> args)
             for (auto &section : song.sections) {
                 std::shared_lock sectionLock(section->mu);
                 float sectionY = sectionPositions[section.get()] + scroll;
-                float sectionYEnd = sectionY + section->length * TIME_SCALE;
+                float sectionYEnd = sectionY + section->length * timeScale;
                 if (sectionYEnd < 0 || sectionY >= winH)
                     continue;
 
@@ -174,8 +177,8 @@ void App::main(const vector<string> args)
 
                         float x = t * TRACK_SPACING;
                         float xEnd = x + TRACK_WIDTH;
-                        float y = event.time * TIME_SCALE + sectionY;
-                        float yEnd = nextEventTime * TIME_SCALE + sectionY;
+                        float y = event.time * timeScale + sectionY;
+                        float yEnd = nextEventTime * timeScale + sectionY;
                         glm::vec3 color = mute ? glm::vec3{0.3, 0.3, 0.3}
                             : glm::vec3{0.5, 0, 0.2};
                         if (!curSample)
@@ -208,6 +211,19 @@ void App::main(const vector<string> args)
                         }
                     } // each event
                 } // each track
+                
+                glEnable(GL_BLEND);
+                glColor4f(1, 1, 1, 0.4);
+                glBegin(GL_LINES);
+                for (ticks grid = 0; grid < section->length; grid += cellSize) {
+                    float y = grid * timeScale + sectionY;
+                    glVertex2f(0, y);
+                    glVertex2f(winW, y);
+                }
+                glVertex2f(0, sectionYEnd);
+                glVertex2f(winW, sectionYEnd);
+                glEnd();
+                glDisable(GL_BLEND);
             } // each section
         } // songLock
 
@@ -221,7 +237,7 @@ void App::main(const vector<string> args)
             float cellX = editCur.track * TRACK_SPACING;
             float cellXEnd = cellX + TRACK_WIDTH;
             float cellY = winH / 2;
-            float cellYEnd = cellY + cellSize * TIME_SCALE;
+            float cellYEnd = cellY + CELL_HEIGHT;
             glColor4f(1, 1, 1, 0.5);
             glEnable(GL_BLEND);
             glBegin(GL_QUADS);
@@ -235,7 +251,7 @@ void App::main(const vector<string> args)
 
         if (playCur.valid()) {
             float playSectionY = sectionPositions[playCur.section] + scroll;
-            float playCursorY = playCur.time * TIME_SCALE + playSectionY;
+            float playCursorY = playCur.time * timeScale + playSectionY;
             glColor3f(0.5, 0.5, 1);
             glBegin(GL_LINES);
             glVertex2f(0, playCursorY);
@@ -315,11 +331,10 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             if (sectionIt != song.sections.end()) {
                 Section *section = sectionIt->get();
                 editCur.cursor.section = section;
-                if (editCur.cursor.time >= section->length)
-                    editCur.cursor.time = 0;
+                editCur.cursor.time = 0;
+                movedEditCur = true;
             }
         }
-        movedEditCur = true;
         break;
     case SDLK_PAGEUP:
         {
@@ -330,19 +345,18 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 sectionIt--;
                 Section *section = sectionIt->get();
                 editCur.cursor.section = section;
-                if (editCur.cursor.time >= section->length)
-                    editCur.cursor.time = 0;
+                editCur.cursor.time = 0;
+                movedEditCur = true;
             }
         }
-        movedEditCur = true;
         break;
     case SDLK_KP_PLUS:
         selectedSample++;
-        cout << "Sample " <<selectedSample<< "\n";
+        cout << "Sample " <<(selectedSample + 1)<< "\n";
         break;
     case SDLK_KP_MINUS:
         selectedSample--;
-        cout << "Sample " <<selectedSample<< "\n";
+        cout << "Sample " <<(selectedSample + 1)<< "\n";
         break;
     case SDLK_EQUALS:
         selectedOctave++;
@@ -375,6 +389,12 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_UP:
         editCur.cursor.move(-cellSize, Cursor::Space::Song);
         movedEditCur = true;
+        break;
+    case SDLK_RIGHTBRACKET:
+        cellSize *= (e.keysym.mod & KMOD_CTRL) ? 3 : 2;
+        break;
+    case SDLK_LEFTBRACKET:
+        cellSize /= (e.keysym.mod & KMOD_CTRL) ? 3 : 2;
         break;
     case SDLK_F10:
         if (e.repeat) break;

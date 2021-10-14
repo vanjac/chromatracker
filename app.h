@@ -48,7 +48,7 @@ private:
     bool record {false};
 
     // main loop flags
-    bool movedEditCur {false};
+    bool movedEditCur {false}; // TODO replace with accumulator to move play cur
 
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)
