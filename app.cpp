@@ -283,7 +283,48 @@ void App::resizeWindow(int w, int h)
 
 void App::keyDown(const SDL_KeyboardEvent &e)
 {
+    if (!e.repeat && !(e.keysym.mod & KMOD_CTRL)) {
+        int key = pitchKeymap(e.keysym.sym);
+        if (key >= 0) {
+            play::JamEvent jam;
+            {
+                std::unique_lock songLock(song.mu);
+                if (selectedSample >= 0 && selectedSample < song.samples.size())
+                    jam.event.sample = song.samples[selectedSample].get();
+            }
+            if (jam.event.sample) {
+                jam.event.pitch = key + selectedOctave * OCTAVE;
+                jam.event.velocity = 1;
+                jam.event.time = calcTickDelay(e.timestamp);
+                jam.touchId = key;
+                bool isPlaying;
+                {
+                    std::unique_lock playerLock(player.mu);
+                    player.queueJamEvent(jam);
+                    isPlaying = player.cursor().valid();
+                }
+                if (record) {
+                    auto op = std::make_unique<edit::ops::WriteCell>(editCur,
+                        (overwrite && !isPlaying) ? cellSize : 1, jam.event);
+                    doOperation(std::move(op));
+                    // TODO if overwrite && isPlaying, clear events while held
+                    // TODO combine into single undo operation while playing
+                }
+            }
+            return;
+        }
+    }
+
     switch (e.keysym.sym) {
+    case SDLK_z:
+        if (e.keysym.mod & KMOD_CTRL) {
+            if (!undoStack.empty()) {
+                undoStack.back()->undoIt(&song);
+                undoStack.pop_back();
+            }
+        }
+        break;
+    /* Mode */
     case SDLK_F1:
         if (e.repeat) break;
         record = !record;
@@ -299,9 +340,25 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         overwrite = !overwrite;
         cout << "Overwrite " <<overwrite<< "\n";
         break;
+    case SDLK_KP_PLUS:
+        selectedSample++;
+        cout << "Sample " <<(selectedSample + 1)<< "\n";
+        break;
+    case SDLK_KP_MINUS:
+        selectedSample--;
+        cout << "Sample " <<(selectedSample + 1)<< "\n";
+        break;
+    case SDLK_EQUALS:
+        selectedOctave++;
+        cout << "Octave " <<selectedOctave<< "\n";
+        break;
+    case SDLK_MINUS:
+        selectedOctave--;
+        cout << "Octave " <<selectedOctave<< "\n";
+        break;
+    /* Playback */ 
     case SDLK_SPACE:
-        if (e.repeat) break;
-        {
+        if (!e.repeat) {
             std::unique_lock playerLock(player.mu);
             std::shared_lock songLock(song.mu);
             if (player.cursor().valid()) {
@@ -313,11 +370,12 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_ESCAPE:
-        {
+        if (!e.repeat) {
             std::unique_lock playerLock(player.mu);
             player.stop();
         }
         break;
+    /* Navigation */
     case SDLK_HOME:
         if (e.keysym.mod & KMOD_CTRL) {
             std::unique_lock songLock(song.mu);
@@ -348,22 +406,6 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             }
         }
         break;
-    case SDLK_KP_PLUS:
-        selectedSample++;
-        cout << "Sample " <<(selectedSample + 1)<< "\n";
-        break;
-    case SDLK_KP_MINUS:
-        selectedSample--;
-        cout << "Sample " <<(selectedSample + 1)<< "\n";
-        break;
-    case SDLK_EQUALS:
-        selectedOctave++;
-        cout << "Octave " <<selectedOctave<< "\n";
-        break;
-    case SDLK_MINUS:
-        selectedOctave--;
-        cout << "Octave " <<selectedOctave<< "\n";
-        break;
     case SDLK_RIGHT:
         if (e.keysym.mod & KMOD_CTRL) {
             std::unique_lock songLock(song.mu);
@@ -391,9 +433,9 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_LEFTBRACKET:
         cellSize /= (e.keysym.mod & KMOD_CTRL) ? 3 : 2;
         break;
-    case SDLK_F10:
-        if (e.repeat) break;
-        {
+    /* Commands */
+    case SDLK_m:
+        if (!e.repeat && e.keysym.mod & KMOD_CTRL) {
             // NOT undoable!
             std::unique_lock songLock(song.mu);
             if (editCur.track >= 0 && editCur.track < song.tracks.size()) {
@@ -412,45 +454,6 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             doOperation(std::move(op));
         }
         break;
-    default:
-        if (e.repeat) break;
-
-        if (e.keysym.sym == SDLK_z && e.keysym.mod & KMOD_CTRL) {
-            if (!undoStack.empty()) {
-                undoStack.back()->undoIt(&song);
-                undoStack.pop_back();
-            }
-            break;
-        }
-
-        int key = pitchKeymap(e.keysym.sym);
-        if (key >= 0) {
-            play::JamEvent jam;
-            {
-                std::unique_lock songLock(song.mu);
-                if (selectedSample >= 0 && selectedSample < song.samples.size())
-                    jam.event.sample = song.samples[selectedSample].get();
-            }
-            if (jam.event.sample) {
-                jam.event.pitch = key + selectedOctave * OCTAVE;
-                jam.event.velocity = 1;
-                jam.event.time = calcTickDelay(e.timestamp);
-                jam.touchId = key;
-                bool isPlaying;
-                {
-                    std::unique_lock playerLock(player.mu);
-                    player.queueJamEvent(jam);
-                    isPlaying = player.cursor().valid();
-                }
-                if (record) {
-                    auto op = std::make_unique<edit::ops::WriteCell>(editCur,
-                        (overwrite && !isPlaying) ? cellSize : 1, jam.event);
-                    doOperation(std::move(op));
-                    // TODO if overwrite && isPlaying, clear events while held
-                    // TODO combine into single undo operation while playing
-                }
-            }
-        }
     }
 }
 
