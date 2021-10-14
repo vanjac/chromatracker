@@ -13,7 +13,7 @@ namespace chromatracker::play {
 struct JamEvent
 {
     Event event;
-    int touchId;
+    int touchId {-1};
 };
 
 class SongPlay

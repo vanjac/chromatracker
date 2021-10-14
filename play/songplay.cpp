@@ -69,7 +69,7 @@ void SongPlay::processJamEvent(const JamEvent &jam)
     if (jamTouches.count(jam.touchId)) {
         trackIndex = jamTouches[jam.touchId];
     } else {
-        trackIndex = 0; // TODO cycle, check overwrite
+        trackIndex = -1;
         for (int i = 0; i < jamTracks.size(); i++) {
             if (!jamTracks[i].currentSample()
                 || jamTracks[i].currentSpecial() == Event::Special::FadeOut) {
@@ -77,6 +77,8 @@ void SongPlay::processJamEvent(const JamEvent &jam)
                 break;
             }
         }
+        if (trackIndex == -1)
+            return; // limit number of touches at once
         jamTouches[jam.touchId] = trackIndex;
     }
     jamTracks[trackIndex].processEvent(jam.event);
