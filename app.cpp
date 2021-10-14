@@ -422,13 +422,16 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 jam.event.velocity = 1;
                 jam.event.time = calcTickDelay(e.timestamp);
                 jam.touchId = key;
+                bool isPlaying;
                 {
                     std::unique_lock playerLock(player.mu);
                     player.queueJamEvent(jam);
+                    isPlaying = player.cursor().valid();
                 }
                 if (record) {
                     edit::ops::writeCell(&song, editCur,
-                                         overwrite ? cellSize : 1, jam.event);
+                        (overwrite && !isPlaying) ? cellSize : 1, jam.event);
+                    // TODO if overwrite && isPlaying, clear events while held
                 }
             }
         }
@@ -439,12 +442,19 @@ void App::keyUp(const SDL_KeyboardEvent &e)
 {
     int key = pitchKeymap(e.keysym.sym);
     if (key >= 0) {
-        std::unique_lock playerLock(player.mu);
         play::JamEvent jam;
         jam.event.special = Event::Special::FadeOut;
         jam.event.time = calcTickDelay(e.timestamp);
         jam.touchId = key;
-        player.queueJamEvent(jam);
+        bool isPlaying;
+        {
+            std::unique_lock playerLock(player.mu);
+            player.queueJamEvent(jam);
+            isPlaying = player.cursor().valid();
+        }
+        if (record && isPlaying) {
+            edit::ops::writeCell(&song, editCur, 1, jam.event);
+        }
     }
 }
 
