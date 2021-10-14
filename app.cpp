@@ -148,6 +148,12 @@ void App::main(const vector<string> args)
                 glColor3f(1, 1, 1);
                 text.drawText(section->title, {0, sectionY - 20});
                 for (int t = 0; t < section->trackEvents.size(); t++) {
+                    bool mute;
+                    {
+                        Track *track = song.tracks[t].get();
+                        std::shared_lock trackLock(track->mu);
+                        mute = track->mute;
+                    }
                     auto &events = section->trackEvents[t];
                     Sample *curSample = nullptr;
                     float curVelocity = 1.0f;
@@ -170,7 +176,8 @@ void App::main(const vector<string> args)
                         float xEnd = x + TRACK_WIDTH;
                         float y = event.time * TIME_SCALE + sectionY;
                         float yEnd = nextEventTime * TIME_SCALE + sectionY;
-                        glm::vec3 color {0.5, 0, 0.2};
+                        glm::vec3 color = mute ? glm::vec3{0.3, 0.3, 0.3}
+                            : glm::vec3{0.5, 0, 0.2};
                         if (!curSample)
                             color = glm::vec3(0);
                         else
