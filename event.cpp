@@ -7,7 +7,8 @@ const float Event::NO_VELOCITY = -1.0f;
 
 bool Event::empty()
 {
-    return sample == nullptr && pitch == NO_PITCH && velocity == NO_VELOCITY
+    // TODO should be already locked??
+    return !sample.lock() && pitch == NO_PITCH && velocity == NO_VELOCITY
         && special == Special::None;
 }
 

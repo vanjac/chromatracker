@@ -3,17 +3,17 @@
 
 namespace chromatracker::play {
 
-const Track * TrackPlay::track() const
+shared_ptr<const Track> TrackPlay::track() const
 {
-    return _track;
+    return _track.lock();
 }
 
-void TrackPlay::setTrack(const Track *track)
+void TrackPlay::setTrack(shared_ptr<const Track> track)
 {
     _track = track;
 }
 
-const Sample * TrackPlay::currentSample() const
+shared_ptr<const Sample> TrackPlay::currentSample() const
 {
     return samplePlay.sample();
 }
@@ -31,8 +31,8 @@ void TrackPlay::stop()
 
 void TrackPlay::processEvent(const Event &event)
 {
-    if (event.sample)
-        samplePlay.setSample(event.sample); // TODO new note action
+    if (auto sampleP = event.sample.lock())
+        samplePlay.setSample(sampleP); // TODO new note action
     if (event.pitch != Event::NO_PITCH)
         samplePlay.setPitch(event.pitch);
     if (event.velocity != Event::NO_VELOCITY)
@@ -44,12 +44,12 @@ void TrackPlay::processTick(float *tickBuffer, frames tickFrames,
                             frames outFrameRate, float globalAmp)
 {
     float lAmp = 0, rAmp = 0;
-    if (_track) {
-        std::shared_lock lock(_track->mu);
-        if (!_track->mute) {
-            globalAmp *= _track->volume;
-            lAmp = globalAmp * panningToLeftAmplitude(_track->pan);
-            rAmp = globalAmp * panningToRightAmplitude(_track->pan);
+    if (auto trackP = _track.lock()) {
+        std::shared_lock lock(trackP->mu);
+        if (!trackP->mute) {
+            globalAmp *= trackP->volume;
+            lAmp = globalAmp * panningToLeftAmplitude(trackP->pan);
+            rAmp = globalAmp * panningToRightAmplitude(trackP->pan);
         }
     } else {
         lAmp = rAmp = globalAmp; // jam track

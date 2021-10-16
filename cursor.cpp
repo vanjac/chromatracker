@@ -5,35 +5,28 @@ namespace chromatracker {
 
 Cursor::Cursor()
     : song(nullptr)
-    , section(nullptr)
     , time(0)
 {}
 
 Cursor::Cursor(Song *song)
     : song(song)
-    , section(nullptr)
     , time(0)
 {}
 
-Cursor::Cursor(Song *song, Section *section)
+Cursor::Cursor(Song *song, shared_ptr<Section> section)
     : song(song)
     , section(section)
     , time(0)
 {}
 
-bool Cursor::valid() const
-{
-    return song != nullptr && section != nullptr;
-}
-
 void Cursor::playStep()
 {
     time++;
 
-    while (section) {
-        std::shared_lock lock(section->mu);
-        if (time >= section->length) {
-            section = section->next;
+    while (auto sectionP = section.lock()) {
+        std::shared_lock lock(sectionP->mu);
+        if (time >= sectionP->length) {
+            section = sectionP->next;
             time = 0;
         } else {
             break;
@@ -43,13 +36,11 @@ void Cursor::playStep()
 
 vector<shared_ptr<Section>>::iterator Cursor::findSection() const
 {
-    return std::find_if(song->sections.begin(), song->sections.end(),
-        [&](std::shared_ptr<Section> &elem) {
-            return elem.get() == section;
-        });
+    return std::find(song->sections.begin(), song->sections.end(),
+                     section.lock());
 }
 
-Section * Cursor::nextSection() const
+shared_ptr<Section> Cursor::nextSection() const
 {
     std::shared_lock lock(song->mu);
     auto it = findSection();
@@ -58,21 +49,22 @@ Section * Cursor::nextSection() const
     it++;
     if (it == song->sections.end())
         return nullptr;
-    return it->get();
+    return *it;
 }
 
-Section * Cursor::prevSection() const
+shared_ptr<Section> Cursor::prevSection() const
 {
     std::shared_lock lock(song->mu);
     auto it = findSection();
     if (it == song->sections.end() || it == song->sections.begin())
         return nullptr;
-    return (--it)->get();
+    return *(--it);
 }
 
 vector<Event> & TrackCursor::events() const
 {
-    return cursor.section->trackEvents[track];
+    // TODO should be already locked??
+    return cursor.section.lock()->trackEvents[track];
 }
 
 vector<Event>::iterator TrackCursor::findEvent() const

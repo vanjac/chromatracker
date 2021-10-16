@@ -29,7 +29,7 @@ int SongPlay::currentTempo() const
 
 void SongPlay::stop()
 {
-    _cursor.section = nullptr;
+    _cursor.section.reset();
     for (auto &track : tracks) {
         track.stop();
     }
@@ -41,7 +41,7 @@ void SongPlay::stop()
 
 void SongPlay::fadeAll()
 {
-    _cursor.section = nullptr;
+    _cursor.section.reset();
     Event fadeEvent;
     fadeEvent.special = Event::Special::FadeOut;
     for (auto &track : tracks) {
@@ -99,14 +99,13 @@ frames SongPlay::processTick(float *tickBuffer, frames maxFrames,
         if (tracks.size() != song->tracks.size()) {
             tracks.resize(song->tracks.size());
             for (int i = 0; i < song->tracks.size(); i++) {
-                tracks[i].setTrack(song->tracks[i].get());
+                tracks[i].setTrack(song->tracks[i]);
                 tracks[i].stop();
             }
         }
 
-        if (_cursor.valid()) {
-            Section *section = _cursor.section;
-            std::shared_lock sectionLock(section->mu);
+        if (auto sectionP = _cursor.section.lock()) {
+            std::shared_lock sectionLock(sectionP->mu);
             // process events
             TrackCursor tcur{_cursor};
             for (tcur.track; tcur.track < tracks.size(); tcur.track++) {
@@ -115,13 +114,13 @@ frames SongPlay::processTick(float *tickBuffer, frames maxFrames,
                         && eventIt->time == _cursor.time)
                     tracks[tcur.track].processEvent(*eventIt);
             }
-            if (section->tempo != Section::NO_TEMPO) {
-                _tempo = section->tempo;
+            if (sectionP->tempo != Section::NO_TEMPO) {
+                _tempo = sectionP->tempo;
             }
         }
     }
     _cursor.playStep();
-    if (!_cursor.valid()) {
+    if (!_cursor.section.lock()) { // section may have been cleared after move
         fadeAll();
     }
 

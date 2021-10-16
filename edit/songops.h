@@ -17,8 +17,8 @@ public:
 protected:
     const TrackCursor tcur;
     const ticks size;
+    const shared_ptr<Section> section;
 private:
-    shared_ptr<Section> section;
     vector<Event> clearedEvents;
 };
 

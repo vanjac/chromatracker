@@ -20,15 +20,15 @@ private:
         bool autoFade = false;
     };
 
-    void loadSample(Sample *sample, InstrumentExtra *extra);
-    void loadInstrument(Sample *sample, InstrumentExtra *extra);
-    void loadSection(Section *section);
+    void loadSample(shared_ptr<Sample> sample, InstrumentExtra *extra);
+    void loadInstrument(shared_ptr<Sample> sample, InstrumentExtra *extra);
+    void loadSection(shared_ptr<Section> section);
 
     SDL_RWops *stream;
 
     Song *song;
     uint16_t compatibleVersion;
-    vector<Sample> itSamples;
+    vector<shared_ptr<Sample>> itSamples;
     vector<InstrumentExtra> itSampleExtras;
     vector<InstrumentExtra> instrumentExtras;
     uint8_t ticksPerRow;

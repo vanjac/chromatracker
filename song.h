@@ -3,12 +3,13 @@
 
 #include "event.h"
 #include "sample.h"
+#include "songobj.h"
 #include "units.h"
 #include <shared_mutex> // https://stackoverflow.com/q/50972345
 
 namespace chromatracker {
 
-struct Track : std::enable_shared_from_this<Track>
+struct Track : public SongObject
 {
     mutable nevercopy<std::shared_mutex> mu;
     bool mute {false};
@@ -16,7 +17,7 @@ struct Track : std::enable_shared_from_this<Track>
     float pan {0.0};
 };
 
-struct Section : std::enable_shared_from_this<Section>
+struct Section : public SongObject
 {
     static const int NO_TEMPO; // keep previous
     static const int NO_METER;
@@ -32,7 +33,7 @@ struct Section : std::enable_shared_from_this<Section>
 
     // section to play after this one
     // typically the next in the sequence, but may be altered to loop/skip/stop
-    Section *next {nullptr};
+    ObjWeakPtr<Section> next;
 };
 
 struct Song

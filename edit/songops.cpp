@@ -5,12 +5,12 @@ namespace chromatracker::edit::ops {
 ClearCell::ClearCell(TrackCursor tcur, ticks size)
     : tcur(tcur)
     , size(size)
-    , section(tcur.cursor.section->shared_from_this())
+    , section(tcur.cursor.section.lockDeleted())
 {}
 
 bool ClearCell::doIt(Song *song)
 {
-    std::unique_lock lock(tcur.cursor.section->mu);
+    std::unique_lock lock(section->mu);
     TrackCursor endCur = tcur;
     endCur.cursor.time += size;
     auto startIt = tcur.findEvent();
@@ -22,7 +22,7 @@ bool ClearCell::doIt(Song *song)
 
 void ClearCell::undoIt(Song *song)
 {
-    std::unique_lock lock(tcur.cursor.section->mu);
+    std::unique_lock lock(section->mu);
     auto insertIt = tcur.findEvent();
     tcur.events().insert(insertIt, clearedEvents.begin(), clearedEvents.end());
     clearedEvents.clear();
@@ -38,7 +38,7 @@ WriteCell::WriteCell(TrackCursor tcur, ticks size, Event event)
 bool WriteCell::doIt(Song *song)
 {
     ClearCell::doIt(song);
-    std::unique_lock lock(tcur.cursor.section->mu);
+    std::unique_lock lock(section->mu);
     auto insertIt = tcur.findEvent();
     tcur.events().insert(insertIt, event);
     return true;

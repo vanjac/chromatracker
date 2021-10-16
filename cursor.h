@@ -8,20 +8,19 @@ namespace chromatracker {
 struct Cursor
 {
     Song *song;
-    Section *section;
+    ObjWeakPtr<Section> section; // null means the cursor is in null state
     ticks time; // in section
 
     Cursor();
     Cursor(Song *song);
-    Cursor(Song *song, Section *section);
+    Cursor(Song *song, shared_ptr<Section> section);
 
-    bool valid() const;
     void playStep();
 
-    // song mutex must be locked
+    // song mutex must be locked (TODO could this be enforced?)
     vector<shared_ptr<Section>>::iterator findSection() const;
-    Section * nextSection() const; // could be null
-    Section * prevSection() const; // could be null
+    shared_ptr<Section> nextSection() const; // could be null
+    shared_ptr<Section> prevSection() const; // could be null
 };
 
 struct TrackCursor

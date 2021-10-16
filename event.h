@@ -1,11 +1,10 @@
 #pragma once
 #include <common.h>
 
+#include "sample.h"
 #include "units.h"
 
 namespace chromatracker {
-
-struct Sample;
 
 struct Event
 {
@@ -20,7 +19,7 @@ struct Event
     };
 
     ticks time {0};
-    Sample *sample {nullptr};
+    ObjWeakPtr<Sample> sample;
     int pitch {NO_PITCH};
     float velocity {NO_VELOCITY};
     Special special {Special::None};

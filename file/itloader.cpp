@@ -29,7 +29,7 @@ void ITLoader::loadSong(Song *song)
         throw std::runtime_error("Unrecognized format");
     }
 
-    Section *firstSection = song->sections.emplace_back(new Section).get();
+    auto firstSection = song->sections.emplace_back(new Section);
 
     char songName[27]{0};
     SDL_RWread(stream, songName, sizeof(char), 26);
@@ -72,7 +72,7 @@ void ITLoader::loadSong(Song *song)
     song->tracks.reserve(MAX_CHANNELS);
     SDL_RWseek(stream, 0x40, RW_SEEK_SET);
     for (int i = 0; i < MAX_CHANNELS; i++) {
-        Track *track = song->tracks.emplace_back(new Track).get();
+        auto track = song->tracks.emplace_back(new Track);
         uint8_t pan = SDL_ReadU8(stream);
         track->mute = pan & 0x80;
         pan &= 0x7f;
@@ -94,13 +94,13 @@ void ITLoader::loadSong(Song *song)
     SDL_RWread(stream, patternOffsets.get(), 4, numPatterns);
 
     for (int i = 0; i < numSamples; i++) {
-        Sample *sample;
+        shared_ptr<Sample> sample;
         InstrumentExtra *extra;
         if (!instrumentMode) {
-            sample = song->samples.emplace_back(new Sample).get();
+            sample = song->samples.emplace_back(new Sample);
             extra = &instrumentExtras.emplace_back();
         } else {
-            sample = &itSamples.emplace_back();
+            sample = itSamples.emplace_back(new Sample);
             extra = &itSampleExtras.emplace_back();
         }
         SDL_RWseek(stream, sampleOffsets[i], RW_SEEK_SET);
@@ -111,7 +111,7 @@ void ITLoader::loadSong(Song *song)
         song->samples.reserve(numInstruments);
         instrumentExtras.reserve(numInstruments);
         for (int i = 0; i < numInstruments; i++) {
-            Sample *sample = song->samples.emplace_back(new Sample).get();
+            auto sample = song->samples.emplace_back(new Sample);
             InstrumentExtra *extra = &instrumentExtras.emplace_back();
             SDL_RWseek(stream, instOffsets[i], RW_SEEK_SET);
             loadInstrument(sample, extra);
@@ -120,7 +120,7 @@ void ITLoader::loadSong(Song *song)
 
     // add number prefixes to samples
     for (int i = 0; i < song->samples.size(); i++) {
-        Sample *sample = song->samples[i].get();
+        auto sample = song->samples[i];
         std::ostringstream nameStream;
         nameStream << std::setw(2) << std::setfill('0') << (i + 1) << " "
             << sample->name;
@@ -138,12 +138,12 @@ void ITLoader::loadSong(Song *song)
             throw std::runtime_error("Order out of range");
         }
 
-        Section *section;
+        shared_ptr<Section> section;
         if (i == 0) {
             section = firstSection;
         } else {
-            Section *prevSection = song->sections.back().get();
-            section = song->sections.emplace_back(new Section).get();
+            auto prevSection = song->sections.back();
+            section = song->sections.emplace_back(new Section);
             prevSection->next = section;
         }
         section->trackEvents.insert(section->trackEvents.end(), MAX_CHANNELS,
@@ -169,7 +169,7 @@ void ITLoader::loadSong(Song *song)
 }
 
 template<typename T>
-void loadWave(SDL_RWops *stream, Sample *sample,
+void loadWave(SDL_RWops *stream, shared_ptr<Sample> sample,
               frames numFrames, int numChannels)
 {
     int numSamples = numFrames * numChannels;
@@ -188,7 +188,7 @@ void loadWave(SDL_RWops *stream, Sample *sample,
     }
 }
 
-void ITLoader::loadSample(Sample *sample, InstrumentExtra *extra)
+void ITLoader::loadSample(shared_ptr<Sample> sample, InstrumentExtra *extra)
 {
     char signature[5]{0};
     SDL_RWread(stream, signature, sizeof(char), 4);
@@ -280,7 +280,7 @@ void ITLoader::loadSample(Sample *sample, InstrumentExtra *extra)
     sample->fadeOut = 1.0f; // will be overridden by instruments
 }
 
-void ITLoader::loadInstrument(Sample *sample, InstrumentExtra *extra)
+void ITLoader::loadInstrument(shared_ptr<Sample> sample, InstrumentExtra *extra)
 {
     char signature[5]{0};
     SDL_RWread(stream, signature, sizeof(char), 4);
@@ -298,7 +298,7 @@ void ITLoader::loadInstrument(Sample *sample, InstrumentExtra *extra)
     }
 
     // copies wave
-    *sample = itSamples[sampleNum - 1];
+    *sample = *(itSamples[sampleNum - 1]);
     *extra = itSampleExtras[sampleNum - 1];
 
     SDL_RWseek(stream, 0x14 - sampleNumOffset - 1, RW_SEEK_CUR);
@@ -351,7 +351,7 @@ void ITLoader::loadInstrument(Sample *sample, InstrumentExtra *extra)
     sample->fadeOut = 1 / fadeTime / IT_TICK_TIME;
 }
 
-void ITLoader::loadSection(Section *section)
+void ITLoader::loadSection(shared_ptr<Section> section)
 {
     uint16_t packedLength = SDL_ReadLE16(stream);
     uint16_t numRows = SDL_ReadLE16(stream);
@@ -431,7 +431,7 @@ void ITLoader::loadSection(Section *section)
         InstrumentExtra *instExtra = nullptr;
         // order is important, velocity gets overridden multiple times
         if (cell.instrument > 0 && cell.instrument <= song->samples.size()) {
-            event.sample = song->samples[cell.instrument - 1].get();
+            event.sample = song->samples[cell.instrument - 1];
             instExtra = &instrumentExtras[cell.instrument - 1];
             event.velocity = amplitudeToVelocity(
                 instExtra->defaultVolume / 64.0f);
@@ -443,12 +443,12 @@ void ITLoader::loadSection(Section *section)
             event.velocity = 0;
         } else if (cell.note > 119) {
             event.special = Event::Special::FadeOut;
-            event.sample = nullptr;
+            event.sample.reset();
         } else if (cell.note != -1) {
             event.pitch = cell.note;
         }
         if ((cell.volume >= 193 && cell.volume <= 202) || cell.command == 7) {
-            event.sample = nullptr; // portamento
+            event.sample.reset(); // portamento
         }
         if (cell.command == 19 && cmdNibble1 == 0xD) { // SDx
             if (cmdNibble1 == 0xD) {

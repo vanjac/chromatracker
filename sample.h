@@ -1,6 +1,7 @@
 #pragma once
 #include <common.h>
 
+#include "songobj.h"
 #include "units.h"
 #include <array>
 #include <shared_mutex>
@@ -8,7 +9,7 @@
 
 namespace chromatracker {
 
-struct Sample : std::enable_shared_from_this<Sample>
+struct Sample : public SongObject
 {
     enum class InterpolationMode
     {

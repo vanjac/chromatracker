@@ -45,7 +45,7 @@ private:
     static const int BLOCK_SIZE = 0x8000;
 
     SDL_RWops *stream;
-    Sample *sample;
+    shared_ptr<Sample> sample;
     const frames numFrames;
     const int numChannels;
     const bool it215;
@@ -57,7 +57,7 @@ private:
     unsigned int mem1, mem2; // integrator memory
 
 public:
-    ITDecompress(SDL_RWops *stream, Sample *sample,
+    ITDecompress(SDL_RWops *stream, shared_ptr<Sample> sample,
                  frames numFrames, int numChannels, bool it215)
         : stream(stream)
         , sample(sample)

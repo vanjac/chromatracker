@@ -60,7 +60,7 @@ void App::main(const vector<string> args)
     // don't need locks at this moment
     player.setCursor(Cursor(&song));
     if (!song.sections.empty()) {
-        editCur.cursor = Cursor(&song, song.sections[0].get());
+        editCur.cursor = Cursor(&song, song.sections[0]);
     } else {
         editCur.cursor = Cursor(&song);
     }
@@ -74,7 +74,7 @@ void App::main(const vector<string> args)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     text.initGL();
 
-    std::unordered_map<const Section *, float> sectionPositions;
+    std::unordered_map<shared_ptr<const Section>, float> sectionPositions;
 
     bool running = true;
     while (running) {
@@ -120,7 +120,7 @@ void App::main(const vector<string> args)
             float y = 0;
             std::shared_lock songLock(song.mu);
             for (auto &section : song.sections) {
-                sectionPositions[section.get()] = y;
+                sectionPositions[section] = y;
                 std::shared_lock sectionLock(section->mu);
                 y += section->length * timeScale + 48;
             }
@@ -130,7 +130,7 @@ void App::main(const vector<string> args)
         {
             std::unique_lock lock(player.mu);
             playCur = player.cursor();
-            if (followPlayback && playCur.valid()) {
+            if (followPlayback && playCur.section.lock()) {
                 if (movedEditCur) {
                     playCur = editCur.cursor;
                     player.setCursor(playCur);
@@ -140,8 +140,8 @@ void App::main(const vector<string> args)
             }
         }
         float scroll = winH / 2;
-        if (editCur.cursor.valid()) {
-            scroll -= sectionPositions[editCur.cursor.section]
+        if (auto sectionP = editCur.cursor.section.lock()) {
+            scroll -= sectionPositions[sectionP]
                 + editCur.cursor.time * timeScale;
         }
 
@@ -149,7 +149,7 @@ void App::main(const vector<string> args)
             std::shared_lock songLock(song.mu);
             for (auto &section : song.sections) {
                 std::shared_lock sectionLock(section->mu);
-                float sectionY = sectionPositions[section.get()] + scroll;
+                float sectionY = sectionPositions[section] + scroll;
                 float sectionYEnd = sectionY + section->length * timeScale;
                 if (sectionYEnd < 0 || sectionY >= winH)
                     continue;
@@ -159,23 +159,24 @@ void App::main(const vector<string> args)
                 for (int t = 0; t < section->trackEvents.size(); t++) {
                     bool mute;
                     {
-                        Track *track = song.tracks[t].get();
+                        auto track = song.tracks[t];
                         std::shared_lock trackLock(track->mu);
                         mute = track->mute;
                     }
                     auto &events = section->trackEvents[t];
-                    Sample *curSample = nullptr;
+                    shared_ptr<Sample> curSample;
                     float curVelocity = 1.0f;
                     for (int e = 0; e < events.size(); e++) {
                         const Event &event = events[e];
+                        auto sampleP = event.sample.lock();
                         ticks nextEventTime = section->length;
                         if (e != events.size() - 1)
                             nextEventTime = events[e + 1].time;
 
                         if (event.special == Event::Special::FadeOut) {
                             curSample = nullptr; // TODO gradient
-                        } else if (event.sample) {
-                            curSample = event.sample;
+                        } else if (sampleP) {
+                            curSample = sampleP;
                         }
                         if (event.velocity != Event::NO_VELOCITY) {
                             curVelocity = event.velocity;
@@ -206,8 +207,8 @@ void App::main(const vector<string> args)
 
                         // TODO avoid allocation
                         glm::ivec2 textPos {x, y};
-                        if (event.sample) {
-                            textPos = text.drawText(event.sample->name.substr(0, 2), textPos);
+                        if (sampleP) {
+                            textPos = text.drawText(sampleP->name.substr(0, 2), textPos);
                         } else {
                             textPos = text.drawText("  ", textPos);
                         }
@@ -233,7 +234,7 @@ void App::main(const vector<string> args)
             } // each section
         } // songLock
 
-        if (editCur.cursor.valid()) {
+        if (editCur.cursor.section.lock()) {
             glColor3f(0.5, 1, 0.5);
             glBegin(GL_LINES);
             glVertex2f(0, winH / 2);
@@ -255,8 +256,8 @@ void App::main(const vector<string> args)
             glDisable(GL_BLEND);
         }
 
-        if (playCur.valid()) {
-            float playSectionY = sectionPositions[playCur.section] + scroll;
+        if (auto sectionP = playCur.section.lock()) {
+            float playSectionY = sectionPositions[sectionP] + scroll;
             float playCursorY = playCur.time * timeScale + playSectionY;
             glColor3f(0.5, 0.5, 1);
             glBegin(GL_LINES);
@@ -298,9 +299,9 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             {
                 std::unique_lock songLock(song.mu);
                 if (selectedSample >= 0 && selectedSample < song.samples.size())
-                    jam.event.sample = song.samples[selectedSample].get();
+                    jam.event.sample = song.samples[selectedSample];
             }
-            if (jam.event.sample) {
+            if (jam.event.sample.lock()) {
                 jam.event.pitch = selectedPitch;
                 jam.event.velocity = 1;
                 jam.event.time = calcTickDelay(e.timestamp);
@@ -309,7 +310,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 {
                     std::unique_lock playerLock(player.mu);
                     player.queueJamEvent(jam);
-                    isPlaying = player.cursor().valid();
+                    isPlaying = (bool)player.cursor().section.lock();
                 }
                 if (record && pitch >= 0) {
                     auto op = std::make_unique<edit::ops::WriteCell>(editCur,
@@ -391,7 +392,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         if (!e.repeat) {
             std::unique_lock playerLock(player.mu);
             std::shared_lock songLock(song.mu);
-            if (player.cursor().valid()) {
+            if (player.cursor().section.lock()) {
                 player.fadeAll();
                 snapToGrid();
             } else if (!song.sections.empty()) {
@@ -410,7 +411,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         if (ctrl) {
             std::unique_lock songLock(song.mu);
             if (!song.sections.empty()) {
-                editCur.cursor.section = song.sections[0].get();
+                editCur.cursor.section = song.sections[0];
             }
         }
         editCur.cursor.time = 0;
@@ -418,7 +419,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_PAGEDOWN:
         {
-            Section *next = editCur.cursor.nextSection();
+            auto next = editCur.cursor.nextSection();
             if (next) {
                 editCur.cursor.section = next;
                 editCur.cursor.time = 0;
@@ -428,7 +429,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_PAGEUP:
         {
-            Section *prev = editCur.cursor.prevSection();
+            auto prev = editCur.cursor.prevSection();
             if (prev) {
                 editCur.cursor.section = prev;
                 editCur.cursor.time = 0;
@@ -469,7 +470,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             // NOT undoable!
             std::unique_lock songLock(song.mu);
             if (editCur.track >= 0 && editCur.track < song.tracks.size()) {
-                Track *track = song.tracks[editCur.track].get();
+                auto track = song.tracks[editCur.track];
                 std::unique_lock trackLock(track->mu);
                 track->mute = !track->mute;
                 cout << "Track " <<editCur.track<<
@@ -502,7 +503,7 @@ void App::keyUp(const SDL_KeyboardEvent &e)
         {
             std::unique_lock playerLock(player.mu);
             player.queueJamEvent(jam);
-            isPlaying = player.cursor().valid();
+            isPlaying = (bool)player.cursor().section.lock();
         }
         if (record && isPlaying && pitch >= 0) {
             auto op = std::make_unique<edit::ops::WriteCell>(
@@ -531,12 +532,14 @@ void App::nextCell()
     snapToGrid();
     editCur.cursor.time += cellSize;
     ticks sectionLength;
-    {
-        std::shared_lock sectionLock(editCur.cursor.section->mu);
-        sectionLength = editCur.cursor.section->length;
+    if (auto sectionP = editCur.cursor.section.lock()) {
+        std::shared_lock sectionLock(sectionP->mu);
+        sectionLength = sectionP->length;
+    } else {
+        return;
     }
     if (editCur.cursor.time >= sectionLength) {
-        Section *next = editCur.cursor.nextSection();
+        auto next = editCur.cursor.nextSection();
         if (next) {
             editCur.cursor.section = next;
             editCur.cursor.time = 0;
@@ -553,7 +556,7 @@ void App::prevCell()
     if (editCur.cursor.time % cellSize != 0) {
         snapToGrid();
     } else if (editCur.cursor.time < cellSize) {
-        Section *prev = editCur.cursor.prevSection();
+        auto prev = editCur.cursor.prevSection();
         if (prev) {
             editCur.cursor.section = prev;
             std::shared_lock sectionLock(prev->mu);

@@ -9,8 +9,8 @@ namespace chromatracker::play {
 class SamplePlay
 {
 public:
-    const Sample * sample() const;
-    void setSample(const Sample *sample);
+    shared_ptr<const Sample> sample() const;
+    void setSample(shared_ptr<const Sample> sample);
     float pitch() const;
     void setPitch(float pitch); // note pitch
     float velocity() const;
@@ -23,7 +23,7 @@ public:
                      frames outFrameRate, float lAmp, float rAmp);
 
 private:
-    const Sample *_sample {nullptr}; // null for no sample
+    ObjWeakPtr<const Sample> _sample; // null for no sample
     float _pitch {MIDDLE_C};
     float _velocity {1.0f};
 

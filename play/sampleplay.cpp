@@ -3,12 +3,12 @@
 
 namespace chromatracker::play {
 
-const Sample * SamplePlay::sample() const
+shared_ptr<const Sample> SamplePlay::sample() const
 {
-    return _sample;
+    return _sample.lock();
 }
 
-void SamplePlay::setSample(const Sample *sample)
+void SamplePlay::setSample(shared_ptr<const Sample> sample)
 {
     _sample = sample;
     playbackPos = 0;
@@ -37,9 +37,9 @@ void SamplePlay::setVelocity(float velocity)
 
 void SamplePlay::fadeOut()
 {
-    if (_sample) {
-        std::shared_lock lock(_sample->mu);
-        _velocity -= _sample->fadeOut;
+    if (auto sampleP = _sample.lock()) {
+        std::shared_lock lock(sampleP->mu);
+        _velocity -= sampleP->fadeOut;
         if (_velocity < 0)
             _velocity = 0;
     }
@@ -48,29 +48,30 @@ void SamplePlay::fadeOut()
 void SamplePlay::processTick(float *tickBuffer, frames tickFrames,
                              frames outFrameRate, float lAmp, float rAmp)
 {
-    if (!_sample)
+    auto sampleP = _sample.lock();
+    if (!sampleP)
         return;
-    std::shared_lock lock(_sample->mu);
-    if (_sample->channels.size() == 0) {
-        _sample = nullptr;
+    std::shared_lock lock(sampleP->mu);
+    if (sampleP->channels.size() == 0) {
+        _sample.reset();
         return;
     }
 
     // TODO: anti-click
 
-    float pitchOffset = _pitch - MIDDLE_C + _sample->tune;
+    float pitchOffset = _pitch - MIDDLE_C + sampleP->tune;
     float noteRate = exp2f(pitchOffset / OCTAVE);
     framesFine playbackRate = (framesFine)roundf(
-        noteRate * (float)_sample->frameRate / outFrameRate * 65536.0f);
+        noteRate * (float)sampleP->frameRate / outFrameRate * 65536.0f);
     if (backwards)
         playbackRate = -playbackRate;
 
-    float monoAmp = velocityToAmplitude(_velocity) * _sample->volume;
+    float monoAmp = velocityToAmplitude(_velocity) * sampleP->volume;
     lAmp *= monoAmp;
     rAmp *= monoAmp;
 
     frames writeFrame = 0;
-    while (_sample && writeFrame < tickFrames) {
+    while (writeFrame < tickFrames) {
         bool collision = false; // hit loop point
 
         // end of tick buffer, sample, or loop, whichever comes first
@@ -80,13 +81,13 @@ void SamplePlay::processTick(float *tickBuffer, frames tickFrames,
         if (backwards) {
             minPos = maxPos;
             maxPos = INT64_MAX;
-            framesFine startPos = framesToFine(_sample->loopStart);
+            framesFine startPos = framesToFine(sampleP->loopStart);
             if (minPos < startPos) {
                 minPos = startPos;
                 collision = true;
             }
         } else {
-            int64_t endPos = framesToFine(_sample->loopEnd);
+            int64_t endPos = framesToFine(sampleP->loopEnd);
             if (maxPos > endPos) {
                 maxPos = endPos;
                 collision = true;
@@ -96,19 +97,19 @@ void SamplePlay::processTick(float *tickBuffer, frames tickFrames,
         if (playbackPos >= maxPos || playbackPos <= minPos) {
             // invalid position, quit (this shouldn't happen)
             // TODO getting this error sometimes (eg. clock.it, d1993.it)
-            cout << ":( " << _sample->name<< " " <<playbackPos<<
+            cout << ":( " << sampleP->name<< " " <<playbackPos<<
                 " " <<maxPos<< " " <<minPos<< "\n";
-            _sample = nullptr;
+            _sample.reset();
             break;
         }
-        bool stereo = _sample->channels.size() > 1;
+        bool stereo = sampleP->channels.size() > 1;
         // TODO prevent leaving sample data
         while (playbackPos < maxPos && playbackPos > minPos) {
             // TODO smooth (linear) interpolation
             frames frame = fineToFrames(playbackPos);
             // works for stereo and mono
-            float left = _sample->channels[0][frame];
-            float right = stereo ? _sample->channels[1][frame] : left;
+            float left = sampleP->channels[0][frame];
+            float right = stereo ? sampleP->channels[1][frame] : left;
             tickBuffer[writeFrame * 2] += left * lAmp;
             tickBuffer[writeFrame * 2 + 1] += right * rAmp;
             playbackPos += playbackRate;
@@ -116,20 +117,21 @@ void SamplePlay::processTick(float *tickBuffer, frames tickFrames,
         }
 
         if (collision) {
-            switch (_sample->loopMode) {
+            switch (sampleP->loopMode) {
             case Sample::LoopMode::Once:
-                _sample = nullptr;
+                _sample.reset();
+                writeFrame = tickFrames; // exit loop
                 break;
             case Sample::LoopMode::Forward:
                 playbackPos -= framesToFine(
-                    _sample->loopEnd - _sample->loopStart);
+                    sampleP->loopEnd - sampleP->loopStart);
                 break;
             case Sample::LoopMode::PingPong:
                 // "bounce" on edges of loop
                 // TODO off by one?
                 framesFine bouncePoint = backwards ?
-                    framesToFine(_sample->loopStart)
-                    : (framesToFine(_sample->loopEnd) - 1);
+                    framesToFine(sampleP->loopStart)
+                    : (framesToFine(sampleP->loopEnd) - 1);
                 playbackPos = bouncePoint * 2 - playbackPos;
                 backwards = !backwards;
                 playbackRate = -playbackRate;

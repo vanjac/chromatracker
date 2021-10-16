@@ -11,10 +11,10 @@ class TrackPlay
     static const int POLYPHONY = 8;
 
 public:
-    const Track * track() const;
-    void setTrack(const Track *track);
+    shared_ptr<const Track> track() const;
+    void setTrack(shared_ptr<const Track> track);
 
-    const Sample * currentSample() const;
+    shared_ptr<const Sample> currentSample() const;
     Event::Special currentSpecial() const;
 
     void stop();
@@ -23,7 +23,7 @@ public:
                      frames outFrameRate, float globalAmp);
 
 private:
-    const Track *_track {nullptr};
+    ObjWeakPtr<const Track> _track;
 
     SamplePlay samplePlay;
     Event::Special _special {Event::Special::None};
