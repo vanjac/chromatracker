@@ -32,4 +32,17 @@ protected:
     Event event;
 };
 
+class DeleteSection : public SongOp
+{
+public:
+    DeleteSection(shared_ptr<Section> section);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    const shared_ptr<Section> section;
+private:
+    int index {-1};
+    vector<shared_ptr<Section>> prevLinks;
+};
+
 } // namespace

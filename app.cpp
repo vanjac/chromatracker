@@ -479,7 +479,20 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_DELETE:
-        {
+        if (ctrl) {
+            auto deleteSection = editCur.cursor.section.lock();
+            auto next = editCur.cursor.nextSection();
+            if (!next)
+                next = editCur.cursor.prevSection();
+            if (next) {
+                editCur.cursor.section = next;
+                editCur.cursor.time = 0;
+                movedEditCur = true;
+            }
+            auto op = std::make_unique<edit::ops::DeleteSection>(
+                deleteSection);
+            doOperation(std::move(op));
+        } else {
             auto op = std::make_unique<edit::ops::ClearCell>(
                 editCur, overwrite ? cellSize : 1);
             doOperation(std::move(op));
