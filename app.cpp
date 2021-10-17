@@ -285,6 +285,7 @@ void App::resizeWindow(int w, int h)
 void App::keyDown(const SDL_KeyboardEvent &e)
 {
     bool ctrl = e.keysym.mod & KMOD_CTRL;
+    bool shift = e.keysym.mod & KMOD_SHIFT;
     if (!e.repeat && !ctrl) {
         int pitch = pitchKeymap(e.keysym.scancode);
         int sample = sampleKeymap(e.keysym.scancode);
@@ -481,7 +482,26 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_DELETE:
-        if (ctrl) {
+        if (ctrl && shift) {
+            // zap sections -- NOT undoable! (clears undo stack)
+            {
+                std::unique_lock playerLock(player.mu);
+                player.stop();
+            }
+            std::unique_lock songLock(song.mu);
+            song.sections.clear();
+            auto section = song.sections.emplace_back(new Section);
+            section->length = TICKS_PER_BEAT * 16;
+            section->trackEvents.insert(section->trackEvents.end(),
+                song.tracks.size(), vector<Event>());
+            section->tempo = 125;
+            section->meter = 4;
+
+            editCur.cursor = Cursor(&song, section);
+
+            undoStack.clear();
+            redoStack.clear();
+        } else if (ctrl) {
             auto deleteSection = editCur.cursor.section.lock();
             auto next = editCur.cursor.nextSection();
             if (!next)
