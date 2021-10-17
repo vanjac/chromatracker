@@ -381,10 +381,12 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_EQUALS:
         selectedOctave++;
+        selectedPitch += 12;
         cout << "Octave " <<selectedOctave<< "\n";
         break;
     case SDLK_MINUS:
         selectedOctave--;
+        selectedPitch -= 12;
         cout << "Octave " <<selectedOctave<< "\n";
         break;
     /* Playback */ 
