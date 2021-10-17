@@ -212,7 +212,16 @@ void App::main(const vector<string> args)
                         } else {
                             textPos = text.drawText("  ", textPos);
                         }
-                        textPos.x += 12;
+                        string specialStr = " ";
+                        switch (event.special) {
+                        case Event::Special::FadeOut:
+                            specialStr = "=";
+                            break;
+                        case Event::Special::Slide:
+                            specialStr = "/";
+                            break;
+                        }
+                        textPos = text.drawText(specialStr, textPos);
                         if (event.pitch != Event::NO_PITCH) {
                             textPos = text.drawText(pitchToString(event.pitch), textPos);
                         }
@@ -520,6 +529,14 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             doOperation(std::move(op));
         }
         break;
+    case SDLK_BACKQUOTE:
+        {
+            Event fadeEvent;
+            fadeEvent.special = Event::Special::FadeOut;
+            auto op = std::make_unique<edit::ops::WriteCell>(
+                editCur, overwrite ? cellSize : 1, fadeEvent);
+            doOperation(std::move(op));
+        }
     }
 }
 
