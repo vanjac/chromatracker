@@ -350,7 +350,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 bool isPlaying;
                 {
                     std::unique_lock playerLock(player.mu);
-                    player.queueJamEvent(jam);
+                    player.jam.queueJamEvent(jam);
                     isPlaying = (bool)player.cursor().section.lock();
                 }
                 if (record && pitch >= 0) {
@@ -615,7 +615,7 @@ void App::keyUp(const SDL_KeyboardEvent &e)
         bool isPlaying;
         {
             std::unique_lock playerLock(player.mu);
-            player.queueJamEvent(jam);
+            player.jam.queueJamEvent(jam);
             isPlaying = (bool)player.cursor().section.lock();
         }
         if (record && isPlaying && pitch >= 0) {

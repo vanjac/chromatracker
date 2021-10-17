@@ -18,6 +18,7 @@ add_executable(chromatracker
     event.cpp
     file/itloader.cpp
     glad/glad.c
+    play/jam.cpp
     play/sampleplay.cpp
     play/songplay.cpp
     play/trackplay.cpp
