@@ -1,6 +1,7 @@
 #include "app.h"
 #include "edit/songops.h"
 #include "file/itloader.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -329,13 +330,32 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     if (!e.repeat && !ctrl) {
         int pitch = pitchKeymap(e.keysym.scancode);
         int sample = sampleKeymap(e.keysym.scancode);
+        bool pick = e.keysym.sym == SDLK_RETURN;
         if (pitch >= 0) {
             selectedPitch = pitch + selectedOctave * OCTAVE;
         } else if (sample >= 0) {
             selectedSample = sample + (selectedSample / 10) * 10;
             cout << "Sample " <<(selectedSample + 1)<< "\n";
+        } else if (pick) {
+            pick = false;
+            if (auto sectionP = editCur.cursor.section.lock()) {
+                std::shared_lock sectionLock(sectionP->mu);
+                auto eventIt = editCur.findEvent();
+                if (eventIt != editCur.events().end()) {
+                    if (eventIt->pitch != Event::NO_PITCH) {
+                        selectedPitch = eventIt->pitch;
+                        pick = true;
+                    }
+                    if (auto sampleP = eventIt->sample.lock()) {
+                        std::shared_lock songLock(song.mu);
+                        selectedSample = std::find(song.samples.begin(),
+                            song.samples.end(), sampleP) - song.samples.begin();
+                        pick = true;
+                    }
+                }
+            }
         }
-        if (pitch >= 0 || sample >= 0) {
+        if (pitch >= 0 || sample >= 0 || pick) {
             play::JamEvent jam;
             {
                 std::unique_lock songLock(song.mu);
@@ -607,7 +627,7 @@ void App::keyUp(const SDL_KeyboardEvent &e)
         return;
     int pitch = pitchKeymap(e.keysym.scancode);
     int sampleI = sampleKeymap(e.keysym.scancode);
-    if (pitch >= 0 || sampleI >= 0) {
+    if (pitch >= 0 || sampleI >= 0 || e.keysym.sym == SDLK_RETURN) {
         play::JamEvent jam;
         jam.event.special = Event::Special::FadeOut;
         jam.event.time = calcTickDelay(e.timestamp);
