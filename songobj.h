@@ -1,13 +1,26 @@
 #pragma once
 #include <common.h>
 
+#include <atomic>
+
 namespace chromatracker {
+
+// ugly hack. initializes atomic bool to false and skips copying
+// TODO does this even need to be atomic?
+class DeletedFlag : public std::atomic<bool>
+{
+public:
+    DeletedFlag() : std::atomic<bool>(false) {}
+    DeletedFlag(const DeletedFlag &rhs) {} // don't copy
+    DeletedFlag & operator=(const DeletedFlag &rhs) { return *this; }
+    bool operator=(bool desired) {return std::atomic<bool>::operator=(desired);}
+};
 
 // SongObject must be referenced with shared_ptr, weak_ptr, or ObjWeakPtr
 class SongObject
 {
 public:
-    bool deleted {false};
+    DeletedFlag deleted;
 };
 
 // replacement for weak_ptr which automatically resets if the object is deleted

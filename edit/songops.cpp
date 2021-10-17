@@ -63,13 +63,10 @@ bool DeleteSection::doIt(Song *song)
         index = -1;
         return false; // don't delete the last section
     }
+    section->deleted = true;
     auto it = std::find(song->sections.begin(), song->sections.end(), section);
     index = it - song->sections.begin();
     song->sections.erase(it);
-    {
-        std::unique_lock sectionLock(section->mu);
-        section->deleted = true;
-    }
 
     // fix sections which point to the deleted section
     for (int i = 0; i < song->sections.size(); i++) {
@@ -92,15 +89,13 @@ void DeleteSection::undoIt(Song *song)
         return;
     std::unique_lock songLock(song->mu);
     song->sections.insert(song->sections.begin() + index, section);
-    {
-        std::unique_lock sectionLock(section->mu);
-        section->deleted = false;
-    }
 
     for (auto &link : prevLinks) {
         std::unique_lock linkLock(link->mu);
         link->next = section;
     }
+
+    section->deleted = false;
     prevLinks.clear();
 }
 
