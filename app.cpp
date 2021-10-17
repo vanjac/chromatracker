@@ -591,7 +591,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_BACKQUOTE:
-        {
+        if (record) {
             Event fadeEvent;
             fadeEvent.special = Event::Special::FadeOut;
             auto op = std::make_unique<edit::ops::WriteCell>(
