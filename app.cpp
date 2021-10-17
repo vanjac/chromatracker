@@ -505,7 +505,11 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         cellSize *= ctrl ? 3 : 2;
         break;
     case SDLK_LEFTBRACKET:
-        cellSize /= ctrl ? 3 : 2;
+        {
+            int factor = ctrl ? 3 : 2;
+            if (cellSize % factor == 0)
+                cellSize /= factor;
+        }
         break;
     /* Commands */
     case SDLK_m:
