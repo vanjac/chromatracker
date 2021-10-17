@@ -157,15 +157,27 @@ void App::main(const vector<string> args)
 
         {
             std::shared_lock songLock(song.mu);
+            int curMeter = Section::NO_METER;
             for (auto &section : song.sections) {
                 std::shared_lock sectionLock(section->mu);
+                if (section->meter != Section::NO_METER)
+                    curMeter = section->meter;
                 float sectionY = sectionPositions[section] + scroll;
                 float sectionYEnd = sectionY + section->length * timeScale;
                 if (sectionYEnd < 0 || sectionY >= winH)
                     continue;
 
                 glColor3f(1, 1, 1);
-                text.drawText(section->title, {0, sectionY - 20});
+                glm::ivec2 textPos {0, sectionY - 20};
+                textPos = text.drawText(section->title, textPos);
+                if (section->tempo != Section::NO_TEMPO) {
+                    textPos = text.drawText("  Tempo=", textPos);
+                    textPos = text.drawText(std::to_string(section->tempo), textPos);
+                }
+                if (section->meter != Section::NO_METER) {
+                    textPos = text.drawText("  Meter=", textPos);
+                    textPos = text.drawText(std::to_string(section->meter), textPos);
+                }
                 for (int t = 0; t < section->trackEvents.size(); t++) {
                     bool mute;
                     {
@@ -239,9 +251,18 @@ void App::main(const vector<string> args)
                 } // each track
                 
                 glEnable(GL_BLEND);
-                glColor4f(1, 1, 1, 0.4);
                 glBegin(GL_LINES);
+                ticks barLength = TICKS_PER_BEAT * curMeter;
                 for (ticks grid = 0; grid < section->length; grid += cellSize) {
+                    if (curMeter != Section::NO_METER
+                            && cellSize < barLength && grid % barLength == 0) {
+                        glColor4f(0.7, 0.7, 1, 0.7);
+                    } else if (cellSize < TICKS_PER_BEAT
+                            && grid % TICKS_PER_BEAT == 0) {
+                        glColor4f(1, 1, 1, 0.7);
+                    } else {
+                        glColor4f(1, 1, 1, 0.4);
+                    }
                     float y = grid * timeScale + sectionY;
                     glVertex2f(0, y);
                     glVertex2f(winW, y);
