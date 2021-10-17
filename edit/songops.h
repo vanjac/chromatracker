@@ -32,6 +32,17 @@ protected:
     Event event;
 };
 
+class AddSection : public SongOp
+{
+public:
+    AddSection(int index, ticks size);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    int index;
+    const shared_ptr<Section> section;
+};
+
 class DeleteSection : public SongOp
 {
 public:

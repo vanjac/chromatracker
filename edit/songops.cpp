@@ -52,6 +52,53 @@ void WriteCell::undoIt(Song *song)
     ClearCell::undoIt(song);
 }
 
+AddSection::AddSection(int index, ticks length)
+    : index(index)
+    , section(new Section)
+{
+    section->length = length;
+}
+
+bool AddSection::doIt(Song *song)
+{
+    std::unique_lock songLock(song->mu);
+
+    song->sections.insert(song->sections.begin() + index, section);
+
+    std::unique_lock sectionLock(section->mu);
+    section->trackEvents.clear();
+    section->trackEvents.insert(section->trackEvents.end(),
+                                song->tracks.size(), vector<Event>());
+    
+    if (index != song->sections.size() - 1) {
+        section->next = song->sections[index + 1];
+    }
+    if (index != 0) {
+        if (song->sections.front()->next.lock() == section->next.lock())
+            song->sections.front()->next = section;
+    }
+
+    section->deleted = false;
+    return true;
+}
+
+void AddSection::undoIt(Song *song)
+{
+    std::unique_lock songLock(song->mu);
+    section->deleted = true;
+    song->sections.erase(song->sections.begin() + index);
+
+    if (index != 0) {
+        if (song->sections.front()->next.lock() == section) {
+            if (index != song->sections.size()) {
+                song->sections.front()->next = song->sections[index];
+            } else {
+                song->sections.front()->next.reset();
+            }
+        }
+    }
+}
+
 DeleteSection::DeleteSection(shared_ptr<Section> section)
     : section(section)
 {}

@@ -60,7 +60,7 @@ void App::main(const vector<string> args)
     // don't need locks at this moment
     player.setCursor(Cursor(&song));
     if (!song.sections.empty()) {
-        editCur.cursor = Cursor(&song, song.sections[0]);
+        editCur.cursor = Cursor(&song, song.sections.front());
     } else {
         editCur.cursor = Cursor(&song);
     }
@@ -123,6 +123,16 @@ void App::main(const vector<string> args)
                 sectionPositions[section] = y;
                 std::shared_lock sectionLock(section->mu);
                 y += section->length * timeScale + 48;
+            }
+        }
+
+        if (!editCur.cursor.section.lock()) {
+            // could happen after eg. undoing adding a section
+            std::unique_lock lock(song.mu);
+            if (!song.sections.empty()) {
+                editCur.cursor.section = song.sections.front();
+                editCur.cursor.time = 0;
+                // don't set movedEditCur
             }
         }
 
@@ -423,7 +433,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         if (ctrl) {
             std::unique_lock songLock(song.mu);
             if (!song.sections.empty()) {
-                editCur.cursor.section = song.sections[0];
+                editCur.cursor.section = song.sections.front();
             }
         }
         editCur.cursor.time = 0;
@@ -487,6 +497,32 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 track->mute = !track->mute;
                 cout << "Track " <<editCur.track<<
                     " mute " <<track->mute<< "\n";
+            }
+        }
+        break;
+    case SDLK_INSERT:
+        if (ctrl && !e.repeat) {
+            if (auto sectionP = editCur.cursor.section.lock()) {
+                auto it = editCur.cursor.findSection();
+                int index;
+                {
+                    std::shared_lock songLock(song.mu);
+                    index = it - song.sections.begin() + 1;
+                }
+                ticks length;
+                {
+                    std::shared_lock sectionLock(sectionP->mu);
+                    length = sectionP->length;
+                }
+                auto op = std::make_unique<edit::ops::AddSection>(
+                    index, length);
+                doOperation(std::move(op));
+                {
+                    std::shared_lock songLock(song.mu);
+                    editCur.cursor.section = song.sections[index];
+                }
+                editCur.cursor.time = 0;
+                movedEditCur = true;
             }
         }
         break;
