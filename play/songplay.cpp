@@ -1,4 +1,5 @@
 #include "songplay.h"
+#include <algorithm>
 
 namespace chromatracker::play {
 
@@ -7,6 +8,8 @@ const int NUM_JAM_TRACKS = 8;
 SongPlay::SongPlay()
 {
     jamTracks.resize(NUM_JAM_TRACKS);
+    jamTrackTouches.resize(NUM_JAM_TRACKS);
+    std::fill(jamTrackTouches.begin(), jamTrackTouches.end(), -1);
 }
 
 Cursor SongPlay::cursor()
@@ -36,7 +39,8 @@ void SongPlay::stop()
     for (auto &track : jamTracks) {
         track.stop();
     }
-    jamTouches.clear();
+    jamTouchTracks.clear();
+    std::fill(jamTrackTouches.begin(), jamTrackTouches.end(), -1);
 }
 
 void SongPlay::fadeAll()
@@ -62,24 +66,21 @@ void SongPlay::queueJamEvent(const JamEvent &jam)
 void SongPlay::processJamEvent(const JamEvent &jam)
 {
     int trackIndex;
-    if (jamTouches.count(jam.touchId)) {
-        trackIndex = jamTouches[jam.touchId];
+    if (jamTouchTracks.count(jam.touchId)) {
+        trackIndex = jamTouchTracks[jam.touchId];
     } else {
-        trackIndex = -1;
-        for (int i = 0; i < jamTracks.size(); i++) {
-            if (!jamTracks[i].currentSample()
-                || jamTracks[i].currentSpecial() == Event::Special::FadeOut) {
-                trackIndex = i;
-                break;
-            }
-        }
-        if (trackIndex == -1)
+        auto it = std::find(jamTrackTouches.begin(), jamTrackTouches.end(), -1);
+        if (it == jamTrackTouches.end())
             return; // limit number of touches at once
-        jamTouches[jam.touchId] = trackIndex;
+        trackIndex = it - jamTrackTouches.begin();
+        jamTouchTracks[jam.touchId] = trackIndex;
+        jamTrackTouches[trackIndex] = jam.touchId;
+        //cout << "assign " <<jam.touchId<< " to track " <<trackIndex<< "\n";
     }
     jamTracks[trackIndex].processEvent(jam.event);
     if (jam.event.special == Event::Special::FadeOut) {
-        jamTouches.erase(jam.touchId);
+        jamTouchTracks.erase(jam.touchId);
+        jamTrackTouches[trackIndex] = -1;
     }
 }
 

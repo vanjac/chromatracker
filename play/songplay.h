@@ -45,7 +45,8 @@ private:
     vector<TrackPlay> tracks;
 
     vector<TrackPlay> jamTracks;
-    std::unordered_map<int, int8_t> jamTouches;
+    std::unordered_map<int, int8_t> jamTouchTracks;
+    vector<int> jamTrackTouches;
     std::array<JamEvent, 32> jamEvents; // circular buffer
     int jamEventI {0}, numJamEvents {0};
 
