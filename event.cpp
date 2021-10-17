@@ -7,7 +7,7 @@ const float Event::NO_VELOCITY = -1.0f;
 
 bool Event::empty()
 {
-    return sample.expired() && pitch == NO_PITCH && velocity == NO_VELOCITY
+    return !sample.lock() && pitch == NO_PITCH && velocity == NO_VELOCITY
         && special == Special::None;
 }
 

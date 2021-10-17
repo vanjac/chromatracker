@@ -33,7 +33,7 @@ struct Section : public SongObject
 
     // section to play after this one
     // typically the next in the sequence, but may be altered to loop/skip/stop
-    weak_ptr<Section> next;
+    ObjWeakPtr<Section> next;
 };
 
 struct Song

@@ -19,7 +19,7 @@ struct Event
     };
 
     ticks time {0};
-    weak_ptr<Sample> sample;
+    ObjWeakPtr<Sample> sample;
     int pitch {NO_PITCH};
     float velocity {NO_VELOCITY};
     Special special {Special::None};

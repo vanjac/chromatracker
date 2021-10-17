@@ -16,7 +16,7 @@ public:
     bool operator=(bool desired) {return std::atomic<bool>::operator=(desired);}
 };
 
-// SongObject must be referenced with shared_ptr, weak_ptr, or ObjWeakPtr
+// SongObject must be referenced with shared_ptr or ObjWeakPtr
 class SongObject
 {
 public:
@@ -33,8 +33,6 @@ public:
     template<typename Y>
     ObjWeakPtr(const ObjWeakPtr<Y> &r) : ptr(r.ptr) {}
     template<typename Y>
-    ObjWeakPtr(const weak_ptr<Y> &r) : ptr(r) {}
-    template<typename Y>
     ObjWeakPtr(const shared_ptr<Y> &r) : ptr(r) {}
 
     ObjWeakPtr & operator=(const ObjWeakPtr &r)
@@ -46,12 +44,6 @@ public:
     ObjWeakPtr & operator=(const ObjWeakPtr<Y> &r)
     {
         ptr = r.ptr;
-        return *this;
-    }
-    template<typename Y>
-    ObjWeakPtr & operator=(const weak_ptr<Y> &r)
-    {
-        ptr = r;
         return *this;
     }
     template<typename Y>

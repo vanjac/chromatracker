@@ -342,7 +342,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 if (selectedSample >= 0 && selectedSample < song.samples.size())
                     jam.event.sample = song.samples[selectedSample];
             }
-            if (!jam.event.sample.expired()) {
+            if (jam.event.sample.lock()) {
                 jam.event.pitch = selectedPitch;
                 jam.event.velocity = 1;
                 jam.event.time = calcTickDelay(e.timestamp);
