@@ -551,6 +551,8 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_F4:
         if (e.repeat) break;
         followPlayback = !followPlayback;
+        if (!followPlayback)
+            snapToGrid();
         break;
     case SDLK_F7:
         if (e.repeat) break;
