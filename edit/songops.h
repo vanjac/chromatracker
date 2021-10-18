@@ -8,6 +8,17 @@
 
 namespace chromatracker::edit::ops {
 
+class SetTrackMute : public SongOp
+{
+public:
+    SetTrackMute(int track, bool mute);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    const int track;
+    bool mute;
+};
+
 class ClearCell : public SongOp
 {
 public:

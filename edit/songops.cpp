@@ -3,6 +3,28 @@
 
 namespace chromatracker::edit::ops {
 
+SetTrackMute::SetTrackMute(int track, bool mute)
+    : track(track)
+    , mute(mute)
+{}
+
+bool SetTrackMute::doIt(Song *song)
+{
+    shared_ptr<Track> t;
+    {
+        std::unique_lock songLock(song->mu);
+        t = song->tracks[track];
+    }
+    std::unique_lock trackLock(t->mu);
+    std::swap(mute, t->mute);
+    return mute != t->mute;
+}
+
+void SetTrackMute::undoIt(Song *song)
+{
+    doIt(song);
+}
+
 ClearCell::ClearCell(TrackCursor tcur, ticks size)
     : tcur(tcur)
     , size(size)

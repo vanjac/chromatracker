@@ -664,14 +664,22 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     /* Commands */
     case SDLK_m:
         if (!e.repeat && ctrl) {
-            // NOT undoable!
-            std::unique_lock songLock(song.mu);
-            if (editCur.track >= 0 && editCur.track < song.tracks.size()) {
-                auto track = song.tracks[editCur.track];
-                std::unique_lock trackLock(track->mu);
-                track->mute = !track->mute;
-                cout << "Track " <<editCur.track<<
-                    " mute " <<track->mute<< "\n";
+            shared_ptr<Track> track;
+            {
+                std::shared_lock songLock(song.mu);
+                if (editCur.track >= 0 && editCur.track < song.tracks.size()) {
+                    track = song.tracks[editCur.track];
+                }
+            }
+            if (track) {
+                bool muted;
+                {
+                    std::shared_lock trackLock(track->mu);
+                    muted = track->mute;
+                }
+                auto op = std::make_unique<edit::ops::SetTrackMute>(
+                    editCur.track, !muted);
+                doOperation(std::move(op));
             }
         }
         break;
