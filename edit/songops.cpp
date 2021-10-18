@@ -3,6 +3,22 @@
 
 namespace chromatracker::edit::ops {
 
+SetSongVolume::SetSongVolume(float volume)
+    : volume(volume)
+{}
+
+bool SetSongVolume::doIt(Song *song)
+{
+    std::unique_lock lock(song->mu);
+    std::swap(volume, song->volume);
+    return volume != song->volume;
+}
+
+void SetSongVolume::undoIt(Song *song)
+{
+    doIt(song);
+}
+
 SetTrackMute::SetTrackMute(int track, bool mute)
     : track(track)
     , mute(mute)

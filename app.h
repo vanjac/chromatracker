@@ -2,6 +2,7 @@
 #include <common.h>
 
 #include "edit/operation.h"
+#include "edit/songops.h"
 #include "play/songplay.h"
 #include "ui/layout.h"
 #include "ui/text.h"
@@ -70,6 +71,8 @@ private:
 
     vector<unique_ptr<edit::SongOp>> undoStack;
     vector<unique_ptr<edit::SongOp>> redoStack;
+
+    unique_ptr<edit::ops::SetSongVolume> songVolumeOp;
 
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)

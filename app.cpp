@@ -1,5 +1,4 @@
 #include "app.h"
-#include "edit/songops.h"
 #include "file/itloader.h"
 #include <algorithm>
 #include <cmath>
@@ -110,12 +109,24 @@ void App::main(const vector<string> args)
             case SDL_MOUSEMOTION:
                 if (event.motion.state & SDL_BUTTON_LMASK != 0
                         && event.motion.x >= 0 && event.motion.x < winW) {
-                    // TODO replace with operation
-                    std::unique_lock songLock(song.mu);
-                    song.volume = velocityToAmplitude(
+                    float volume = velocityToAmplitude(
                         (float)event.motion.x / winW);
+                    if (!songVolumeOp) {
+                        songVolumeOp = std::make_unique
+                            <edit::ops::SetSongVolume>(volume);
+                    } else {
+                        songVolumeOp->undoIt(&song);
+                        *songVolumeOp = edit::ops::SetSongVolume(volume);
+                    }
+                    songVolumeOp->doIt(&song); // preview before push undo stack
                 }
                 break;
+            case SDL_MOUSEBUTTONUP:
+                if (songVolumeOp) {
+                    songVolumeOp->undoIt(&song);
+                    doOperation(std::move(songVolumeOp));
+                    // songVolumeOp will be null after move
+                }
             }
         }
 

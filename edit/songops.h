@@ -8,6 +8,16 @@
 
 namespace chromatracker::edit::ops {
 
+class SetSongVolume : public SongOp
+{
+public:
+    SetSongVolume(float volume);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    float volume;
+};
+
 class SetTrackMute : public SongOp
 {
 public:
