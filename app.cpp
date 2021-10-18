@@ -15,6 +15,9 @@ namespace chromatracker {
 const float CELL_HEIGHT = 32;
 const float TRACK_SPACING = 80;
 const float TRACK_WIDTH = 70;
+const float PIANO_KEY_WIDTH = 40;
+const int WHITE_KEYS[] = {0, 2, 4, 5, 7, 9, 11};
+const int BLACK_KEYS[] = {1, 3, -1, 6, 8, 10, -1};
 
 void cAudioCallback(void * userdata, uint8_t *stream, int len);
 
@@ -71,7 +74,6 @@ void App::main(const vector<string> args)
 
     SDL_PauseAudioDevice(audioDevice, 0); // audio devices start paused
 
-    glClearColor(0, 0, 0, 1);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     text.initGL();
 
@@ -134,11 +136,13 @@ void App::main(const vector<string> args)
             }
         }
 
+        glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT);
 
         glEnable(GL_SCISSOR_TEST);
-        drawEvents({{0, 0}, {winW - 200, winH}}, playCur);
-        drawSampleList({{winW - 200, 0}, {winW, winH}});
+        drawEvents({{0, 0}, {winW - 180, winH - 100}}, playCur);
+        drawSampleList({{winW - 180, 0}, {winW, winH}});
+        drawPiano({{0, winH - 100}, {winW - 180, winH}});
         glDisable(GL_SCISSOR_TEST);
 
         SDL_GL_SwapWindow(window);
@@ -357,6 +361,63 @@ void App::drawSampleList(ui::Rect rect)
     }
 }
 
+void App::drawPiano(ui::Rect rect)
+{
+    scissorRect(rect);
+
+    int numWhiteKeys = rect.width() / PIANO_KEY_WIDTH + 1;
+    for (int i = 0; i < numWhiteKeys; i++) {
+        int key = WHITE_KEYS[i % 7];
+        int octave = selectedOctave + (i / 7);
+        int pitch = key + octave * OCTAVE;
+
+        float x = rect.min.x + i * PIANO_KEY_WIDTH;
+        float xEnd = x + PIANO_KEY_WIDTH;
+
+        if (pitch == selectedPitch)
+            glColor3f(0.7, 1.0, 0.7);
+        else
+            glColor3f(1, 1, 1);
+        glBegin(GL_QUADS);
+        glVertex2f(x, rect.min.y);
+        glVertex2f(x, rect.max.y);
+        glVertex2f(xEnd, rect.max.y);
+        glVertex2f(xEnd, rect.min.y);
+        glEnd();
+
+        glColor3f(0, 0, 0);
+        glBegin(GL_LINES);
+        glVertex2f(xEnd, rect.min.y);
+        glVertex2f(xEnd, rect.max.y);
+        glEnd();
+
+        if (key == 0) {
+            text.drawText(std::to_string(octave), {x + 8, rect.max.y - 24});
+        }
+    }
+
+    for (int i = 0; i < numWhiteKeys; i++) {
+        int key = BLACK_KEYS[i % 7];
+        if (key < 0)
+            continue;
+        int pitch = key + (selectedOctave + (i / 7)) * OCTAVE;
+
+        float x = rect.min.x + (i + 0.75) * PIANO_KEY_WIDTH;
+        float xEnd = x + PIANO_KEY_WIDTH / 2;
+        float yEnd = rect.min.y + rect.height() * 0.6;
+        if (pitch == selectedPitch)
+            glColor3f(0, 0.7, 0);
+        else
+            glColor3f(0, 0, 0);
+        glBegin(GL_QUADS);
+        glVertex2f(x, rect.min.y);
+        glVertex2f(x, yEnd);
+        glVertex2f(xEnd, yEnd);
+        glVertex2f(xEnd, rect.min.y);
+        glEnd();
+    }
+}
+
 void App::keyDown(const SDL_KeyboardEvent &e)
 {
     bool ctrl = e.keysym.mod & KMOD_CTRL;
@@ -377,6 +438,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 if (eventIt != editCur.events().end()) {
                     if (eventIt->pitch != Event::NO_PITCH) {
                         selectedPitch = eventIt->pitch;
+                        selectedOctave = selectedPitch / OCTAVE;
                         pick = true;
                     }
                     if (auto sampleP = eventIt->sample.lock()) {
@@ -472,12 +534,10 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_EQUALS:
         selectedOctave++;
         selectedPitch += 12;
-        cout << "Octave " <<selectedOctave<< "\n";
         break;
     case SDLK_MINUS:
         selectedOctave--;
         selectedPitch -= 12;
-        cout << "Octave " <<selectedOctave<< "\n";
         break;
     /* Playback */ 
     case SDLK_SPACE:

@@ -30,6 +30,7 @@ private:
 
     void drawEvents(ui::Rect rect, Cursor playCur);
     void drawSampleList(ui::Rect rect);
+    void drawPiano(ui::Rect rect);
 
     void keyDown(const SDL_KeyboardEvent &e);
     void keyUp(const SDL_KeyboardEvent &e);
