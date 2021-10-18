@@ -137,7 +137,8 @@ void App::main(const vector<string> args)
         glClear(GL_COLOR_BUFFER_BIT);
 
         glEnable(GL_SCISSOR_TEST);
-        drawEvents({{0, 0}, {winW, winH}}, playCur);
+        drawEvents({{0, 0}, {winW - 200, winH}}, playCur);
+        drawSampleList({{winW - 200, 0}, {winW, winH}});
         glDisable(GL_SCISSOR_TEST);
 
         SDL_GL_SwapWindow(window);
@@ -341,6 +342,21 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
     }
 }
 
+void App::drawSampleList(ui::Rect rect)
+{
+    scissorRect(rect);
+    std::shared_lock songLock(song.mu);
+    for (int i = 0; i < song.samples.size(); i++) {
+        if (i == selectedSample)
+            glColor3f(0.7, 1.0, 0.7);
+        else
+            glColor3f(1, 1, 1);
+        glm::vec2 textPos = rect.min;
+        textPos.y += i * 20;
+        text.drawText(song.samples[i]->name, textPos);
+    }
+}
+
 void App::keyDown(const SDL_KeyboardEvent &e)
 {
     bool ctrl = e.keysym.mod & KMOD_CTRL;
@@ -353,7 +369,6 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             selectedPitch = pitch + selectedOctave * OCTAVE;
         } else if (sample >= 0) {
             selectedSample = sample + (selectedSample / 10) * 10;
-            cout << "Sample " <<(selectedSample + 1)<< "\n";
         } else if (pick) {
             pick = false;
             if (auto sectionP = editCur.cursor.section.lock()) {
@@ -444,19 +459,15 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_KP_PLUS:
         selectedSample++;
-        cout << "Sample " <<(selectedSample + 1)<< "\n";
         break;
     case SDLK_KP_MINUS:
         selectedSample--;
-        cout << "Sample " <<(selectedSample + 1)<< "\n";
         break;
     case SDLK_KP_MULTIPLY:
         selectedSample += 10;
-        cout << "Sample " <<(selectedSample + 1)<< "\n";
         break;
     case SDLK_KP_DIVIDE:
         selectedSample -= 10;
-        cout << "Sample " <<(selectedSample + 1)<< "\n";
         break;
     case SDLK_EQUALS:
         selectedOctave++;

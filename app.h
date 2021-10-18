@@ -29,6 +29,7 @@ private:
     void scissorRect(ui::Rect rect);
 
     void drawEvents(ui::Rect rect, Cursor playCur);
+    void drawSampleList(ui::Rect rect);
 
     void keyDown(const SDL_KeyboardEvent &e);
     void keyUp(const SDL_KeyboardEvent &e);
