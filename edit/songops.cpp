@@ -12,7 +12,7 @@ bool SetTrackMute::doIt(Song *song)
 {
     shared_ptr<Track> t;
     {
-        std::unique_lock songLock(song->mu);
+        std::shared_lock songLock(song->mu);
         t = song->tracks[track];
     }
     std::unique_lock trackLock(t->mu);

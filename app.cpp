@@ -110,6 +110,7 @@ void App::main(const vector<string> args)
             case SDL_MOUSEMOTION:
                 if (event.motion.state & SDL_BUTTON_LMASK != 0
                         && event.motion.x >= 0 && event.motion.x < winW) {
+                    // TODO replace with operation
                     std::unique_lock songLock(song.mu);
                     song.volume = velocityToAmplitude(
                         (float)event.motion.x / winW);
@@ -120,7 +121,7 @@ void App::main(const vector<string> args)
 
         if (!editCur.cursor.section.lock()) {
             // could happen after eg. undoing adding a section
-            std::unique_lock lock(song.mu);
+            std::shared_lock lock(song.mu);
             if (!song.sections.empty()) {
                 editCur.cursor.section = song.sections.front();
                 editCur.cursor.time = 0;
@@ -472,7 +473,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         if (pitch >= 0 || sample >= 0 || pick) {
             play::JamEvent jam;
             {
-                std::unique_lock songLock(song.mu);
+                std::shared_lock songLock(song.mu);
                 if (selectedSample >= 0 && selectedSample < song.samples.size())
                     jam.event.sample = song.samples[selectedSample];
             }
