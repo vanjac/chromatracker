@@ -159,7 +159,8 @@ void App::main(const vector<string> args)
 
         glEnable(GL_SCISSOR_TEST);
         drawInfo({{0, 0}, {winW - 180, 20}});
-        drawEvents({{0, 20}, {winW - 180, winH - 100}}, playCur);
+        drawTracks({{0, 20}, {winW - 180, 40}});
+        drawEvents({{0, 40}, {winW - 180, winH - 100}}, playCur);
         drawSampleList({{winW - 180, 0}, {winW, winH}});
         drawPiano({{0, winH - 100}, {winW - 180, winH}});
         glDisable(GL_SCISSOR_TEST);
@@ -218,6 +219,39 @@ void App::drawInfo(ui::Rect rect)
     drawRect({{volumeX, rect.min.y}, {rect.max.x, rect.max.y}});
     glColor3f(1, 1, 1);
     text.drawText("Volume", textPos);
+}
+
+void App::drawTracks(ui::Rect rect)
+{
+    scissorRect(rect);
+
+    std::shared_lock songLock(song.mu);
+    for (int i = 0; i < song.tracks.size(); i++) {
+        auto track = song.tracks[i];
+        std::shared_lock trackLock(track->mu);
+
+        float x = rect.min.x + TRACK_SPACING * i;
+        float xEnd = x + TRACK_WIDTH;
+        float xCenter = (x + xEnd) / 2;
+        glColor3f(0.2, 0.2, 0.2);
+        drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
+        if (!track->mute) {
+            float volumeX = x + amplitudeToVelocity(track->volume) * (xEnd - x);
+            float panX = xCenter + track->pan * (xEnd - x) / 2;
+            glColor3f(0, 0.7, 0);
+            drawRect({{x, rect.min.y}, {volumeX, rect.center().y}});
+            drawRect({{xCenter, rect.center().y}, {panX, rect.max.y}});
+
+            glColor3f(1, 1, 1);
+            glBegin(GL_LINES);
+            glVertex2f(xCenter, rect.center().y);
+            glVertex2f(xCenter, rect.max.y);
+            glEnd();
+        }
+
+        glColor3f(1, 1, 1);
+        text.drawText(std::to_string(i + 1), {x + 20, rect.min.y});
+    }
 }
 
 void App::drawEvents(ui::Rect rect, Cursor playCur)

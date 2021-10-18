@@ -31,6 +31,7 @@ private:
     void scissorRect(ui::Rect rect);
 
     void drawInfo(ui::Rect rect);
+    void drawTracks(ui::Rect rect);
     void drawEvents(ui::Rect rect, Cursor playCur);
     void drawSampleList(ui::Rect rect);
     void drawPiano(ui::Rect rect);
