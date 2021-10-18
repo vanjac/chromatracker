@@ -138,7 +138,8 @@ void App::main(const vector<string> args)
         glClear(GL_COLOR_BUFFER_BIT);
 
         glEnable(GL_SCISSOR_TEST);
-        drawEvents({{0, 0}, {winW - 180, winH - 100}}, playCur);
+        drawInfo({{0, 0}, {winW - 180, 20}});
+        drawEvents({{0, 20}, {winW - 180, winH - 100}}, playCur);
         drawSampleList({{winW - 180, 0}, {winW, winH}});
         drawPiano({{0, winH - 100}, {winW - 180, winH}});
         glDisable(GL_SCISSOR_TEST);
@@ -162,6 +163,23 @@ void App::resizeWindow(int w, int h)
 void App::scissorRect(ui::Rect rect)
 {
     glScissor(rect.min.x, winH - rect.max.y, rect.width(), rect.height());
+}
+
+void App::drawInfo(ui::Rect rect)
+{
+    scissorRect(rect);
+
+    glColor3f(1, 1, 1);
+    glm::vec2 textPos = rect.min;
+    textPos = text.drawText("Record: ", textPos);
+    textPos = text.drawText(std::to_string(record), textPos);
+    textPos = text.drawText(" Follow: ", textPos);
+    textPos = text.drawText(std::to_string(followPlayback), textPos);
+    textPos = text.drawText(" Overwrite: ", textPos);
+    textPos = text.drawText(std::to_string(overwrite), textPos);
+    textPos = text.drawText("  Volume: ", textPos);
+    std::shared_lock songLock(song.mu);
+    textPos = text.drawText(std::to_string(song.volume), textPos);
 }
 
 void App::drawEvents(ui::Rect rect, Cursor playCur)
@@ -505,17 +523,14 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_F1:
         if (e.repeat) break;
         record = !record;
-        cout << "Record " <<record<< "\n";
         break;
     case SDLK_F4:
         if (e.repeat) break;
         followPlayback = !followPlayback;
-        cout << "Follow " <<followPlayback<< "\n";
         break;
     case SDLK_F7:
         if (e.repeat) break;
         overwrite = !overwrite;
-        cout << "Overwrite " <<overwrite<< "\n";
         break;
     case SDLK_KP_PLUS:
         {
