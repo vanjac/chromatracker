@@ -107,6 +107,14 @@ void App::main(const vector<string> args)
                     }
                 }
                 break;
+            case SDL_MOUSEMOTION:
+                if (event.motion.state & SDL_BUTTON_LMASK != 0
+                        && event.motion.x >= 0 && event.motion.x < winW) {
+                    std::unique_lock songLock(song.mu);
+                    song.volume = velocityToAmplitude(
+                        (float)event.motion.x / winW);
+                }
+                break;
             }
         }
 
@@ -177,9 +185,25 @@ void App::drawInfo(ui::Rect rect)
     textPos = text.drawText(std::to_string(followPlayback), textPos);
     textPos = text.drawText(" Overwrite: ", textPos);
     textPos = text.drawText(std::to_string(overwrite), textPos);
-    textPos = text.drawText("  Volume: ", textPos);
+    textPos = text.drawText("  ", textPos);
+
     std::shared_lock songLock(song.mu);
-    textPos = text.drawText(std::to_string(song.volume), textPos);
+    float volumeX = textPos.x
+        + amplitudeToVelocity(song.volume) * (rect.max.x - textPos.x);
+    glBegin(GL_QUADS);
+    glColor3f(0, 0.7, 0);
+    glVertex2f(textPos.x, rect.min.y);
+    glVertex2f(textPos.x, rect.max.y);
+    glVertex2f(volumeX, rect.max.y);
+    glVertex2f(volumeX, rect.min.y);
+    glColor3f(0.2, 0.2, 0.2);
+    glVertex2f(volumeX, rect.min.y);
+    glVertex2f(volumeX, rect.max.y);
+    glVertex2f(rect.max.x, rect.max.y);
+    glVertex2f(rect.max.x, rect.min.y);
+    glEnd();
+    glColor3f(1, 1, 1);
+    text.drawText("Volume", textPos);
 }
 
 void App::drawEvents(ui::Rect rect, Cursor playCur)
