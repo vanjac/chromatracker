@@ -59,8 +59,6 @@ void App::main(const vector<string> args)
     file::ITLoader loader(stream);
     loader.loadSong(&song);
 
-    cout <<song.tracks.size()<< " tracks\n";
-
     // don't need locks at this moment
     player.setCursor(Cursor(&song));
     if (!song.sections.empty()) {
@@ -520,24 +518,41 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         cout << "Overwrite " <<overwrite<< "\n";
         break;
     case SDLK_KP_PLUS:
-        selectedSample++;
+        {
+            std::shared_lock songLock(song.mu);
+            selectedSample++;
+            if (selectedSample >= song.samples.size())
+                selectedSample = song.samples.size() - 1;
+        }
         break;
     case SDLK_KP_MINUS:
         selectedSample--;
+        if (selectedSample < 0)
+            selectedSample = 0;
         break;
     case SDLK_KP_MULTIPLY:
-        selectedSample += 10;
+        {
+            std::shared_lock songLock(song.mu);
+            if (selectedSample < song.samples.size() - 10)
+                selectedSample += 10;
+        }
         break;
     case SDLK_KP_DIVIDE:
         selectedSample -= 10;
+        if (selectedSample < 0)
+            selectedSample = 0;
         break;
     case SDLK_EQUALS:
-        selectedOctave++;
-        selectedPitch += 12;
+        if (selectedOctave < 9) {
+            selectedOctave++;
+            selectedPitch += 12;
+        }
         break;
     case SDLK_MINUS:
-        selectedOctave--;
-        selectedPitch -= 12;
+        if (selectedOctave > 0) {
+            selectedOctave--;
+            selectedPitch -= 12;
+        }
         break;
     /* Playback */ 
     case SDLK_SPACE:
@@ -561,7 +576,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     /* Navigation */
     case SDLK_HOME:
         if (ctrl) {
-            std::unique_lock songLock(song.mu);
+            std::shared_lock songLock(song.mu);
             if (!song.sections.empty()) {
                 editCur.cursor.section = song.sections.front();
             }
@@ -590,11 +605,15 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_RIGHT:
-        if (ctrl) {
-            std::unique_lock songLock(song.mu);
-            editCur.track = song.tracks.size() - 1;
-        } else {
-            editCur.track++;
+        {
+            std::shared_lock songLock(song.mu);
+            if (ctrl) {
+                editCur.track = song.tracks.size() - 1;
+            } else {
+                editCur.track++;
+                if (editCur.track >= song.tracks.size())
+                    editCur.track = song.tracks.size() - 1;
+            }
         }
         break;
     case SDLK_LEFT:
@@ -602,6 +621,8 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             editCur.track = 0;
         } else {
             editCur.track--;
+            if (editCur.track < 0)
+                editCur.track = 0;
         }
         break;
     case SDLK_DOWN:
