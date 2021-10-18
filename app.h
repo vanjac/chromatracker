@@ -26,6 +26,7 @@ public:
 
 private:
     void resizeWindow(int w, int h);
+    void drawRect(ui::Rect rect);
     void scissorRect(ui::Rect rect);
 
     void drawInfo(ui::Rect rect);

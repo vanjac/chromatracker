@@ -168,6 +168,16 @@ void App::resizeWindow(int w, int h)
     glLoadIdentity();
 }
 
+void App::drawRect(ui::Rect rect)
+{
+    glBegin(GL_QUADS);
+    glVertex2f(rect.min.x, rect.min.y);
+    glVertex2f(rect.min.x, rect.max.y);
+    glVertex2f(rect.max.x, rect.max.y);
+    glVertex2f(rect.max.x, rect.min.y);
+    glEnd();
+}
+
 void App::scissorRect(ui::Rect rect)
 {
     glScissor(rect.min.x, winH - rect.max.y, rect.width(), rect.height());
@@ -190,18 +200,10 @@ void App::drawInfo(ui::Rect rect)
     std::shared_lock songLock(song.mu);
     float volumeX = textPos.x
         + amplitudeToVelocity(song.volume) * (rect.max.x - textPos.x);
-    glBegin(GL_QUADS);
     glColor3f(0, 0.7, 0);
-    glVertex2f(textPos.x, rect.min.y);
-    glVertex2f(textPos.x, rect.max.y);
-    glVertex2f(volumeX, rect.max.y);
-    glVertex2f(volumeX, rect.min.y);
+    drawRect({{textPos.x, rect.min.y}, {volumeX, rect.max.y}});
     glColor3f(0.2, 0.2, 0.2);
-    glVertex2f(volumeX, rect.min.y);
-    glVertex2f(volumeX, rect.max.y);
-    glVertex2f(rect.max.x, rect.max.y);
-    glVertex2f(rect.max.x, rect.min.y);
-    glEnd();
+    drawRect({{volumeX, rect.min.y}, {rect.max.x, rect.max.y}});
     glColor3f(1, 1, 1);
     text.drawText("Volume", textPos);
 }
@@ -292,12 +294,7 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
                     else
                         color *= curVelocity; // TODO gamma correct
                     glColor3f(color.r, color.g, color.b);
-                    glBegin(GL_QUADS);
-                    glVertex2f(x, y);
-                    glVertex2f(x, yEnd);
-                    glVertex2f(xEnd, yEnd);
-                    glVertex2f(xEnd, y);
-                    glEnd();
+                    drawRect({{x, y}, {xEnd, yEnd}});
                     glColor3f(1, 1, 1);
                     glBegin(GL_LINES);
                     glVertex2f(x, y);
@@ -361,17 +358,10 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
         glEnd();
 
         float cellX = editCur.track * TRACK_SPACING + rect.min.x;
-        float cellXEnd = cellX + TRACK_WIDTH;
         float cellY = rect.center().y;
-        float cellYEnd = cellY + CELL_HEIGHT;
         glColor4f(1, 1, 1, 0.5);
         glEnable(GL_BLEND);
-        glBegin(GL_QUADS);
-        glVertex2f(cellX, cellY);
-        glVertex2f(cellX, cellYEnd);
-        glVertex2f(cellXEnd, cellYEnd);
-        glVertex2f(cellXEnd, cellY);
-        glEnd();
+        drawRect({{cellX, cellY}, {cellX + TRACK_WIDTH, cellY + CELL_HEIGHT}});
         glDisable(GL_BLEND);
     }
 
@@ -418,12 +408,7 @@ void App::drawPiano(ui::Rect rect)
             glColor3f(0.7, 1.0, 0.7);
         else
             glColor3f(1, 1, 1);
-        glBegin(GL_QUADS);
-        glVertex2f(x, rect.min.y);
-        glVertex2f(x, rect.max.y);
-        glVertex2f(xEnd, rect.max.y);
-        glVertex2f(xEnd, rect.min.y);
-        glEnd();
+        drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
 
         glColor3f(0, 0, 0);
         glBegin(GL_LINES);
@@ -436,6 +421,7 @@ void App::drawPiano(ui::Rect rect)
         }
     }
 
+    float blackYEnd = rect.min.y + rect.height() * 0.6;
     for (int i = 0; i < numWhiteKeys; i++) {
         int key = BLACK_KEYS[i % 7];
         if (key < 0)
@@ -443,18 +429,11 @@ void App::drawPiano(ui::Rect rect)
         int pitch = key + (selectedOctave + (i / 7)) * OCTAVE;
 
         float x = rect.min.x + (i + 0.75) * PIANO_KEY_WIDTH;
-        float xEnd = x + PIANO_KEY_WIDTH / 2;
-        float yEnd = rect.min.y + rect.height() * 0.6;
         if (pitch == selectedPitch)
             glColor3f(0, 0.7, 0);
         else
             glColor3f(0, 0, 0);
-        glBegin(GL_QUADS);
-        glVertex2f(x, rect.min.y);
-        glVertex2f(x, yEnd);
-        glVertex2f(xEnd, yEnd);
-        glVertex2f(xEnd, rect.min.y);
-        glEnd();
+        drawRect({{x, rect.min.y}, {x + PIANO_KEY_WIDTH / 2, blackYEnd}});
     }
 }
 
