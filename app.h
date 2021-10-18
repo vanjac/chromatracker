@@ -3,6 +3,7 @@
 
 #include "edit/operation.h"
 #include "play/songplay.h"
+#include "ui/layout.h"
 #include "ui/text.h"
 #include <atomic>
 #include <SDL2/SDL.h>
@@ -25,6 +26,9 @@ public:
 
 private:
     void resizeWindow(int w, int h);
+    void scissorRect(ui::Rect rect);
+
+    void drawEvents(ui::Rect rect, Cursor playCur);
 
     void keyDown(const SDL_KeyboardEvent &e);
     void keyUp(const SDL_KeyboardEvent &e);

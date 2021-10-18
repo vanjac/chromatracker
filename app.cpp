@@ -13,8 +13,8 @@
 namespace chromatracker {
 
 const float CELL_HEIGHT = 32;
-const float TRACK_SPACING = 100;
-const float TRACK_WIDTH = 80;
+const float TRACK_SPACING = 80;
+const float TRACK_WIDTH = 70;
 
 void cAudioCallback(void * userdata, uint8_t *stream, int len);
 
@@ -75,8 +75,6 @@ void App::main(const vector<string> args)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     text.initGL();
 
-    std::unordered_map<shared_ptr<const Section>, float> sectionPositions;
-
     bool running = true;
     while (running) {
         movedEditCur = false;
@@ -112,21 +110,6 @@ void App::main(const vector<string> args)
             }
         }
 
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        float timeScale = CELL_HEIGHT / cellSize;
-
-        sectionPositions.clear();
-        {
-            float y = 0;
-            std::shared_lock songLock(song.mu);
-            for (auto &section : song.sections) {
-                sectionPositions[section] = y;
-                std::shared_lock sectionLock(section->mu);
-                y += section->length * timeScale + 48;
-            }
-        }
-
         if (!editCur.cursor.section.lock()) {
             // could happen after eg. undoing adding a section
             std::unique_lock lock(song.mu);
@@ -150,162 +133,12 @@ void App::main(const vector<string> args)
                 }
             }
         }
-        float scroll = winH / 2;
-        if (auto sectionP = editCur.cursor.section.lock()) {
-            scroll -= sectionPositions[sectionP]
-                + editCur.cursor.time * timeScale;
-        }
 
-        {
-            std::shared_lock songLock(song.mu);
-            int curMeter = Section::NO_METER;
-            for (auto &section : song.sections) {
-                std::shared_lock sectionLock(section->mu);
-                if (section->meter != Section::NO_METER)
-                    curMeter = section->meter;
-                float sectionY = sectionPositions[section] + scroll;
-                float sectionYEnd = sectionY + section->length * timeScale;
-                if (sectionYEnd < 0 || sectionY >= winH)
-                    continue;
+        glClear(GL_COLOR_BUFFER_BIT);
 
-                glColor3f(1, 1, 1);
-                glm::ivec2 textPos {0, sectionY - 20};
-                textPos = text.drawText(section->title, textPos);
-                if (section->tempo != Section::NO_TEMPO) {
-                    textPos = text.drawText("  Tempo=", textPos);
-                    textPos = text.drawText(std::to_string(section->tempo), textPos);
-                }
-                if (section->meter != Section::NO_METER) {
-                    textPos = text.drawText("  Meter=", textPos);
-                    textPos = text.drawText(std::to_string(section->meter), textPos);
-                }
-                for (int t = 0; t < section->trackEvents.size(); t++) {
-                    bool mute;
-                    {
-                        auto track = song.tracks[t];
-                        std::shared_lock trackLock(track->mu);
-                        mute = track->mute;
-                    }
-                    auto &events = section->trackEvents[t];
-                    shared_ptr<Sample> curSample;
-                    float curVelocity = 1.0f;
-                    for (int e = 0; e < events.size(); e++) {
-                        const Event &event = events[e];
-                        auto sampleP = event.sample.lock();
-                        ticks nextEventTime = section->length;
-                        if (e != events.size() - 1)
-                            nextEventTime = events[e + 1].time;
-
-                        if (event.special == Event::Special::FadeOut) {
-                            curSample = nullptr; // TODO gradient
-                        } else if (sampleP) {
-                            curSample = sampleP;
-                        }
-                        if (event.velocity != Event::NO_VELOCITY) {
-                            curVelocity = event.velocity;
-                        }
-
-                        float x = t * TRACK_SPACING;
-                        float xEnd = x + TRACK_WIDTH;
-                        float y = event.time * timeScale + sectionY;
-                        float yEnd = nextEventTime * timeScale + sectionY;
-                        glm::vec3 color = mute ? glm::vec3{0.3, 0.3, 0.3}
-                            : glm::vec3{0.5, 0, 0.2};
-                        if (!curSample)
-                            color = glm::vec3(0);
-                        else
-                            color *= curVelocity; // TODO gamma correct
-                        glColor3f(color.r, color.g, color.b);
-                        glBegin(GL_QUADS);
-                        glVertex2f(x, y);
-                        glVertex2f(x, yEnd);
-                        glVertex2f(xEnd, yEnd);
-                        glVertex2f(xEnd, y);
-                        glEnd();
-                        glColor3f(1, 1, 1);
-                        glBegin(GL_LINES);
-                        glVertex2f(x, y);
-                        glVertex2f(xEnd, y);
-                        glEnd();
-
-                        // TODO avoid allocation
-                        glm::ivec2 textPos {x, y};
-                        if (sampleP) {
-                            textPos = text.drawText(sampleP->name.substr(0, 2), textPos);
-                        } else {
-                            textPos = text.drawText("  ", textPos);
-                        }
-                        string specialStr = " ";
-                        switch (event.special) {
-                        case Event::Special::FadeOut:
-                            specialStr = "=";
-                            break;
-                        case Event::Special::Slide:
-                            specialStr = "/";
-                            break;
-                        }
-                        textPos = text.drawText(specialStr, textPos);
-                        if (event.pitch != Event::NO_PITCH) {
-                            textPos = text.drawText(pitchToString(event.pitch), textPos);
-                        }
-                    } // each event
-                } // each track
-                
-                glEnable(GL_BLEND);
-                glBegin(GL_LINES);
-                ticks barLength = TICKS_PER_BEAT * curMeter;
-                for (ticks grid = 0; grid < section->length; grid += cellSize) {
-                    if (curMeter != Section::NO_METER
-                            && cellSize < barLength && grid % barLength == 0) {
-                        glColor4f(0.7, 0.7, 1, 0.7);
-                    } else if (cellSize < TICKS_PER_BEAT
-                            && grid % TICKS_PER_BEAT == 0) {
-                        glColor4f(1, 1, 1, 0.7);
-                    } else {
-                        glColor4f(1, 1, 1, 0.4);
-                    }
-                    float y = grid * timeScale + sectionY;
-                    glVertex2f(0, y);
-                    glVertex2f(winW, y);
-                }
-                glVertex2f(0, sectionYEnd);
-                glVertex2f(winW, sectionYEnd);
-                glEnd();
-                glDisable(GL_BLEND);
-            } // each section
-        } // songLock
-
-        if (editCur.cursor.section.lock()) {
-            glColor3f(0.5, 1, 0.5);
-            glBegin(GL_LINES);
-            glVertex2f(0, winH / 2);
-            glVertex2f(winW, winH / 2);
-            glEnd();
-
-            float cellX = editCur.track * TRACK_SPACING;
-            float cellXEnd = cellX + TRACK_WIDTH;
-            float cellY = winH / 2;
-            float cellYEnd = cellY + CELL_HEIGHT;
-            glColor4f(1, 1, 1, 0.5);
-            glEnable(GL_BLEND);
-            glBegin(GL_QUADS);
-            glVertex2f(cellX, cellY);
-            glVertex2f(cellX, cellYEnd);
-            glVertex2f(cellXEnd, cellYEnd);
-            glVertex2f(cellXEnd, cellY);
-            glEnd();
-            glDisable(GL_BLEND);
-        }
-
-        if (auto sectionP = playCur.section.lock()) {
-            float playSectionY = sectionPositions[sectionP] + scroll;
-            float playCursorY = playCur.time * timeScale + playSectionY;
-            glColor3f(0.5, 0.5, 1);
-            glBegin(GL_LINES);
-            glVertex2f(0, playCursorY);
-            glVertex2f(winW, playCursorY);
-            glEnd();
-        }
+        glEnable(GL_SCISSOR_TEST);
+        drawEvents({{0, 0}, {winW, winH}}, playCur);
+        glDisable(GL_SCISSOR_TEST);
 
         SDL_GL_SwapWindow(window);
     }
@@ -321,6 +154,191 @@ void App::resizeWindow(int w, int h)
     glOrtho(0, w, h, 0, 0.0f, 1.0f);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+}
+
+void App::scissorRect(ui::Rect rect)
+{
+    glScissor(rect.min.x, winH - rect.max.y, rect.width(), rect.height());
+}
+
+void App::drawEvents(ui::Rect rect, Cursor playCur)
+{
+    scissorRect(rect);
+
+    float timeScale = CELL_HEIGHT / cellSize;
+
+    static std::unordered_map<shared_ptr<const Section>, float>
+        sectionPositions;
+    sectionPositions.clear();
+    {
+        float y = 0;
+        std::shared_lock songLock(song.mu);
+        for (auto &section : song.sections) {
+            sectionPositions[section] = y;
+            std::shared_lock sectionLock(section->mu);
+            y += section->length * timeScale + 48;
+        }
+    }
+
+    float scroll = rect.center().y;
+    if (auto sectionP = editCur.cursor.section.lock()) {
+        scroll -= sectionPositions[sectionP] + editCur.cursor.time * timeScale;
+    }
+
+    {
+        std::shared_lock songLock(song.mu);
+        int curMeter = Section::NO_METER;
+        for (auto &section : song.sections) {
+            std::shared_lock sectionLock(section->mu);
+            if (section->meter != Section::NO_METER)
+                curMeter = section->meter;
+            float sectionY = sectionPositions[section] + scroll;
+            float sectionYEnd = sectionY + section->length * timeScale;
+            if (sectionYEnd < rect.min.y || sectionY >= rect.max.y)
+                continue;
+
+            glColor3f(1, 1, 1);
+            glm::ivec2 textPos {rect.min.x, sectionY - 20};
+            textPos = text.drawText(section->title, textPos);
+            if (section->tempo != Section::NO_TEMPO) {
+                textPos = text.drawText("  Tempo=", textPos);
+                textPos = text.drawText(std::to_string(section->tempo),
+                                        textPos);
+            }
+            if (section->meter != Section::NO_METER) {
+                textPos = text.drawText("  Meter=", textPos);
+                textPos = text.drawText(std::to_string(section->meter),
+                                        textPos);
+            }
+            for (int t = 0; t < section->trackEvents.size(); t++) {
+                bool mute;
+                {
+                    auto track = song.tracks[t];
+                    std::shared_lock trackLock(track->mu);
+                    mute = track->mute;
+                }
+                auto &events = section->trackEvents[t];
+                shared_ptr<Sample> curSample;
+                float curVelocity = 1.0f;
+                for (int e = 0; e < events.size(); e++) {
+                    const Event &event = events[e];
+                    auto sampleP = event.sample.lock();
+                    ticks nextEventTime = section->length;
+                    if (e != events.size() - 1)
+                        nextEventTime = events[e + 1].time;
+
+                    if (event.special == Event::Special::FadeOut) {
+                        curSample = nullptr; // TODO gradient
+                    } else if (sampleP) {
+                        curSample = sampleP;
+                    }
+                    if (event.velocity != Event::NO_VELOCITY) {
+                        curVelocity = event.velocity;
+                    }
+
+                    float x = t * TRACK_SPACING + rect.min.x;
+                    float xEnd = x + TRACK_WIDTH;
+                    float y = event.time * timeScale + sectionY;
+                    float yEnd = nextEventTime * timeScale + sectionY;
+                    glm::vec3 color = mute ? glm::vec3{0.3, 0.3, 0.3}
+                        : glm::vec3{0.5, 0, 0.2};
+                    if (!curSample)
+                        color = glm::vec3(0);
+                    else
+                        color *= curVelocity; // TODO gamma correct
+                    glColor3f(color.r, color.g, color.b);
+                    glBegin(GL_QUADS);
+                    glVertex2f(x, y);
+                    glVertex2f(x, yEnd);
+                    glVertex2f(xEnd, yEnd);
+                    glVertex2f(xEnd, y);
+                    glEnd();
+                    glColor3f(1, 1, 1);
+                    glBegin(GL_LINES);
+                    glVertex2f(x, y);
+                    glVertex2f(xEnd, y);
+                    glEnd();
+
+                    // TODO avoid allocation
+                    glm::ivec2 textPos {x, y};
+                    if (sampleP) {
+                        textPos = text.drawText(sampleP->name.substr(0, 2),
+                                                textPos);
+                    } else {
+                        textPos = text.drawText("  ", textPos);
+                    }
+                    string specialStr = " ";
+                    switch (event.special) {
+                    case Event::Special::FadeOut:
+                        specialStr = "=";
+                        break;
+                    case Event::Special::Slide:
+                        specialStr = "/";
+                        break;
+                    }
+                    textPos = text.drawText(specialStr, textPos);
+                    if (event.pitch != Event::NO_PITCH) {
+                        textPos = text.drawText(pitchToString(event.pitch),
+                                                textPos);
+                    }
+                } // each event
+            } // each track
+            
+            glEnable(GL_BLEND);
+            glBegin(GL_LINES);
+            ticks barLength = TICKS_PER_BEAT * curMeter;
+            for (ticks grid = 0; grid < section->length; grid += cellSize) {
+                if (curMeter != Section::NO_METER
+                        && cellSize < barLength && grid % barLength == 0) {
+                    glColor4f(0.7, 0.7, 1, 0.7);
+                } else if (cellSize < TICKS_PER_BEAT
+                        && grid % TICKS_PER_BEAT == 0) {
+                    glColor4f(1, 1, 1, 0.7);
+                } else {
+                    glColor4f(1, 1, 1, 0.4);
+                }
+                float y = grid * timeScale + sectionY;
+                glVertex2f(rect.min.x, y);
+                glVertex2f(rect.max.x, y);
+            }
+            glVertex2f(rect.min.x, sectionYEnd);
+            glVertex2f(rect.max.x, sectionYEnd);
+            glEnd();
+            glDisable(GL_BLEND);
+        } // each section
+    } // songLock
+
+    if (editCur.cursor.section.lock()) {
+        glColor3f(0.5, 1, 0.5);
+        glBegin(GL_LINES);
+        glVertex2f(rect.min.x, rect.center().y);
+        glVertex2f(rect.max.x, rect.center().y);
+        glEnd();
+
+        float cellX = editCur.track * TRACK_SPACING + rect.min.x;
+        float cellXEnd = cellX + TRACK_WIDTH;
+        float cellY = rect.center().y;
+        float cellYEnd = cellY + CELL_HEIGHT;
+        glColor4f(1, 1, 1, 0.5);
+        glEnable(GL_BLEND);
+        glBegin(GL_QUADS);
+        glVertex2f(cellX, cellY);
+        glVertex2f(cellX, cellYEnd);
+        glVertex2f(cellXEnd, cellYEnd);
+        glVertex2f(cellXEnd, cellY);
+        glEnd();
+        glDisable(GL_BLEND);
+    }
+
+    if (auto sectionP = playCur.section.lock()) {
+        float playSectionY = sectionPositions[sectionP] + scroll;
+        float playCursorY = playCur.time * timeScale + playSectionY;
+        glColor3f(0.5, 0.5, 1);
+        glBegin(GL_LINES);
+        glVertex2f(rect.min.x, playCursorY);
+        glVertex2f(rect.max.x, playCursorY);
+        glEnd();
+    }
 }
 
 void App::keyDown(const SDL_KeyboardEvent &e)

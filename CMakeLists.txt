@@ -24,6 +24,7 @@ add_executable(chromatracker
     play/trackplay.cpp
     song.cpp
     ui/font.cpp
+    ui/layout.cpp
     ui/text.cpp
     units.cpp)
 
