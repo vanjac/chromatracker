@@ -47,6 +47,8 @@ struct Song
     vector<shared_ptr<Section>> sections;
 
     float volume {0.5};
+
+    void clear();
 };
 
 } // namespace

@@ -16,6 +16,7 @@ add_executable(chromatracker
     cursor.cpp
     edit/songops.cpp
     event.cpp
+    file/browser.cpp
     file/itloader.cpp
     glad/glad.c
     play/jam.cpp

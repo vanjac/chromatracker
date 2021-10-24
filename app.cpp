@@ -54,9 +54,9 @@ void App::main(const vector<string> args)
     if (!stream)
         throw std::runtime_error(string("Error opening stream: ")
             + SDL_GetError() + "\n");
-
     file::ITLoader loader(stream);
     loader.loadSong(&song);
+    SDL_RWclose(stream);
 
     // don't need locks at this moment
     player.setCursor(Cursor(&song));
@@ -93,7 +93,8 @@ void App::main(const vector<string> args)
                 keyDown(event.key);
                 break;
             case SDL_KEYUP:
-                keyUp(event.key);
+                if (tab == Tab::Events)
+                    keyUpEvents(event.key);
                 break;
             case SDL_MOUSEWHEEL:
                 if (event.wheel.y < 0) {
@@ -159,8 +160,15 @@ void App::main(const vector<string> args)
 
         glEnable(GL_SCISSOR_TEST);
         drawInfo({{0, 0}, {winW - 180, 20}});
-        drawTracks({{0, 20}, {winW - 180, 40}});
-        drawEvents({{0, 40}, {winW - 180, winH - 100}}, playCur);
+        switch (tab) {
+        case Tab::Browser:
+            drawBrowser({{0, 20}, {winW - 180, winH - 100}});
+            break;
+        case Tab::Events:
+            drawTracks({{0, 20}, {winW - 180, 40}});
+            drawEvents({{0, 40}, {winW - 180, winH - 100}}, playCur);
+            break;
+        }
         drawSampleList({{winW - 180, 0}, {winW, winH}});
         drawPiano({{0, winH - 100}, {winW - 180, winH}});
         glDisable(GL_SCISSOR_TEST);
@@ -483,10 +491,137 @@ void App::drawPiano(ui::Rect rect)
     }
 }
 
+void App::drawBrowser(ui::Rect rect)
+{
+    scissorRect(rect);
+
+    glColor3f(1, 1, 1);
+    glm::vec2 textPos = rect.min;
+    textPos = text.drawText(browser.path().string(), textPos);
+    
+    int i = 0;
+    for (auto &directory : browser.directories()) {
+        textPos.x = rect.min.x;
+        textPos.y += 20;
+        if (i == selectedFile)
+            glColor3f(1, 0.7, 0.7);
+        else
+            glColor3f(0.7, 1, 0.7);
+        textPos = text.drawText(directory.filename().string(), textPos);
+        i++;
+    }
+    for (auto &file : browser.files()) {
+        textPos.x = rect.min.x;
+        textPos.y += 20;
+        if (i == selectedFile)
+            glColor3f(1, 0.7, 0.7);
+        else
+            glColor3f(1, 1, 1);
+        textPos = text.drawText(file.filename().string(), textPos);
+        i++;
+    }
+}
+
 void App::keyDown(const SDL_KeyboardEvent &e)
 {
     bool ctrl = e.keysym.mod & KMOD_CTRL;
     bool shift = e.keysym.mod & KMOD_SHIFT;
+    switch (e.keysym.sym) {
+    /* Tabs */
+    case SDLK_F1:
+        tab = Tab::Browser;
+        break;
+    case SDLK_F2:
+        tab = Tab::Events;
+        break;
+    case SDLK_z:
+        if (ctrl) {
+            if (!undoStack.empty()) {
+                undoStack.back()->undoIt(&song);
+                redoStack.push_back(std::move(undoStack.back()));
+                undoStack.pop_back();
+            } else {
+                cout << "Nothing to undo\n";
+            }
+        }
+        break;
+    case SDLK_y:
+        if (ctrl) {
+            if (!redoStack.empty()) {
+                redoStack.back()->doIt(&song);
+                undoStack.push_back(std::move(redoStack.back()));
+                redoStack.pop_back();
+            } else {
+                cout << "Nothing to redo\n";
+            }
+        }
+        break;
+    /* Mode */
+    case SDLK_F5:
+        if (e.repeat) break;
+        record = !record;
+        break;
+    case SDLK_F6:
+        if (e.repeat) break;
+        followPlayback = !followPlayback;
+        if (!followPlayback)
+            snapToGrid();
+        break;
+    case SDLK_F7:
+        if (e.repeat) break;
+        overwrite = !overwrite;
+        break;
+    case SDLK_KP_PLUS:
+        {
+            std::shared_lock songLock(song.mu);
+            selectedSample++;
+            if (selectedSample >= song.samples.size())
+                selectedSample = song.samples.size() - 1;
+        }
+        break;
+    case SDLK_KP_MINUS:
+        selectedSample--;
+        if (selectedSample < 0)
+            selectedSample = 0;
+        break;
+    case SDLK_KP_MULTIPLY:
+        {
+            std::shared_lock songLock(song.mu);
+            if (selectedSample < song.samples.size() - 10)
+                selectedSample += 10;
+        }
+        break;
+    case SDLK_KP_DIVIDE:
+        selectedSample -= 10;
+        if (selectedSample < 0)
+            selectedSample = 0;
+        break;
+    case SDLK_EQUALS:
+        if (selectedOctave < 9) {
+            selectedOctave++;
+            selectedPitch += 12;
+        }
+        break;
+    case SDLK_MINUS:
+        if (selectedOctave > 0) {
+            selectedOctave--;
+            selectedPitch -= 12;
+        }
+        break;
+    default:
+        switch (tab) {
+        case Tab::Events:
+            keyDownEvents(e, ctrl, shift);
+            break;
+        case Tab::Browser:
+            keyDownBrowser(e, ctrl, shift);
+            break;
+        }
+    }
+}
+
+void App::keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
+{
     if (!e.repeat && !ctrl) {
         int pitch = pitchKeymap(e.keysym.scancode);
         int sample = sampleKeymap(e.keysym.scancode);
@@ -546,81 +681,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     }
 
     switch (e.keysym.sym) {
-    case SDLK_z:
-        if (ctrl) {
-            if (!undoStack.empty()) {
-                undoStack.back()->undoIt(&song);
-                redoStack.push_back(std::move(undoStack.back()));
-                undoStack.pop_back();
-            } else {
-                cout << "Nothing to undo\n";
-            }
-        }
-        break;
-    case SDLK_y:
-        if (ctrl) {
-            if (!redoStack.empty()) {
-                redoStack.back()->doIt(&song);
-                undoStack.push_back(std::move(redoStack.back()));
-                redoStack.pop_back();
-            } else {
-                cout << "Nothing to redo\n";
-            }
-        }
-        break;
-    /* Mode */
-    case SDLK_F1:
-        if (e.repeat) break;
-        record = !record;
-        break;
-    case SDLK_F4:
-        if (e.repeat) break;
-        followPlayback = !followPlayback;
-        if (!followPlayback)
-            snapToGrid();
-        break;
-    case SDLK_F7:
-        if (e.repeat) break;
-        overwrite = !overwrite;
-        break;
-    case SDLK_KP_PLUS:
-        {
-            std::shared_lock songLock(song.mu);
-            selectedSample++;
-            if (selectedSample >= song.samples.size())
-                selectedSample = song.samples.size() - 1;
-        }
-        break;
-    case SDLK_KP_MINUS:
-        selectedSample--;
-        if (selectedSample < 0)
-            selectedSample = 0;
-        break;
-    case SDLK_KP_MULTIPLY:
-        {
-            std::shared_lock songLock(song.mu);
-            if (selectedSample < song.samples.size() - 10)
-                selectedSample += 10;
-        }
-        break;
-    case SDLK_KP_DIVIDE:
-        selectedSample -= 10;
-        if (selectedSample < 0)
-            selectedSample = 0;
-        break;
-    case SDLK_EQUALS:
-        if (selectedOctave < 9) {
-            selectedOctave++;
-            selectedPitch += 12;
-        }
-        break;
-    case SDLK_MINUS:
-        if (selectedOctave > 0) {
-            selectedOctave--;
-            selectedPitch -= 12;
-        }
-        break;
-    /* Playback */ 
+    /* Playback */
     case SDLK_SPACE:
         if (!e.repeat) {
             std::unique_lock playerLock(player.mu);
@@ -763,6 +824,9 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 player.stop();
             }
             std::unique_lock songLock(song.mu);
+            for (auto section : song.sections) {
+                section->deleted = true;
+            }
             song.sections.clear();
             auto section = song.sections.emplace_back(new Section);
             section->length = TICKS_PER_BEAT * 16;
@@ -805,7 +869,52 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     }
 }
 
-void App::keyUp(const SDL_KeyboardEvent &e)
+void App::keyDownBrowser(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
+{
+    switch (e.keysym.sym) {
+    case SDLK_DOWN:
+        selectedFile++;
+        break;
+    case SDLK_UP:
+        selectedFile--;
+        break;
+    case SDLK_RETURN:
+        if (selectedFile >= 0 && selectedFile < browser.directories().size()) {
+            browser.open(browser.directories()[selectedFile]);
+            selectedFile = 0;
+        } else {
+            selectedFile -= browser.directories().size();
+            if (selectedFile >= 0 && selectedFile < browser.files().size()) {
+                auto &path = browser.files()[selectedFile];
+                SDL_RWops *stream = SDL_RWFromFile(path.string().c_str(), "r");
+                if (!stream) {
+                    cout << "Error opening stream: " <<SDL_GetError()<< "\n";
+                } else {
+                    {
+                        std::unique_lock playerLock(player.mu);
+                        player.stop();
+                    }
+                    file::ITLoader loader(stream);
+                    std::unique_lock lock(song.mu);
+                    song.clear();
+                    loader.loadSong(&song);
+                    SDL_RWclose(stream);
+                    if (!song.sections.empty()) {
+                        editCur.cursor.section = song.sections.front();
+                        editCur.cursor.time = 0;
+                    }
+                }
+            }
+        }
+        break;
+    case SDLK_BACKSPACE:
+        browser.open(browser.path().parent_path());
+        selectedFile = 0;
+        break;
+    }
+}
+
+void App::keyUpEvents(const SDL_KeyboardEvent &e)
 {
     if (e.keysym.mod & KMOD_CTRL)
         return;
