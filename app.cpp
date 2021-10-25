@@ -608,15 +608,14 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             selectedPitch -= 12;
         }
         break;
-    default:
-        switch (tab) {
-        case Tab::Events:
-            keyDownEvents(e, ctrl, shift);
-            break;
-        case Tab::Browser:
-            keyDownBrowser(e, ctrl, shift);
-            break;
-        }
+    }
+    switch (tab) {
+    case Tab::Events:
+        keyDownEvents(e, ctrl, shift);
+        break;
+    case Tab::Browser:
+        keyDownBrowser(e, ctrl, shift);
+        break;
     }
 }
 
