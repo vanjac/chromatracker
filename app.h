@@ -4,6 +4,7 @@
 #include "edit/operation.h"
 #include "edit/songops.h"
 #include "file/browser.h"
+#include "file/types.h"
 #include "play/songplay.h"
 #include "ui/layout.h"
 #include "ui/text.h"
@@ -81,7 +82,7 @@ private:
     // main loop flags
     bool movedEditCur {false}; // TODO replace with accumulator to move play cur
 
-    file::Browser browser {file::Browser::FileType::Module};
+    file::Browser browser {file::FileType::Module};
     int selectedFile {0};
 
     vector<unique_ptr<edit::SongOp>> undoStack;

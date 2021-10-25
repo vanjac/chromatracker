@@ -2,11 +2,12 @@
 #include <common.h>
 
 #include <song.h>
+#include "types.h"
 #include <SDL2/SDL_rwops.h>
 
 namespace chromatracker::file {
 
-class ITLoader
+class ITLoader : public ModuleLoader
 {
 public:
     ITLoader(SDL_RWops *stream);

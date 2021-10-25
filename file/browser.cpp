@@ -1,6 +1,4 @@
 #include "browser.h"
-#include <algorithm>
-#include <cctype>
 #include <SDL2/SDL_filesystem.h>
 
 namespace fs = std::filesystem;
@@ -22,7 +20,7 @@ void Browser::open(fs::path path)
         auto &childPath = dir.path();
         if (dir.is_directory()) {
             _directories.push_back(childPath);
-        } else if (extensionMatch(childPath.extension().string())) {
+        } else if (typeForPath(childPath) == type) {
             _files.push_back(childPath);
         }
     }
@@ -41,19 +39,6 @@ const vector<fs::path> & Browser::directories() const
 const vector<fs::path> & Browser::files() const
 {
     return _files;
-}
-
-bool Browser::extensionMatch(string ext) {
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-        [](unsigned char c){ return std::tolower(c); }); // :(
-    switch (type) {
-    case FileType::Module:
-        return ext == ".it";
-    case FileType::Sample:
-        return ext == ".wav" || ext == ".iti";
-    default:
-        return true;
-    }
 }
 
 } // namespace

@@ -1,5 +1,4 @@
 #include "app.h"
-#include "file/itloader.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -46,25 +45,22 @@ App::~App()
 
 void App::main(const vector<string> args)
 {
-    if (args.size() < 2) {
-        throw std::runtime_error("please specify file path :)\n");
+    // setup song (don't need locks at this moment)
+    song.tracks.reserve(8);
+    for (int i = 0; i < 8; i++) {
+        song.tracks.emplace_back(new Track);
+    }
+    {
+        auto section = song.sections.emplace_back(new Section);
+        section->length = TICKS_PER_BEAT * 16;
+        section->trackEvents.insert(section->trackEvents.end(),
+            song.tracks.size(), vector<Event>());
+        section->tempo = 125;
+        section->meter = 4;
     }
 
-    SDL_RWops *stream = SDL_RWFromFile(args[1].c_str(), "r");
-    if (!stream)
-        throw std::runtime_error(string("Error opening stream: ")
-            + SDL_GetError() + "\n");
-    file::ITLoader loader(stream);
-    loader.loadSong(&song);
-    SDL_RWclose(stream);
-
-    // don't need locks at this moment
+    editCur.cursor = Cursor(&song, song.sections.front());
     player.setCursor(Cursor(&song));
-    if (!song.sections.empty()) {
-        editCur.cursor = Cursor(&song, song.sections.front());
-    } else {
-        editCur.cursor = Cursor(&song);
-    }
 
     SDL_GetWindowSize(window, &winW, &winH);
     resizeWindow(winW, winH);
@@ -893,10 +889,11 @@ void App::keyDownBrowser(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
                         std::unique_lock playerLock(player.mu);
                         player.stop();
                     }
-                    file::ITLoader loader(stream);
+                    unique_ptr<file::ModuleLoader> loader(
+                        file::moduleLoaderForPath(path, stream));
                     std::unique_lock lock(song.mu);
                     song.clear();
-                    loader.loadSong(&song);
+                    loader->loadSong(&song);
                     SDL_RWclose(stream);
                     if (!song.sections.empty()) {
                         editCur.cursor.section = song.sections.front();
@@ -909,6 +906,13 @@ void App::keyDownBrowser(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
     case SDLK_BACKSPACE:
         browser.open(browser.path().parent_path());
         selectedFile = 0;
+        break;
+    case SDLK_1:
+        if (ctrl) {
+            // bookmark for testing TODO remove
+            browser.open("D:\\Google Drive\\mods");
+            selectedFile = 0;
+        }
         break;
     }
 }
