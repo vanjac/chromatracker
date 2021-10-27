@@ -1,8 +1,8 @@
 #pragma once
 #include <common.h>
 
-#include <event.h>
 #include "trackplay.h"
+#include <event.h>
 #include <array>
 #include <unordered_map>
 

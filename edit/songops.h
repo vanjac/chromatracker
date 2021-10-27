@@ -1,9 +1,9 @@
 #pragma once
 #include <common.h>
 
+#include "operation.h"
 #include <cursor.h>
 #include <event.h>
-#include "operation.h"
 #include <units.h>
 
 namespace chromatracker::edit::ops {

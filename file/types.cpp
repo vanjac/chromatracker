@@ -1,5 +1,5 @@
-#include "itloader.h"
 #include "types.h"
+#include "itloader.h"
 #include <algorithm>
 #include <cctype>
 

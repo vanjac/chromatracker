@@ -1,8 +1,8 @@
 #pragma once
 #include <common.h>
 
-#include <song.h>
 #include "types.h"
+#include <song.h>
 #include <SDL2/SDL_rwops.h>
 
 namespace chromatracker::file {

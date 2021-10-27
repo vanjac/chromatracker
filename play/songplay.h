@@ -1,10 +1,10 @@
 #pragma once
 #include <common.h>
 
-#include <cursor.h>
 #include "jam.h"
-#include <song.h>
 #include "trackplay.h"
+#include <cursor.h>
+#include <song.h>
 #include <mutex>
 
 namespace chromatracker::play {
