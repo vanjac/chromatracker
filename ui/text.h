@@ -10,7 +10,10 @@ struct Font
 {
     void initGL();
 
-    GLTexture texture;
+    const uint8_t *bitmap;
+    glm::ivec2 bitmapDim;
+    glm::ivec2 charDim;
+    GLTexture texture {0};
 };
 
 extern Font FONT_DEFAULT;

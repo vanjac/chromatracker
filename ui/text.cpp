@@ -5,18 +5,19 @@
 
 namespace chromatracker::ui {
 
-Font FONT_DEFAULT {};
+Font FONT_DEFAULT {FONT_DEFAULT_BITMAP, {96, 48}, {6, 8}};
 
 void Font::initGL()
 {
-    // unpack to 8bpp
-    std::array<uint8_t, sizeof(fontBitmap) * 16> pixels;
-    for (int i = 0; i < sizeof(fontBitmap); i++) {
-        uint8_t byteVal = fontBitmap[i];
+    // unpack 1bpp bitmap to 8bpp texture
+    int bitmapSize = bitmapDim.x * bitmapDim.y;
+    std::vector<uint8_t> pixels;
+    pixels.reserve(bitmapSize * 2);
+    for (int i = 0; i < bitmapSize / 8; i++) {
+        uint8_t byteVal = bitmap[i];
         for (int bit = 0; bit < 8; bit++) {
-            int index = i * 16 + bit * 2;
-            pixels[index] = 0xFF; // luminance
-            pixels[index + 1] = byteVal & (1<<bit) ? 0xFF : 0x00; // alpha
+            pixels.push_back(0xFF); // luminance
+            pixels.push_back(byteVal & (1<<bit) ? 0xFF : 0x00); // alpha
         }
     }
 
@@ -24,7 +25,7 @@ void Font::initGL()
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA,
-                 96, 48, 0,
+                 bitmapDim.x, bitmapDim.y, 0,
                  GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, pixels.data());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -40,7 +41,8 @@ glm::ivec2 drawText(string text, glm::ivec2 position, Font *font)
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
 
-    glm::ivec2 charSize = fontCharDim * 2;
+    glm::ivec2 charSize = font->charDim * 2;
+    glm::ivec2 charCount = font->bitmapDim / font->charDim;
 
     glBegin(GL_QUADS);
     glm::ivec2 curPos = position;
@@ -51,11 +53,11 @@ glm::ivec2 drawText(string text, glm::ivec2 position, Font *font)
             continue;
         }
         int charNum = c - ' ';
-        glm::ivec2 minCoord { (charNum % fontCharCount.x) * fontCharDim.x,
-                                (charNum / fontCharCount.x) * fontCharDim.y };
-        glm::ivec2 maxCoord = minCoord + fontCharDim;
-        glm::vec2 minCoordF = (glm::vec2)minCoord / (glm::vec2)fontBitmapDim;
-        glm::vec2 maxCoordF = (glm::vec2)maxCoord / (glm::vec2)fontBitmapDim;
+        glm::ivec2 minCoord { (charNum % charCount.x) * font->charDim.x,
+                                (charNum / charCount.x) * font->charDim.y };
+        glm::ivec2 maxCoord = minCoord + font->charDim;
+        glm::vec2 minCoordF = (glm::vec2)minCoord / (glm::vec2)font->bitmapDim;
+        glm::vec2 maxCoordF = (glm::vec2)maxCoord / (glm::vec2)font->bitmapDim;
 
         glm::ivec2 maxPos = curPos + charSize;
 
