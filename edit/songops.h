@@ -56,7 +56,7 @@ protected:
 class AddSection : public SongOp
 {
 public:
-    AddSection(int index, ticks size);
+    AddSection(int index, shared_ptr<Section> section);
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:

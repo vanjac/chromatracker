@@ -90,12 +90,10 @@ void WriteCell::undoIt(Song *song)
     ClearCell::undoIt(song);
 }
 
-AddSection::AddSection(int index, ticks length)
+AddSection::AddSection(int index, shared_ptr<Section> section)
     : index(index)
-    , section(new Section)
-{
-    section->length = length;
-}
+    , section(section)
+{}
 
 bool AddSection::doIt(Song *song)
 {
@@ -127,7 +125,7 @@ void AddSection::undoIt(Song *song)
     song->sections.erase(song->sections.begin() + index);
 
     if (index != 0) {
-        if (song->sections.front()->next.lock() == section) {
+        if (song->sections.front()->next.lockDeleted() == section) {
             if (index != song->sections.size()) {
                 song->sections.front()->next = song->sections[index];
             } else {
@@ -157,7 +155,7 @@ bool DeleteSection::doIt(Song *song)
     for (int i = 0; i < song->sections.size(); i++) {
         auto &other = song->sections[i];
         std::unique_lock otherLock(other->mu);
-        if (other->next.lock() == section) {
+        if (other->next.lockDeleted() == section) {
             prevLinks.push_back(other);
             if (i != song->sections.size() - 1)
                 other->next = song->sections[i + 1];

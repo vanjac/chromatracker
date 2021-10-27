@@ -779,18 +779,15 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
                     std::shared_lock songLock(song.mu);
                     index = it - song.sections.begin() + 1;
                 }
-                ticks length;
+                shared_ptr<Section> newSection(new Section);
                 {
                     std::shared_lock sectionLock(sectionP->mu);
-                    length = sectionP->length;
+                    newSection->length = sectionP->length;
                 }
                 auto op = std::make_unique<edit::ops::AddSection>(
-                    index, length);
+                    index, newSection);
                 doOperation(std::move(op));
-                {
-                    std::shared_lock songLock(song.mu);
-                    editCur.cursor.section = song.sections[index];
-                }
+                editCur.cursor.section = newSection;
                 editCur.cursor.time = 0;
                 movedEditCur = true;
             }
