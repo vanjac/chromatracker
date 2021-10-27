@@ -3,16 +3,6 @@
 
 namespace chromatracker::play {
 
-shared_ptr<const Track> TrackPlay::track() const
-{
-    return _track.lock();
-}
-
-void TrackPlay::setTrack(shared_ptr<const Track> track)
-{
-    _track = track;
-}
-
 shared_ptr<const Sample> TrackPlay::currentSample() const
 {
     return samplePlay.sample();
@@ -41,20 +31,8 @@ void TrackPlay::processEvent(const Event &event)
 }
 
 void TrackPlay::processTick(float *tickBuffer, frames tickFrames,
-                            frames outFrameRate, float globalAmp)
+                            frames outFrameRate, float lAmp, float rAmp)
 {
-    float lAmp = 0, rAmp = 0;
-    if (auto trackP = _track.lock()) {
-        std::shared_lock lock(trackP->mu);
-        if (!trackP->mute) {
-            globalAmp *= trackP->volume;
-            lAmp = globalAmp * panningToLeftAmplitude(trackP->pan);
-            rAmp = globalAmp * panningToRightAmplitude(trackP->pan);
-        }
-    } else {
-        lAmp = rAmp = globalAmp; // jam track
-    }
-
     samplePlay.processTick(tickBuffer, tickFrames, outFrameRate, lAmp, rAmp);
     
     switch (_special) {

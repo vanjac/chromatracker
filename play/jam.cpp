@@ -68,7 +68,8 @@ void Jam::processTick(float *tickBuffer, frames tickFrames,
     }
 
     for (auto &track : jamTracks) {
-        track.processTick(tickBuffer, tickFrames, outFrameRate, globalAmp);
+        track.processTick(tickBuffer, tickFrames,
+                          outFrameRate, globalAmp, globalAmp);
     }
 }
 
