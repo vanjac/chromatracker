@@ -18,6 +18,7 @@ struct Font
 
 extern Font FONT_DEFAULT;
 
-glm::ivec2 drawText(string text, glm::ivec2 position, Font *font = nullptr);
+glm::ivec2 drawText(string text, glm::ivec2 position,
+                    const Font *font = &FONT_DEFAULT);
 
 } // namespace

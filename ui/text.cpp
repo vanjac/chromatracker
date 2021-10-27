@@ -32,10 +32,8 @@ void Font::initGL()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-glm::ivec2 drawText(string text, glm::ivec2 position, Font *font)
+glm::ivec2 drawText(string text, glm::ivec2 position, const Font *font)
 {
-    if (!font)
-        font = &FONT_DEFAULT;
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, font->texture);
     glEnable(GL_TEXTURE_2D);
