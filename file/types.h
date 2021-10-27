@@ -7,6 +7,8 @@
 
 namespace chromatracker::file {
 
+using Path = std::filesystem::path;
+
 enum class FileType
 {
     Unknown, Module, Sample
@@ -19,9 +21,12 @@ public:
     virtual void loadSong(Song *song) = 0;
 };
 
-FileType typeForPath(std::filesystem::path path);
+FileType typeForPath(Path path);
 // constructs loader, caller should take ownership
-ModuleLoader * moduleLoaderForPath(std::filesystem::path path,
-                                   SDL_RWops *stream);
+ModuleLoader * moduleLoaderForPath(Path path, SDL_RWops *stream);
+
+// for Sample type, Module files are treated as directories of samples
+void listDirectory(Path path, FileType type,
+                   vector<Path> &directories, vector<Path> &files);
 
 } // namespace

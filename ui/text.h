@@ -6,14 +6,15 @@
 
 namespace chromatracker::ui {
 
-class TextRender
+struct Font
 {
-public:
     void initGL();
-    glm::ivec2 drawText(string text, glm::ivec2 position);
 
-private:
-    GLTexture fontTexture;
+    GLTexture texture;
 };
+
+extern Font FONT_DEFAULT;
+
+glm::ivec2 drawText(string text, glm::ivec2 position, Font *font = nullptr);
 
 } // namespace

@@ -5,7 +5,9 @@
 
 namespace chromatracker::ui {
 
-void TextRender::initGL()
+Font FONT_DEFAULT {};
+
+void Font::initGL()
 {
     // unpack to 8bpp
     std::array<uint8_t, sizeof(fontBitmap) * 16> pixels;
@@ -18,9 +20,9 @@ void TextRender::initGL()
         }
     }
 
-    glGenTextures(1, &fontTexture);
+    glGenTextures(1, &texture);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fontTexture);
+    glBindTexture(GL_TEXTURE_2D, texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA,
                  96, 48, 0,
                  GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, pixels.data());
@@ -29,10 +31,12 @@ void TextRender::initGL()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-glm::ivec2 TextRender::drawText(string text, glm::ivec2 position)
+glm::ivec2 drawText(string text, glm::ivec2 position, Font *font)
 {
+    if (!font)
+        font = &FONT_DEFAULT;
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fontTexture);
+    glBindTexture(GL_TEXTURE_2D, font->texture);
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
 

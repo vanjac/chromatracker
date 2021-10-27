@@ -3,11 +3,10 @@
 
 #include "edit/operation.h"
 #include "edit/songops.h"
-#include "file/browser.h"
 #include "file/types.h"
 #include "play/songplay.h"
 #include "ui/layout.h"
-#include "ui/text.h"
+#include "ui/panels/browser.h"
 #include <atomic>
 #include <SDL2/SDL.h>
 
@@ -27,26 +26,19 @@ public:
 
     void audioCallback(uint8_t *stream, int len);
 
-private:
-    enum class Tab
-    {
-        Events, Browser
-    };
+    void scissorRect(ui::Rect rect) const;
 
+private:
     void resizeWindow(int w, int h);
-    void drawRect(ui::Rect rect);
-    void scissorRect(ui::Rect rect);
 
     void drawInfo(ui::Rect rect);
     void drawTracks(ui::Rect rect);
     void drawEvents(ui::Rect rect, Cursor playCur);
     void drawSampleList(ui::Rect rect);
     void drawPiano(ui::Rect rect);
-    void drawBrowser(ui::Rect rect);
 
     void keyDown(const SDL_KeyboardEvent &e);
     void keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift);
-    void keyDownBrowser(const SDL_KeyboardEvent &e, bool ctrl, bool shift);
     void keyUpEvents(const SDL_KeyboardEvent &e);
 
     void doOperation(unique_ptr<edit::SongOp> op);
@@ -66,8 +58,6 @@ private:
     Song song;
     play::SongPlay player;
 
-    Tab tab {Tab::Events};
-
     TrackCursor editCur;
     ticks cellSize {TICKS_PER_BEAT / 4};
     int selectedSample {0};
@@ -82,8 +72,7 @@ private:
     // main loop flags
     bool movedEditCur {false}; // TODO replace with accumulator to move play cur
 
-    file::Browser browser {file::FileType::Module};
-    int selectedFile {0};
+    unique_ptr<ui::panels::Browser> browser;
 
     vector<unique_ptr<edit::SongOp>> undoStack;
     vector<unique_ptr<edit::SongOp>> redoStack;
@@ -94,8 +83,6 @@ private:
     int tickBufferLen {0}; // in SAMPLES (not frames!)
     int tickBufferPos {0};
     std::atomic<uint32_t> audioCallbackTime {0};
-
-    ui::TextRender text;
 };
 
 } // namespace

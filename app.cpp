@@ -1,4 +1,6 @@
 #include "app.h"
+#include "ui/draw.h"
+#include "ui/text.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -68,7 +70,7 @@ void App::main(const vector<string> args)
     SDL_PauseAudioDevice(audioDevice, 0); // audio devices start paused
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    text.initGL();
+    ui::FONT_DEFAULT.initGL();
 
     bool running = true;
     while (running) {
@@ -89,7 +91,7 @@ void App::main(const vector<string> args)
                 keyDown(event.key);
                 break;
             case SDL_KEYUP:
-                if (tab == Tab::Events)
+                if (!browser)
                     keyUpEvents(event.key);
                 break;
             case SDL_MOUSEWHEEL:
@@ -156,14 +158,11 @@ void App::main(const vector<string> args)
 
         glEnable(GL_SCISSOR_TEST);
         drawInfo({{0, 0}, {winW - 180, 20}});
-        switch (tab) {
-        case Tab::Browser:
-            drawBrowser({{0, 20}, {winW - 180, winH - 100}});
-            break;
-        case Tab::Events:
+        if (browser) {
+            browser->draw({{0, 20}, {winW - 180, winH - 100}});
+        } else {
             drawTracks({{0, 20}, {winW - 180, 40}});
             drawEvents({{0, 40}, {winW - 180, winH - 100}}, playCur);
-            break;
         }
         drawSampleList({{winW - 180, 0}, {winW, winH}});
         drawPiano({{0, winH - 100}, {winW - 180, winH}});
@@ -185,17 +184,7 @@ void App::resizeWindow(int w, int h)
     glLoadIdentity();
 }
 
-void App::drawRect(ui::Rect rect)
-{
-    glBegin(GL_QUADS);
-    glVertex2f(rect.min.x, rect.min.y);
-    glVertex2f(rect.min.x, rect.max.y);
-    glVertex2f(rect.max.x, rect.max.y);
-    glVertex2f(rect.max.x, rect.min.y);
-    glEnd();
-}
-
-void App::scissorRect(ui::Rect rect)
+void App::scissorRect(ui::Rect rect) const
 {
     glScissor(rect.min.x, winH - rect.max.y, rect.width(), rect.height());
 }
@@ -206,23 +195,23 @@ void App::drawInfo(ui::Rect rect)
 
     glColor3f(1, 1, 1);
     glm::vec2 textPos = rect.min;
-    textPos = text.drawText("Record: ", textPos);
-    textPos = text.drawText(std::to_string(record), textPos);
-    textPos = text.drawText(" Follow: ", textPos);
-    textPos = text.drawText(std::to_string(followPlayback), textPos);
-    textPos = text.drawText(" Overwrite: ", textPos);
-    textPos = text.drawText(std::to_string(overwrite), textPos);
-    textPos = text.drawText("  ", textPos);
+    textPos = ui::drawText("Record: ", textPos);
+    textPos = ui::drawText(std::to_string(record), textPos);
+    textPos = ui::drawText(" Follow: ", textPos);
+    textPos = ui::drawText(std::to_string(followPlayback), textPos);
+    textPos = ui::drawText(" Overwrite: ", textPos);
+    textPos = ui::drawText(std::to_string(overwrite), textPos);
+    textPos = ui::drawText("  ", textPos);
 
     std::shared_lock songLock(song.mu);
     float volumeX = textPos.x
         + amplitudeToVelocity(song.volume) * (rect.max.x - textPos.x);
     glColor3f(0, 0.7, 0);
-    drawRect({{textPos.x, rect.min.y}, {volumeX, rect.max.y}});
+    ui::drawRect({{textPos.x, rect.min.y}, {volumeX, rect.max.y}});
     glColor3f(0.2, 0.2, 0.2);
-    drawRect({{volumeX, rect.min.y}, {rect.max.x, rect.max.y}});
+    ui::drawRect({{volumeX, rect.min.y}, {rect.max.x, rect.max.y}});
     glColor3f(1, 1, 1);
-    text.drawText("Volume", textPos);
+    ui::drawText("Volume", textPos);
 }
 
 void App::drawTracks(ui::Rect rect)
@@ -238,13 +227,13 @@ void App::drawTracks(ui::Rect rect)
         float xEnd = x + TRACK_WIDTH;
         float xCenter = (x + xEnd) / 2;
         glColor3f(0.2, 0.2, 0.2);
-        drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
+        ui::drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
         if (!track->mute) {
             float volumeX = x + amplitudeToVelocity(track->volume) * (xEnd - x);
             float panX = xCenter + track->pan * (xEnd - x) / 2;
             glColor3f(0, 0.7, 0);
-            drawRect({{x, rect.min.y}, {volumeX, rect.center().y}});
-            drawRect({{xCenter, rect.center().y}, {panX, rect.max.y}});
+            ui::drawRect({{x, rect.min.y}, {volumeX, rect.center().y}});
+            ui::drawRect({{xCenter, rect.center().y}, {panX, rect.max.y}});
 
             glColor3f(1, 1, 1);
             glBegin(GL_LINES);
@@ -254,7 +243,7 @@ void App::drawTracks(ui::Rect rect)
         }
 
         glColor3f(1, 1, 1);
-        text.drawText(std::to_string(i + 1), {x + 20, rect.min.y});
+        ui::drawText(std::to_string(i + 1), {x + 20, rect.min.y});
     }
 }
 
@@ -296,16 +285,14 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
 
             glColor3f(1, 1, 1);
             glm::ivec2 textPos {rect.min.x, sectionY - 20};
-            textPos = text.drawText(section->title, textPos);
+            textPos = ui::drawText(section->title, textPos);
             if (section->tempo != Section::NO_TEMPO) {
-                textPos = text.drawText("  Tempo=", textPos);
-                textPos = text.drawText(std::to_string(section->tempo),
-                                        textPos);
+                textPos = ui::drawText("  Tempo=", textPos);
+                textPos = ui::drawText(std::to_string(section->tempo), textPos);
             }
             if (section->meter != Section::NO_METER) {
-                textPos = text.drawText("  Meter=", textPos);
-                textPos = text.drawText(std::to_string(section->meter),
-                                        textPos);
+                textPos = ui::drawText("  Meter=", textPos);
+                textPos = ui::drawText(std::to_string(section->meter), textPos);
             }
             for (int t = 0; t < section->trackEvents.size(); t++) {
                 bool mute;
@@ -344,7 +331,7 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
                     else
                         color *= curVelocity; // TODO gamma correct
                     glColor3f(color.r, color.g, color.b);
-                    drawRect({{x, y}, {xEnd, yEnd}});
+                    ui::drawRect({{x, y}, {xEnd, yEnd}});
                     glColor3f(1, 1, 1);
                     glBegin(GL_LINES);
                     glVertex2f(x, y);
@@ -354,10 +341,10 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
                     // TODO avoid allocation
                     glm::ivec2 textPos {x, y};
                     if (sampleP) {
-                        textPos = text.drawText(sampleP->name.substr(0, 2),
-                                                textPos);
+                        textPos = ui::drawText(sampleP->name.substr(0, 2),
+                                               textPos);
                     } else {
-                        textPos = text.drawText("  ", textPos);
+                        textPos = ui::drawText("  ", textPos);
                     }
                     string specialStr = " ";
                     switch (event.special) {
@@ -368,10 +355,10 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
                         specialStr = "/";
                         break;
                     }
-                    textPos = text.drawText(specialStr, textPos);
+                    textPos = ui::drawText(specialStr, textPos);
                     if (event.pitch != Event::NO_PITCH) {
-                        textPos = text.drawText(pitchToString(event.pitch),
-                                                textPos);
+                        textPos = ui::drawText(pitchToString(event.pitch),
+                                               textPos);
                     }
                 } // each event
             } // each track
@@ -411,7 +398,8 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
         float cellY = rect.center().y;
         glColor4f(1, 1, 1, 0.5);
         glEnable(GL_BLEND);
-        drawRect({{cellX, cellY}, {cellX + TRACK_WIDTH, cellY + CELL_HEIGHT}});
+        ui::drawRect({{cellX, cellY},
+                      {cellX + TRACK_WIDTH, cellY + CELL_HEIGHT}});
         glDisable(GL_BLEND);
     }
 
@@ -437,7 +425,7 @@ void App::drawSampleList(ui::Rect rect)
             glColor3f(1, 1, 1);
         glm::vec2 textPos = rect.min;
         textPos.y += i * 20;
-        text.drawText(song.samples[i]->name, textPos);
+        ui::drawText(song.samples[i]->name, textPos);
     }
 }
 
@@ -458,7 +446,7 @@ void App::drawPiano(ui::Rect rect)
             glColor3f(0.7, 1.0, 0.7);
         else
             glColor3f(1, 1, 1);
-        drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
+        ui::drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
 
         glColor3f(0, 0, 0);
         glBegin(GL_LINES);
@@ -467,7 +455,7 @@ void App::drawPiano(ui::Rect rect)
         glEnd();
 
         if (key == 0) {
-            text.drawText(std::to_string(octave), {x + 8, rect.max.y - 24});
+            ui::drawText(std::to_string(octave), {x + 8, rect.max.y - 24});
         }
     }
 
@@ -483,38 +471,7 @@ void App::drawPiano(ui::Rect rect)
             glColor3f(0, 0.7, 0);
         else
             glColor3f(0, 0, 0);
-        drawRect({{x, rect.min.y}, {x + PIANO_KEY_WIDTH / 2, blackYEnd}});
-    }
-}
-
-void App::drawBrowser(ui::Rect rect)
-{
-    scissorRect(rect);
-
-    glColor3f(1, 1, 1);
-    glm::vec2 textPos = rect.min;
-    textPos = text.drawText(browser.path().string(), textPos);
-    
-    int i = 0;
-    for (auto &directory : browser.directories()) {
-        textPos.x = rect.min.x;
-        textPos.y += 20;
-        if (i == selectedFile)
-            glColor3f(1, 0.7, 0.7);
-        else
-            glColor3f(0.7, 1, 0.7);
-        textPos = text.drawText(directory.filename().string(), textPos);
-        i++;
-    }
-    for (auto &file : browser.files()) {
-        textPos.x = rect.min.x;
-        textPos.y += 20;
-        if (i == selectedFile)
-            glColor3f(1, 0.7, 0.7);
-        else
-            glColor3f(1, 1, 1);
-        textPos = text.drawText(file.filename().string(), textPos);
-        i++;
+        ui::drawRect({{x, rect.min.y}, {x + PIANO_KEY_WIDTH / 2, blackYEnd}});
     }
 }
 
@@ -523,13 +480,6 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     bool ctrl = e.keysym.mod & KMOD_CTRL;
     bool shift = e.keysym.mod & KMOD_SHIFT;
     switch (e.keysym.sym) {
-    /* Tabs */
-    case SDLK_F1:
-        tab = Tab::Browser;
-        break;
-    case SDLK_F2:
-        tab = Tab::Events;
-        break;
     case SDLK_z:
         if (ctrl) {
             if (!undoStack.empty()) {
@@ -604,14 +554,49 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             selectedPitch -= 12;
         }
         break;
+    /* File */
+    case SDLK_o:
+        if (ctrl) {
+            browser = std::make_unique<ui::panels::Browser>(this,
+                file::FileType::Module, [this](file::Path path) {
+                    if (path.empty()) {
+                        browser.reset();
+                        return;
+                    }
+
+                    SDL_RWops *stream = SDL_RWFromFile(path.string().c_str(),
+                                                       "r");
+                    if (!stream) {
+                        cout << "Error opening stream: "
+                            <<SDL_GetError()<< "\n";
+                    } else {
+                        {
+                            std::unique_lock playerLock(player.mu);
+                            player.stop();
+                        }
+                        unique_ptr<file::ModuleLoader> loader(
+                            file::moduleLoaderForPath(path, stream));
+                        std::unique_lock lock(song.mu);
+                        song.clear();
+                        loader->loadSong(&song);
+                        SDL_RWclose(stream);
+                        if (!song.sections.empty()) {
+                            editCur.cursor.section = song.sections.front();
+                            editCur.cursor.time = 0;
+                        }
+                    }
+
+                    // call at the end to prevent access violation!
+                    browser.reset();
+                });
+        }
+        break;
     }
-    switch (tab) {
-    case Tab::Events:
+
+    if (browser) {
+        browser->keyDown(e);
+    } else {
         keyDownEvents(e, ctrl, shift);
-        break;
-    case Tab::Browser:
-        keyDownBrowser(e, ctrl, shift);
-        break;
     }
 }
 
@@ -861,59 +846,6 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
                 editCur, overwrite ? cellSize : 1, fadeEvent);
             doOperation(std::move(op));
         }
-    }
-}
-
-void App::keyDownBrowser(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
-{
-    switch (e.keysym.sym) {
-    case SDLK_DOWN:
-        selectedFile++;
-        break;
-    case SDLK_UP:
-        selectedFile--;
-        break;
-    case SDLK_RETURN:
-        if (selectedFile >= 0 && selectedFile < browser.directories().size()) {
-            browser.open(browser.directories()[selectedFile]);
-            selectedFile = 0;
-        } else {
-            selectedFile -= browser.directories().size();
-            if (selectedFile >= 0 && selectedFile < browser.files().size()) {
-                auto &path = browser.files()[selectedFile];
-                SDL_RWops *stream = SDL_RWFromFile(path.string().c_str(), "r");
-                if (!stream) {
-                    cout << "Error opening stream: " <<SDL_GetError()<< "\n";
-                } else {
-                    {
-                        std::unique_lock playerLock(player.mu);
-                        player.stop();
-                    }
-                    unique_ptr<file::ModuleLoader> loader(
-                        file::moduleLoaderForPath(path, stream));
-                    std::unique_lock lock(song.mu);
-                    song.clear();
-                    loader->loadSong(&song);
-                    SDL_RWclose(stream);
-                    if (!song.sections.empty()) {
-                        editCur.cursor.section = song.sections.front();
-                        editCur.cursor.time = 0;
-                    }
-                }
-            }
-        }
-        break;
-    case SDLK_BACKSPACE:
-        browser.open(browser.path().parent_path());
-        selectedFile = 0;
-        break;
-    case SDLK_1:
-        if (ctrl) {
-            // bookmark for testing TODO remove
-            browser.open("D:\\Google Drive\\mods");
-            selectedFile = 0;
-        }
-        break;
     }
 }
 
