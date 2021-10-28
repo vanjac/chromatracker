@@ -15,23 +15,62 @@ namespace chromatracker::file {
 const ticks IT_TICK_TIME = 8; // chroma ticks per IT tick
 const int MAX_CHANNELS = 64;
 
+const uint32_t INST_SAMPLE_NUM_OFFSET = 0x40 + 2*MIDDLE_C + 1;
+
 ITLoader::ITLoader(SDL_RWops *stream)
     : stream(stream)
 {}
 
-void ITLoader::loadSong(Song *song)
+void ITLoader::checkHeader()
 {
-    this->song = song;
-
+    SDL_RWseek(stream, 0, RW_SEEK_SET);
     char signature[5]{0};
     SDL_RWread(stream, signature, sizeof(char), 4);
     if (memcmp(signature, "IMPM", 4)) {
         throw std::runtime_error("Unrecognized format");
     }
 
+    SDL_RWseek(stream, 0x2A, RW_SEEK_SET);
+    compatibleVersion = SDL_ReadLE16(stream);
+    if (compatibleVersion < 0x200) {
+        throw std::runtime_error("Old IT files (pre 2.00) not supported");
+    }
+
+    uint16_t songFlags = SDL_ReadLE16(stream);
+    instrumentMode = songFlags & (1<<2);
+}
+
+void ITLoader::loadObjects()
+{
+    SDL_RWseek(stream, 0x20, RW_SEEK_SET);
+    numOrders = SDL_ReadLE16(stream);
+    numInstruments = SDL_ReadLE16(stream);
+    numSamples = SDL_ReadLE16(stream);
+    numPatterns = SDL_ReadLE16(stream);
+    cout <<numOrders<< " orders, " <<numInstruments<< " instruments, "
+        <<numSamples<< " samples, " <<numPatterns<< " patterns\n";
+
+    SDL_RWseek(stream, 0xC0, RW_SEEK_SET);
+    orders.reset(new uint8_t[numOrders]);
+    SDL_RWread(stream, orders.get(), 1, numOrders);
+    instOffsets.reset(new uint32_t[numInstruments]);
+    SDL_RWread(stream, instOffsets.get(), 4, numInstruments);
+    sampleOffsets.reset(new uint32_t[numSamples]);
+    SDL_RWread(stream, sampleOffsets.get(), 4, numSamples);
+    patternOffsets.reset(new uint32_t[numPatterns]);
+    SDL_RWread(stream, patternOffsets.get(), 4, numPatterns);
+}
+
+void ITLoader::loadSong(Song *song)
+{
+    this->song = song;
+    checkHeader();
+    loadObjects();
+
     auto firstSection = song->sections.emplace_back(new Section);
 
     char songName[27]{0};
+    SDL_RWseek(stream, 0x04, RW_SEEK_SET);
     SDL_RWread(stream, songName, sizeof(char), 26);
     firstSection->title = string(songName);
 
@@ -42,24 +81,7 @@ void ITLoader::loadSong(Song *song)
         firstSection->meter = rowsPerMeasure / rowsPerBeat;
     }
 
-    uint16_t numOrders = SDL_ReadLE16(stream);
-    uint16_t numInstruments = SDL_ReadLE16(stream);
-    uint16_t numSamples = SDL_ReadLE16(stream);
-    uint16_t numPatterns = SDL_ReadLE16(stream);
-
-    cout <<numOrders<< " orders, " <<numInstruments<< " instruments, "
-        <<numSamples<< " samples, " <<numPatterns<< " patterns\n";
-
-    SDL_RWseek(stream, 2, RW_SEEK_CUR); // skip created version
-    compatibleVersion = SDL_ReadLE16(stream);
-    if (compatibleVersion < 0x200) {
-        throw std::runtime_error("Old IT files (pre 2.00) not supported");
-    }
-
-    uint16_t songFlags = SDL_ReadLE16(stream);
-    bool instrumentMode = songFlags & (1<<2);
-    SDL_RWseek(stream, 2, RW_SEEK_CUR); // skip special flags
-
+    SDL_RWseek(stream, 0x30, RW_SEEK_SET);
     uint8_t globalVolume = SDL_ReadU8(stream);
     uint8_t mixVolume = SDL_ReadU8(stream);
     song->volume = (globalVolume / 128.0f) * (mixVolume / 128.0f);
@@ -84,15 +106,6 @@ void ITLoader::loadSong(Song *song)
         track->volume = vol / 64.0f;
     }
 
-    unique_ptr<uint8_t[]> orders(new uint8_t[numOrders]);
-    SDL_RWread(stream, orders.get(), 1, numOrders);
-    unique_ptr<uint32_t[]> instOffsets(new uint32_t[numInstruments]);
-    SDL_RWread(stream, instOffsets.get(), 4, numInstruments);
-    unique_ptr<uint32_t[]> sampleOffsets(new uint32_t[numSamples]);
-    SDL_RWread(stream, sampleOffsets.get(), 4, numSamples);
-    unique_ptr<uint32_t[]> patternOffsets(new uint32_t[numPatterns]);
-    SDL_RWread(stream, patternOffsets.get(), 4, numPatterns);
-
     for (int i = 0; i < numSamples; i++) {
         shared_ptr<Sample> sample;
         InstrumentExtra *extra;
@@ -103,8 +116,7 @@ void ITLoader::loadSong(Song *song)
             sample = itSamples.emplace_back(new Sample);
             extra = &itSampleExtras.emplace_back();
         }
-        SDL_RWseek(stream, sampleOffsets[i], RW_SEEK_SET);
-        loadSample(sample, extra);
+        loadITSample(sampleOffsets[i], sample, extra);
     }
 
     if (instrumentMode) {
@@ -113,8 +125,7 @@ void ITLoader::loadSong(Song *song)
         for (int i = 0; i < numInstruments; i++) {
             auto sample = song->samples.emplace_back(new Sample);
             InstrumentExtra *extra = &instrumentExtras.emplace_back();
-            SDL_RWseek(stream, instOffsets[i], RW_SEEK_SET);
-            loadInstrument(sample, extra);
+            loadInstrument(instOffsets[i], sample, extra);
         }
     }
 
@@ -154,8 +165,7 @@ void ITLoader::loadSong(Song *song)
             section->length = 64 * (int)ticksPerRow * IT_TICK_TIME;
         } else {
             // TODO: inefficient, can load the same pattern many times
-            SDL_RWseek(stream, patternOffset, RW_SEEK_SET);
-            loadSection(section);
+            loadPattern(patternOffset, section);
         }
     }
 
@@ -167,6 +177,49 @@ void ITLoader::loadSong(Song *song)
             section->trackEvents.end());
     }
 }
+
+vector<string> ITLoader::listSamples()
+{
+    checkHeader();
+    loadObjects();
+
+    vector<string> sampleNames;
+    sampleNames.reserve(numSamples);
+    for (int i = 0; i < numSamples; i++) {
+        checkSampleHeader(sampleOffsets[i]);
+        SDL_RWseek(stream, sampleOffsets[i] + 0x14, RW_SEEK_SET);
+        char nameBuf[27]{0};
+        SDL_RWread(stream, nameBuf, sizeof(char), 26);
+        sampleNames.push_back(nameBuf);
+    }
+    if (!instrumentMode) {
+        return sampleNames;
+    }
+
+    vector<string> instrumentNames;
+    instrumentNames.reserve(numInstruments);
+    for (int i = 0; i < numInstruments; i++) {
+        checkInstrumentHeader(instOffsets[i]);
+        SDL_RWseek(stream, instOffsets[i] + INST_SAMPLE_NUM_OFFSET,
+                   RW_SEEK_SET);
+        uint8_t sampleNum = SDL_ReadU8(stream);
+        SDL_RWseek(stream, instOffsets[i] + 0x20, RW_SEEK_SET);
+        char nameBuf[27]{0};
+        SDL_RWread(stream, nameBuf, sizeof(char), 26);
+        string name = nameBuf;
+        if (!name.empty()) {
+            instrumentNames.push_back(name);
+        } else if (sampleNum != 0 && sampleNum <= sampleNames.size()) {
+            instrumentNames.push_back(sampleNames[sampleNum - 1]);
+        } else {
+            instrumentNames.push_back("");
+        }
+    }
+    return instrumentNames;
+}
+
+void ITLoader::loadSample(int index, shared_ptr<Sample> sample)
+{}
 
 template<typename T>
 void loadWave(SDL_RWops *stream, shared_ptr<Sample> sample,
@@ -188,15 +241,22 @@ void loadWave(SDL_RWops *stream, shared_ptr<Sample> sample,
     }
 }
 
-void ITLoader::loadSample(shared_ptr<Sample> sample, InstrumentExtra *extra)
+void ITLoader::checkSampleHeader(uint32_t offset)
 {
+    SDL_RWseek(stream, offset, RW_SEEK_SET);
     char signature[5]{0};
     SDL_RWread(stream, signature, sizeof(char), 4);
     if (memcmp(signature, "IMPS", 4)) {
         throw std::runtime_error("Invalid sample header");
     }
+}
 
-    SDL_RWseek(stream, 13, RW_SEEK_CUR); // skip filename, 0 byte
+void ITLoader::loadITSample(uint32_t offset, shared_ptr<Sample> sample,
+                            InstrumentExtra *extra)
+{
+    checkSampleHeader(offset);
+
+    SDL_RWseek(stream, offset + 0x11, RW_SEEK_SET);
     uint8_t globalVolume = SDL_ReadU8(stream);
     sample->volume = globalVolume / 64.0f;
 
@@ -226,8 +286,8 @@ void ITLoader::loadSample(shared_ptr<Sample> sample, InstrumentExtra *extra)
 
     uint8_t convertFlags = SDL_ReadU8(stream);
     bool signedSamples = convertFlags & (1<<0);
-    SDL_RWseek(stream, 1, RW_SEEK_CUR); // skip default pan
 
+    SDL_RWseek(stream, offset + 0x30, RW_SEEK_SET);
     uint32_t numFrames = SDL_ReadLE32(stream);
     uint32_t loopStart = SDL_ReadLE32(stream);
     uint32_t loopEnd = SDL_ReadLE32(stream);
@@ -280,18 +340,25 @@ void ITLoader::loadSample(shared_ptr<Sample> sample, InstrumentExtra *extra)
     sample->fadeOut = 1.0f; // will be overridden by instruments
 }
 
-void ITLoader::loadInstrument(shared_ptr<Sample> sample, InstrumentExtra *extra)
+void ITLoader::checkInstrumentHeader(uint32_t offset)
 {
+    SDL_RWseek(stream, offset, RW_SEEK_SET);
     char signature[5]{0};
     SDL_RWread(stream, signature, sizeof(char), 4);
     if (memcmp(signature, "IMPI", 4)) {
-        throw std::runtime_error("Invalid sample header");
+        throw std::runtime_error("Invalid instrument header");
     }
+}
+
+void ITLoader::loadInstrument(uint32_t offset, shared_ptr<Sample> sample,
+                              InstrumentExtra *extra)
+{
+    SDL_RWseek(stream, offset, RW_SEEK_SET);
+    checkInstrumentHeader(offset);
 
     // get the sample associated with middle c
     // TODO also get note and transpose
-    int sampleNumOffset = 0x40 + 2*MIDDLE_C + 1;
-    SDL_RWseek(stream, sampleNumOffset - 0x04, RW_SEEK_CUR);
+    SDL_RWseek(stream, offset + INST_SAMPLE_NUM_OFFSET, RW_SEEK_SET);
     uint8_t sampleNum = SDL_ReadU8(stream);
     if (sampleNum == 0 || sampleNum > itSamples.size()) {
         return;
@@ -301,15 +368,15 @@ void ITLoader::loadInstrument(shared_ptr<Sample> sample, InstrumentExtra *extra)
     *sample = *(itSamples[sampleNum - 1]);
     *extra = itSampleExtras[sampleNum - 1];
 
-    SDL_RWseek(stream, 0x14 - sampleNumOffset - 1, RW_SEEK_CUR);
+    SDL_RWseek(stream, offset + 0x14, RW_SEEK_SET);
     uint16_t fadeOut = SDL_ReadLE16(stream);
     float fadeTime = 1024.0 / fadeOut; // time to fade to zero in IT ticks
 
-    SDL_RWseek(stream, 2, RW_SEEK_CUR); // skip pitch-pan sep
+    SDL_RWseek(stream, offset + 0x18, RW_SEEK_SET);
     uint8_t globalVolume = SDL_ReadU8(stream);
     sample->volume *= globalVolume / 128.0f;
 
-    SDL_RWseek(stream, 7, RW_SEEK_CUR);
+    SDL_RWseek(stream, offset + 0x20, RW_SEEK_SET);
     char nameBuf[27]{0};
     SDL_RWread(stream, nameBuf, sizeof(char), 26);
     string name = nameBuf;
@@ -317,7 +384,7 @@ void ITLoader::loadInstrument(shared_ptr<Sample> sample, InstrumentExtra *extra)
         sample->name = nameBuf;
     
     // volume envelope
-    SDL_RWseek(stream, 0x130 - 0x3A, RW_SEEK_CUR);
+    SDL_RWseek(stream, offset + 0x130, RW_SEEK_SET);
     uint8_t volEnvFlags = SDL_ReadU8(stream);
     bool volEnvEnable = volEnvFlags & (1<<0);
     if (volEnvEnable) {
@@ -326,7 +393,7 @@ void ITLoader::loadInstrument(shared_ptr<Sample> sample, InstrumentExtra *extra)
             extra->autoFade = true;
 
         uint8_t numNodes = SDL_ReadU8(stream);
-        SDL_RWseek(stream, 3, RW_SEEK_CUR);
+        SDL_RWseek(stream, 3, RW_SEEK_CUR); // TODO clean up SEEK_CUR
         uint8_t susLoopEnd = SDL_ReadU8(stream);
 
         // skip to last node
@@ -351,12 +418,13 @@ void ITLoader::loadInstrument(shared_ptr<Sample> sample, InstrumentExtra *extra)
     sample->fadeOut = 1 / fadeTime / IT_TICK_TIME;
 }
 
-void ITLoader::loadSection(shared_ptr<Section> section)
+void ITLoader::loadPattern(uint32_t offset, shared_ptr<Section> section)
 {
+    SDL_RWseek(stream, offset, RW_SEEK_SET);
     uint16_t packedLength = SDL_ReadLE16(stream);
     uint16_t numRows = SDL_ReadLE16(stream);
     section->length = numRows * (int)ticksPerRow * IT_TICK_TIME;
-    SDL_RWseek(stream, 4, RW_SEEK_CUR);
+    SDL_RWseek(stream, offset + 0x08, RW_SEEK_SET);
 
     struct PatternCell {
         int note{-1}; // -1 = no note!

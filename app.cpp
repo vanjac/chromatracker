@@ -518,7 +518,12 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         overwrite = !overwrite;
         break;
     case SDLK_KP_PLUS:
-        {
+        if (ctrl) {
+            browser = std::make_unique<ui::panels::Browser>(this,
+                file::FileType::Sample, [this](file::Path path) {
+                    browser.reset();
+                });
+        } else {
             std::shared_lock songLock(song.mu);
             selectedSample++;
             if (selectedSample >= song.samples.size())
@@ -569,21 +574,21 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     if (!stream) {
                         cout << "Error opening stream: "
                             <<SDL_GetError()<< "\n";
-                    } else {
-                        {
-                            std::unique_lock playerLock(player.mu);
-                            player.stop();
-                        }
-                        unique_ptr<file::ModuleLoader> loader(
-                            file::moduleLoaderForPath(path, stream));
-                        std::unique_lock lock(song.mu);
-                        song.clear();
-                        loader->loadSong(&song);
-                        SDL_RWclose(stream);
-                        if (!song.sections.empty()) {
-                            editCur.cursor.section = song.sections.front();
-                            editCur.cursor.time = 0;
-                        }
+                        return;
+                    }
+                    {
+                        std::unique_lock playerLock(player.mu);
+                        player.stop();
+                    }
+                    unique_ptr<file::ModuleLoader> loader(
+                        file::moduleLoaderForPath(path, stream));
+                    std::unique_lock lock(song.mu);
+                    song.clear();
+                    loader->loadSong(&song);
+                    SDL_RWclose(stream);
+                    if (!song.sections.empty()) {
+                        editCur.cursor.section = song.sections.front();
+                        editCur.cursor.time = 0;
                     }
 
                     // call at the end to prevent access violation!

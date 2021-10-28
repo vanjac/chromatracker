@@ -18,7 +18,9 @@ class ModuleLoader
 {
 public:
     virtual ~ModuleLoader() = default;
-    virtual void loadSong(Song *song) = 0;
+    virtual void loadSong(Song *song) = 0; // song should be cleared
+    virtual vector<string> listSamples() = 0;
+    virtual void loadSample(int index, shared_ptr<Sample> sample) = 0;
 };
 
 FileType typeForPath(Path path);

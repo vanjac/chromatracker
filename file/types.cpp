@@ -1,6 +1,7 @@
 #include "types.h"
 #include "itloader.h"
 #include <algorithm>
+#include <exception>
 #include <cctype>
 
 namespace chromatracker::file {
@@ -38,12 +39,36 @@ void listDirectory(Path path, FileType type,
 {
     directories.clear();
     files.clear();
-    for (const auto &dir : std::filesystem::directory_iterator(path)) {
-        auto &childPath = dir.path();
-        if (dir.is_directory()) {
-            directories.push_back(childPath);
-        } else if (typeForPath(childPath) == type) {
-            files.push_back(childPath);
+
+    FileType pathType = typeForPath(path);
+    if (type == FileType::Sample && pathType == FileType::Module) {
+        SDL_RWops *stream = SDL_RWFromFile(path.string().c_str(), "r");
+        if (!stream) {
+            cout << "Error opening stream: " <<SDL_GetError()<< "\n";
+            return;
+        }
+        unique_ptr<ModuleLoader> loader(moduleLoaderForPath(path, stream));
+        vector<string> sampleNames;
+        try {
+            sampleNames = loader->listSamples();
+        } catch (std::exception e) {
+            cout << "Error reading module: " <<e.what()<< "\n";
+            return;
+        }
+        SDL_RWclose(stream);
+        for (auto &name : sampleNames) {
+            files.push_back(path / name);
+        }
+    } else {
+        for (const auto &dir : std::filesystem::directory_iterator(path)) {
+            auto &childPath = dir.path();
+            FileType childType = typeForPath(childPath);
+            if (childType == type) {
+                files.push_back(childPath);
+            } else if (dir.is_directory() || (type == FileType::Sample &&
+                                              childType == FileType::Module)) {
+                directories.push_back(childPath);
+            }
         }
     }
 }
