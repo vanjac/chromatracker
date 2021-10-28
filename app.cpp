@@ -528,6 +528,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     unique_ptr<file::SampleLoader> loader(
                         file::sampleLoaderForPath(path));
                     if (!loader) {
+                        cout << "No loader available for " <<path<< "\n";
                         browser.reset();
                         return;
                     }
@@ -594,6 +595,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     unique_ptr<file::ModuleLoader> loader(
                         file::moduleLoaderForPath(path));
                     if (!loader) {
+                        cout << "No loader available for " <<path<< "\n";
                         browser.reset();
                         return;
                     }

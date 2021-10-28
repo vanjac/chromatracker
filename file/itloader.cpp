@@ -221,13 +221,14 @@ vector<string> ITLoader::listSamples()
 
 void ITLoader::loadSample(int index, shared_ptr<Sample> sample)
 {
-    if (index < 0 || index >= numSamples)
-        return;
-
     if (!instrumentMode) {
+        if (index < 0 || index >= numSamples)
+            return;
         InstrumentExtra extra;
         loadITSample(sampleOffsets[index], sample, &extra);
     } else {
+        if (index < 0 || index >= numInstruments)
+            return;
         InstrumentExtra extra;
         loadInstrument(instOffsets[index], sample, &extra);
     }
