@@ -1,8 +1,10 @@
 #include "types.h"
 #include "itloader.h"
 #include <algorithm>
-#include <exception>
 #include <cctype>
+#include <exception>
+#include <iomanip>
+#include <sstream>
 
 namespace chromatracker::file {
 
@@ -41,6 +43,25 @@ ModuleLoader * moduleLoaderForPath(Path path)
     }
 }
 
+SampleLoader * sampleLoaderForPath(Path path)
+{
+    Path parent = path.parent_path();
+    string ext = normalizedExtension(path);
+    string parentExt = normalizedExtension(parent);
+    if (ext == "" && parentExt == ".it") {
+        Path modulePath = path.parent_path();
+        SDL_RWops *stream = SDL_RWFromFile(modulePath.string().c_str(), "r");
+        if (!stream) {
+            cout << "Error opening stream: " <<SDL_GetError()<< "\n";
+            return nullptr;
+        }
+        int index = std::stoi(path.filename()) - 1; // parse the first number
+        return new ModuleSampleLoader(new ITLoader(stream), index);
+    } else {
+        return nullptr;
+    }
+}
+
 void listDirectory(Path path, FileType type,
                    vector<Path> &directories, vector<Path> &files)
 {
@@ -59,8 +80,11 @@ void listDirectory(Path path, FileType type,
             cout << "Error reading module: " <<e.what()<< "\n";
             return;
         }
-        for (auto &name : sampleNames) {
-            files.push_back(path / name);
+        for (int i = 0; i < sampleNames.size(); i++) {
+            std::ostringstream nameStream;
+            nameStream << std::setw(2) << std::setfill('0') << (i + 1) << " "
+                << sampleNames[i];
+            files.push_back(path / nameStream.str());
         }
     } else {
         for (const auto &dir : std::filesystem::directory_iterator(path)) {
@@ -74,6 +98,16 @@ void listDirectory(Path path, FileType type,
             }
         }
     }
+}
+
+ModuleSampleLoader::ModuleSampleLoader(ModuleLoader *mod, int index)
+    : mod(mod)
+    , index(index)
+{}
+
+void ModuleSampleLoader::loadSample(shared_ptr<Sample> sample)
+{
+    mod->loadSample(index, sample);
 }
 
 } // namespace

@@ -77,4 +77,15 @@ private:
     vector<shared_ptr<Section>> prevLinks;
 };
 
+class AddSample : public SongOp
+{
+public:
+    AddSample(int index, shared_ptr<Sample> sample);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    const int index;
+    const shared_ptr<Sample> sample;
+};
+
 } // namespace

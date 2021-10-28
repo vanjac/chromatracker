@@ -48,6 +48,7 @@ private:
     vector<shared_ptr<Sample>> itSamples;
     vector<InstrumentExtra> itSampleExtras;
     vector<InstrumentExtra> instrumentExtras;
+
     uint8_t ticksPerRow;
     int maxUsedChannel = 0;
 };

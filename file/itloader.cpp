@@ -19,7 +19,10 @@ const uint32_t INST_SAMPLE_NUM_OFFSET = 0x40 + 2*MIDDLE_C + 1;
 
 ITLoader::ITLoader(SDL_RWops *stream)
     : stream(stream)
-{}
+{
+    checkHeader();
+    loadObjects();
+}
 
 ITLoader::~ITLoader()
 {
@@ -52,8 +55,6 @@ void ITLoader::loadObjects()
     numInstruments = SDL_ReadLE16(stream);
     numSamples = SDL_ReadLE16(stream);
     numPatterns = SDL_ReadLE16(stream);
-    cout <<numOrders<< " orders, " <<numInstruments<< " instruments, "
-        <<numSamples<< " samples, " <<numPatterns<< " patterns\n";
 
     SDL_RWseek(stream, 0xC0, RW_SEEK_SET);
     orders.reset(new uint8_t[numOrders]);
@@ -69,8 +70,6 @@ void ITLoader::loadObjects()
 void ITLoader::loadSong(Song *song)
 {
     this->song = song;
-    checkHeader();
-    loadObjects();
 
     auto firstSection = song->sections.emplace_back(new Section);
 
@@ -185,9 +184,6 @@ void ITLoader::loadSong(Song *song)
 
 vector<string> ITLoader::listSamples()
 {
-    checkHeader();
-    loadObjects();
-
     vector<string> sampleNames;
     sampleNames.reserve(numSamples);
     for (int i = 0; i < numSamples; i++) {
@@ -224,7 +220,17 @@ vector<string> ITLoader::listSamples()
 }
 
 void ITLoader::loadSample(int index, shared_ptr<Sample> sample)
-{}
+{
+    if (index < 0 || index >= numSamples)
+        return;
+
+    if (!instrumentMode) {
+        InstrumentExtra extra;
+        loadITSample(sampleOffsets[index], sample, &extra);
+    } else {
+        // TODO
+    }
+}
 
 template<typename T>
 void loadWave(SDL_RWops *stream, shared_ptr<Sample> sample,

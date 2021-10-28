@@ -521,6 +521,28 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         if (ctrl) {
             browser = std::make_unique<ui::panels::Browser>(this,
                 file::FileType::Sample, [this](file::Path path) {
+                    if (path.empty()) {
+                        browser.reset();
+                        return;
+                    }
+                    unique_ptr<file::SampleLoader> loader(
+                        file::sampleLoaderForPath(path));
+                    if (!loader) {
+                        browser.reset();
+                        return;
+                    }
+                    int numSamples;
+                    {
+                        std::shared_lock lock(song.mu);
+                        numSamples = song.samples.size();
+                    }
+                    shared_ptr<Sample> newSample(new Sample);
+                    loader->loadSample(newSample);
+                    auto op = std::make_unique<edit::ops::AddSample>(
+                        numSamples, newSample);
+                    doOperation(std::move(op));
+
+                    // call at the end to prevent access violation!
                     browser.reset();
                 });
         } else {

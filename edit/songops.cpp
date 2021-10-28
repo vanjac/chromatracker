@@ -181,4 +181,24 @@ void DeleteSection::undoIt(Song *song)
     prevLinks.clear();
 }
 
+AddSample::AddSample(int index, shared_ptr<Sample> sample)
+    : index(index)
+    , sample(sample)
+{}
+
+bool AddSample::doIt(Song *song)
+{
+    std::unique_lock songLock(song->mu);
+    song->samples.insert(song->samples.begin() + index, sample);
+    sample->deleted = false;
+    return true;
+}
+
+void AddSample::undoIt(Song *song)
+{
+    std::unique_lock songLock(song->mu);
+    sample->deleted = true;
+    song->samples.erase(song->samples.begin() + index);
+}
+
 } // namespace
