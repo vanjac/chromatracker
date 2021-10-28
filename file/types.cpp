@@ -25,13 +25,20 @@ FileType typeForPath(Path path)
         return FileType::Unknown;
 }
 
-ModuleLoader * moduleLoaderForPath(Path path, SDL_RWops *stream)
+ModuleLoader * moduleLoaderForPath(Path path)
 {
-    string ext = normalizedExtension(path);
-    if (ext == ".it")
-        return new ITLoader(stream);
-    else
+    SDL_RWops *stream = SDL_RWFromFile(path.string().c_str(), "r");
+    if (!stream) {
+        cout << "Error opening stream: " <<SDL_GetError()<< "\n";
         return nullptr;
+    }
+    string ext = normalizedExtension(path);
+    if (ext == ".it") {
+        return new ITLoader(stream);
+    } else {
+        SDL_RWclose(stream);
+        return nullptr;
+    }
 }
 
 void listDirectory(Path path, FileType type,
@@ -42,12 +49,9 @@ void listDirectory(Path path, FileType type,
 
     FileType pathType = typeForPath(path);
     if (type == FileType::Sample && pathType == FileType::Module) {
-        SDL_RWops *stream = SDL_RWFromFile(path.string().c_str(), "r");
-        if (!stream) {
-            cout << "Error opening stream: " <<SDL_GetError()<< "\n";
+        unique_ptr<ModuleLoader> loader(moduleLoaderForPath(path));
+        if (!loader)
             return;
-        }
-        unique_ptr<ModuleLoader> loader(moduleLoaderForPath(path, stream));
         vector<string> sampleNames;
         try {
             sampleNames = loader->listSamples();
@@ -55,7 +59,6 @@ void listDirectory(Path path, FileType type,
             cout << "Error reading module: " <<e.what()<< "\n";
             return;
         }
-        SDL_RWclose(stream);
         for (auto &name : sampleNames) {
             files.push_back(path / name);
         }

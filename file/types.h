@@ -24,8 +24,8 @@ public:
 };
 
 FileType typeForPath(Path path);
-// constructs loader, caller should take ownership
-ModuleLoader * moduleLoaderForPath(Path path, SDL_RWops *stream);
+// constructs loader, caller should take ownership (could return null!)
+ModuleLoader * moduleLoaderForPath(Path path);
 
 // for Sample type, Module files are treated as directories of samples
 void listDirectory(Path path, FileType type,

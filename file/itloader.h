@@ -10,7 +10,8 @@ namespace chromatracker::file {
 class ITLoader : public ModuleLoader
 {
 public:
-    ITLoader(SDL_RWops *stream);
+    ITLoader(SDL_RWops *stream); // takes ownership of stream
+    ~ITLoader();
 
     void loadSong(Song *song) override;
     vector<string> listSamples() override;

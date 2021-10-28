@@ -568,24 +568,19 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                         browser.reset();
                         return;
                     }
-
-                    SDL_RWops *stream = SDL_RWFromFile(path.string().c_str(),
-                                                       "r");
-                    if (!stream) {
-                        cout << "Error opening stream: "
-                            <<SDL_GetError()<< "\n";
+                    unique_ptr<file::ModuleLoader> loader(
+                        file::moduleLoaderForPath(path));
+                    if (!loader) {
+                        browser.reset();
                         return;
                     }
                     {
                         std::unique_lock playerLock(player.mu);
                         player.stop();
                     }
-                    unique_ptr<file::ModuleLoader> loader(
-                        file::moduleLoaderForPath(path, stream));
                     std::unique_lock lock(song.mu);
                     song.clear();
                     loader->loadSong(&song);
-                    SDL_RWclose(stream);
                     if (!song.sections.empty()) {
                         editCur.cursor.section = song.sections.front();
                         editCur.cursor.time = 0;

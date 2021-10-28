@@ -21,6 +21,11 @@ ITLoader::ITLoader(SDL_RWops *stream)
     : stream(stream)
 {}
 
+ITLoader::~ITLoader()
+{
+    SDL_RWclose(stream);
+}
+
 void ITLoader::checkHeader()
 {
     SDL_RWseek(stream, 0, RW_SEEK_SET);
