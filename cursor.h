@@ -19,6 +19,7 @@ struct Cursor
 
     // song mutex must be locked (TODO could this be enforced?)
     vector<shared_ptr<Section>>::iterator findSection() const;
+
     shared_ptr<Section> nextSection() const; // could be null
     shared_ptr<Section> prevSection() const; // could be null
 };

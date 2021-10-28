@@ -60,7 +60,7 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    int index;
+    const int index;
     const shared_ptr<Section> section;
 };
 

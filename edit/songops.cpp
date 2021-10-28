@@ -85,8 +85,11 @@ bool WriteCell::doIt(Song *song)
 
 void WriteCell::undoIt(Song *song)
 {
-    auto it = tcur.findEvent();
-    tcur.events().erase(it);
+    {
+        std::unique_lock lock(section->mu);
+        auto it = tcur.findEvent();
+        tcur.events().erase(it);
+    }
     ClearCell::undoIt(song);
 }
 
@@ -102,10 +105,6 @@ bool AddSection::doIt(Song *song)
     song->sections.insert(song->sections.begin() + index, section);
 
     std::unique_lock sectionLock(section->mu);
-    section->trackEvents.clear();
-    section->trackEvents.insert(section->trackEvents.end(),
-                                song->tracks.size(), vector<Event>());
-    
     if (index != song->sections.size() - 1) {
         section->next = song->sections[index + 1];
     }

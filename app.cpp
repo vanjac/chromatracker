@@ -773,16 +773,19 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
     case SDLK_INSERT:
         if (ctrl && !e.repeat) {
             if (auto sectionP = editCur.cursor.section.lock()) {
-                auto it = editCur.cursor.findSection();
-                int index;
-                {
-                    std::shared_lock songLock(song.mu);
-                    index = it - song.sections.begin() + 1;
-                }
                 shared_ptr<Section> newSection(new Section);
                 {
                     std::shared_lock sectionLock(sectionP->mu);
                     newSection->length = sectionP->length;
+                }
+                int index;
+                {
+                    std::shared_lock songLock(song.mu);
+                    newSection->trackEvents.insert(
+                        newSection->trackEvents.end(), song.tracks.size(),
+                        vector<Event>());
+                    auto it = editCur.cursor.findSection();
+                    index = it - song.sections.begin() + 1;
                 }
                 auto op = std::make_unique<edit::ops::AddSection>(
                     index, newSection);
