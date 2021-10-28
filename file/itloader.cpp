@@ -228,7 +228,8 @@ void ITLoader::loadSample(int index, shared_ptr<Sample> sample)
         InstrumentExtra extra;
         loadITSample(sampleOffsets[index], sample, &extra);
     } else {
-        // TODO
+        InstrumentExtra extra;
+        loadInstrument(instOffsets[index], sample, &extra);
     }
 }
 
@@ -371,13 +372,18 @@ void ITLoader::loadInstrument(uint32_t offset, shared_ptr<Sample> sample,
     // TODO also get note and transpose
     SDL_RWseek(stream, offset + INST_SAMPLE_NUM_OFFSET, RW_SEEK_SET);
     uint8_t sampleNum = SDL_ReadU8(stream);
-    if (sampleNum == 0 || sampleNum > itSamples.size()) {
+    if (sampleNum == 0 || sampleNum > numSamples) {
         return;
     }
 
-    // copies wave
-    *sample = *(itSamples[sampleNum - 1]);
-    *extra = itSampleExtras[sampleNum - 1];
+    if (itSamples.empty()) {
+        // probably loading single instrument
+        loadITSample(sampleOffsets[sampleNum - 1], sample, extra);
+    } else {
+        // copies wave
+        *sample = *(itSamples[sampleNum - 1]);
+        *extra = itSampleExtras[sampleNum - 1];
+    }
 
     SDL_RWseek(stream, offset + 0x14, RW_SEEK_SET);
     uint16_t fadeOut = SDL_ReadLE16(stream);

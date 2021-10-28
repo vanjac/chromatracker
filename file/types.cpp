@@ -48,7 +48,7 @@ SampleLoader * sampleLoaderForPath(Path path)
     Path parent = path.parent_path();
     string ext = normalizedExtension(path);
     string parentExt = normalizedExtension(parent);
-    if (ext == "" && parentExt == ".it") {
+    if (parentExt == ".it") {
         Path modulePath = path.parent_path();
         SDL_RWops *stream = SDL_RWFromFile(modulePath.string().c_str(), "r");
         if (!stream) {

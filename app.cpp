@@ -541,6 +541,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     auto op = std::make_unique<edit::ops::AddSample>(
                         numSamples, newSample);
                     doOperation(std::move(op));
+                    selectedSample = numSamples;
 
                     // call at the end to prevent access violation!
                     browser.reset();
