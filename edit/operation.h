@@ -19,4 +19,13 @@ public:
 
 using SongOp = Operation<Song *>;
 
+// utils for operations:
+
+struct EventRef
+{
+    shared_ptr<Section> section;
+    int track;
+    int index;
+};
+
 } // namespace

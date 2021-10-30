@@ -88,4 +88,17 @@ protected:
     const shared_ptr<Sample> sample;
 };
 
+class DeleteSample : public SongOp
+{
+public:
+    DeleteSample(shared_ptr<Sample> sample);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    const shared_ptr<Sample> sample;
+private:
+    int index {-1};
+    vector<EventRef> sampleEvents;
+};
+
 } // namespace

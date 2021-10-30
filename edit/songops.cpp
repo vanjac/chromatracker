@@ -213,4 +213,46 @@ void AddSample::undoIt(Song *song)
     sample->deleted = true;
 }
 
+DeleteSample::DeleteSample(shared_ptr<Sample> sample)
+    : sample(sample)
+{}
+
+bool DeleteSample::doIt(Song *song)
+{
+    std::unique_lock songLock(song->mu);
+
+    // clear all events that reference this sample
+    for (auto &section : song->sections) {
+        std::unique_lock sectionLock(section->mu);
+        for (int t = 0; t < section->trackEvents.size(); t++) {
+            auto &events = section->trackEvents[t];
+            for (int e = 0; e < events.size(); e++) {
+                if (events[e].sample.lockDeleted() == sample) {
+                    sampleEvents.push_back({section, t, e});
+                    events[e].sample.reset();
+                }
+            }
+        }
+    }
+
+    auto it = std::find(song->samples.begin(), song->samples.end(), sample);
+    index = it - song->samples.begin();
+    song->samples.erase(it);
+    sample->deleted = true;
+    return true;
+}
+
+void DeleteSample::undoIt(Song *song)
+{
+    std::unique_lock songLock(song->mu);
+    sample->deleted = false;
+    song->samples.insert(song->samples.begin() + index, sample);
+
+    for (auto &eventRef : sampleEvents) {
+        std::unique_lock sectionLock(eventRef.section->mu);
+        eventRef.section->trackEvents[eventRef.track][eventRef.index].sample
+            = sample;
+    }
+}
+
 } // namespace

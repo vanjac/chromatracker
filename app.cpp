@@ -555,6 +555,20 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_KP_MINUS:
+        if (ctrl) {
+            shared_ptr<Sample> sample;
+            {
+                std::shared_lock lock(song.mu);
+                if (selectedSample >= 0 && selectedSample < song.samples.size())
+                    sample = song.samples[selectedSample];
+                if (selectedSample == song.samples.size() - 1)
+                    selectedSample--;
+            }
+            if (sample) {
+                auto op = std::make_unique<edit::ops::DeleteSample>(sample);
+                doOperation(std::move(op));
+            }
+        }
         selectedSample--;
         if (selectedSample < 0)
             selectedSample = 0;
