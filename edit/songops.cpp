@@ -3,6 +3,24 @@
 
 namespace chromatracker::edit::ops {
 
+/*
+Order is important!
+For deleting an object:
+- Lock song
+- Remove all links to the object
+- Remove from songobj list
+- Set deleted flag
+
+If the deleted flag is set too early, links could be broken if they are accessed
+elsewhere.
+
+For adding/undeleting an object:
+- Lock song
+- Clear deleted flag
+- Insert to songobj list
+- Restore all links to the object
+*/
+
 SetSongVolume::SetSongVolume(float volume)
     : volume(volume)
 {}
@@ -101,7 +119,7 @@ AddSection::AddSection(int index, shared_ptr<Section> section)
 bool AddSection::doIt(Song *song)
 {
     std::unique_lock songLock(song->mu);
-
+    section->deleted = false;
     song->sections.insert(song->sections.begin() + index, section);
 
     std::unique_lock sectionLock(section->mu);
@@ -109,29 +127,26 @@ bool AddSection::doIt(Song *song)
         section->next = song->sections[index + 1];
     }
     if (index != 0) {
-        if (song->sections.front()->next.lock() == section->next.lock())
-            song->sections.front()->next = section;
+        if (song->sections[index - 1]->next.lockDeleted() ==
+                section->next.lockDeleted())
+            song->sections[index - 1]->next = section;
     }
 
-    section->deleted = false;
     return true;
 }
 
 void AddSection::undoIt(Song *song)
 {
     std::unique_lock songLock(song->mu);
-    section->deleted = true;
-    song->sections.erase(song->sections.begin() + index);
 
     if (index != 0) {
-        if (song->sections.front()->next.lockDeleted() == section) {
-            if (index != song->sections.size()) {
-                song->sections.front()->next = song->sections[index];
-            } else {
-                song->sections.front()->next.reset();
-            }
+        if (song->sections[index - 1]->next.lockDeleted() == section) {
+            song->sections[index - 1]->next = section->next;
         }
     }
+
+    song->sections.erase(song->sections.begin() + index);
+    section->deleted = true;
 }
 
 DeleteSection::DeleteSection(shared_ptr<Section> section)
@@ -145,10 +160,6 @@ bool DeleteSection::doIt(Song *song)
         index = -1;
         return false; // don't delete the last section
     }
-    section->deleted = true;
-    auto it = std::find(song->sections.begin(), song->sections.end(), section);
-    index = it - song->sections.begin();
-    song->sections.erase(it);
 
     // fix sections which point to the deleted section
     for (int i = 0; i < song->sections.size(); i++) {
@@ -156,12 +167,14 @@ bool DeleteSection::doIt(Song *song)
         std::unique_lock otherLock(other->mu);
         if (other->next.lockDeleted() == section) {
             prevLinks.push_back(other);
-            if (i != song->sections.size() - 1)
-                other->next = song->sections[i + 1];
-            else
-                other->next.reset();
+            other->next = section->next;
         }
     }
+
+    auto it = std::find(song->sections.begin(), song->sections.end(), section);
+    index = it - song->sections.begin();
+    song->sections.erase(it);
+    section->deleted = true;
     return true;
 }
 
@@ -170,14 +183,13 @@ void DeleteSection::undoIt(Song *song)
     if (index < 0)
         return;
     std::unique_lock songLock(song->mu);
+    section->deleted = false;
     song->sections.insert(song->sections.begin() + index, section);
 
     for (auto &link : prevLinks) {
         std::unique_lock linkLock(link->mu);
         link->next = section;
     }
-
-    section->deleted = false;
     prevLinks.clear();
 }
 
@@ -189,16 +201,16 @@ AddSample::AddSample(int index, shared_ptr<Sample> sample)
 bool AddSample::doIt(Song *song)
 {
     std::unique_lock songLock(song->mu);
-    song->samples.insert(song->samples.begin() + index, sample);
     sample->deleted = false;
+    song->samples.insert(song->samples.begin() + index, sample);
     return true;
 }
 
 void AddSample::undoIt(Song *song)
 {
     std::unique_lock songLock(song->mu);
-    sample->deleted = true;
     song->samples.erase(song->samples.begin() + index);
+    sample->deleted = true;
 }
 
 } // namespace
