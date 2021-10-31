@@ -70,6 +70,50 @@ void AddTrack::undoIt(Song *song)
     track->deleted = true;
 }
 
+DeleteTrack::DeleteTrack(shared_ptr<Track> track)
+    : track(track)
+{}
+
+bool DeleteTrack::doIt(Song *song)
+{
+    std::unique_lock songLock(song->mu);
+    if (song->tracks.size() <= 1) {
+        index = -1;
+        return false; // don't delete the last track
+    }
+
+    auto it = std::find(song->tracks.begin(), song->tracks.end(), track);
+    index = it - song->tracks.begin();
+
+    clearedEvents.reserve(song->sections.size());
+    for (auto &section : song->sections) {
+        std::unique_lock sectionLock(section->mu);
+        clearedEvents.push_back(section->trackEvents[index]);
+        section->trackEvents.erase(section->trackEvents.begin() + index);
+    }
+
+    song->tracks.erase(song->tracks.begin() + index);
+    track->deleted = true;
+    return true;
+}
+
+void DeleteTrack::undoIt(Song *song)
+{
+    if (index < 0)
+        return;
+    std::unique_lock songLock(song->mu);
+    track->deleted = false;
+    song->tracks.insert(song->tracks.begin() + index, track);
+
+    for (int i = 0; i < song->sections.size(); i++) {
+        auto &section = song->sections[i];
+        std::unique_lock sectionLock(section->mu);
+        section->trackEvents.insert(section->trackEvents.begin() + index,
+                                    clearedEvents[i]);
+    }
+    clearedEvents.clear();
+}
+
 SetTrackMute::SetTrackMute(int track, bool mute)
     : track(track)
     , mute(mute)

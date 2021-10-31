@@ -886,6 +886,17 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             auto op = std::make_unique<edit::ops::DeleteSection>(
                 deleteSection);
             doOperation(std::move(op));
+        } else if (alt) {
+            std::shared_ptr<Track> deleteTrack;
+            {
+                std::shared_lock lock(song.mu);
+                if (editCur.track >= 0 && editCur.track < song.tracks.size())
+                    deleteTrack = song.tracks[editCur.track];
+            }
+            if (deleteTrack) {
+                auto op = std::make_unique<edit::ops::DeleteTrack>(deleteTrack);
+                doOperation(std::move(op));
+            }
         } else {
             auto op = std::make_unique<edit::ops::ClearCell>(
                 editCur, overwrite ? cellSize : 1);

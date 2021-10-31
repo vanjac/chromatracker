@@ -29,6 +29,19 @@ protected:
     const shared_ptr<Track> track;
 };
 
+class DeleteTrack : public SongOp
+{
+public:
+    DeleteTrack(shared_ptr<Track> track);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    const shared_ptr<Track> track;
+private:
+    int index {-1};
+    vector<vector<Event>> clearedEvents;
+};
+
 class SetTrackMute : public SongOp
 {
 public:
