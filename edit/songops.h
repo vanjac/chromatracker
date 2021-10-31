@@ -18,6 +18,17 @@ protected:
     float volume;
 };
 
+class AddTrack : public SongOp
+{
+public:
+    AddTrack(int index, shared_ptr<Track> track);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    const int index;
+    const shared_ptr<Track> track;
+};
+
 class SetTrackMute : public SongOp
 {
 public:

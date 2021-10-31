@@ -37,6 +37,39 @@ void SetSongVolume::undoIt(Song *song)
     doIt(song);
 }
 
+AddTrack::AddTrack(int index, shared_ptr<Track> track)
+    : index(index)
+    , track(track)
+{}
+
+bool AddTrack::doIt(Song *song)
+{
+    std::unique_lock songLock(song->mu);
+    track->deleted = false;
+    song->tracks.insert(song->tracks.begin() + index, track);
+
+    for (auto &section : song->sections) {
+        std::unique_lock sectionLock(section->mu);
+        section->trackEvents.insert(section->trackEvents.begin() + index,
+                                    vector<Event>());
+    }
+
+    return true;
+}
+
+void AddTrack::undoIt(Song *song)
+{
+    std::unique_lock songLock(song->mu);
+
+    for (auto &section : song->sections) {
+        std::unique_lock sectionLock(section->mu);
+        section->trackEvents.erase(section->trackEvents.begin() + index);
+    }
+
+    song->tracks.erase(song->tracks.begin() + index);
+    track->deleted = true;
+}
+
 SetTrackMute::SetTrackMute(int track, bool mute)
     : track(track)
     , mute(mute)

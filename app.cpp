@@ -48,8 +48,8 @@ App::~App()
 void App::main(const vector<string> args)
 {
     // setup song (don't need locks at this moment)
-    song.tracks.reserve(8);
-    for (int i = 0; i < 8; i++) {
+    song.tracks.reserve(4);
+    for (int i = 0; i < 4; i++) {
         song.tracks.emplace_back(new Track);
     }
     {
@@ -751,7 +751,17 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
         }
         break;
     case SDLK_RIGHT:
-        {
+        if (ctrl) {
+            {
+                std::shared_lock lock(song.mu);
+                if (editCur.track >= song.tracks.size())
+                    editCur.track = song.tracks.size() - 1;
+            }
+            shared_ptr<Track> newTrack(new Track);
+            auto op = std::make_unique<edit::ops::AddTrack>(
+                editCur.track + 1, newTrack);
+            doOperation(std::move(op));
+        } else {
             std::shared_lock songLock(song.mu);
             if (ctrl) {
                 editCur.track = song.tracks.size() - 1;
