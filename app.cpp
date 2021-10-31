@@ -478,7 +478,6 @@ void App::drawPiano(ui::Rect rect)
 void App::keyDown(const SDL_KeyboardEvent &e)
 {
     bool ctrl = e.keysym.mod & KMOD_CTRL;
-    bool shift = e.keysym.mod & KMOD_SHIFT;
     switch (e.keysym.sym) {
     case SDLK_z:
         if (ctrl) {
@@ -635,12 +634,15 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     if (browser) {
         browser->keyDown(e);
     } else {
-        keyDownEvents(e, ctrl, shift);
+        keyDownEvents(e);
     }
 }
 
-void App::keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
+void App::keyDownEvents(const SDL_KeyboardEvent &e)
 {
+    bool ctrl = e.keysym.mod & KMOD_CTRL;
+    bool shift = e.keysym.mod & KMOD_SHIFT;
+    bool alt = e.keysym.mod & KMOD_ALT;
     if (!e.repeat && !ctrl) {
         int pitch = pitchKeymap(e.keysym.scancode);
         int sample = sampleKeymap(e.keysym.scancode);
@@ -751,17 +753,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
         }
         break;
     case SDLK_RIGHT:
-        if (ctrl) {
-            {
-                std::shared_lock lock(song.mu);
-                if (editCur.track >= song.tracks.size())
-                    editCur.track = song.tracks.size() - 1;
-            }
-            shared_ptr<Track> newTrack(new Track);
-            auto op = std::make_unique<edit::ops::AddTrack>(
-                editCur.track + 1, newTrack);
-            doOperation(std::move(op));
-        } else {
+        {
             std::shared_lock songLock(song.mu);
             if (ctrl) {
                 editCur.track = song.tracks.size() - 1;
@@ -843,6 +835,19 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift)
                 editCur.cursor.time = 0;
                 movedEditCur = true;
             }
+        } else if (alt) {
+            {
+                std::shared_lock lock(song.mu);
+                if (editCur.track >= song.tracks.size()) {
+                    editCur.track = song.tracks.size() - 1;
+                } else if (editCur.track < 0) {
+                    editCur.track = 0;
+                }
+            }
+            shared_ptr<Track> newTrack(new Track);
+            auto op = std::make_unique<edit::ops::AddTrack>(
+                editCur.track + 1, newTrack);
+            doOperation(std::move(op));
         }
         break;
     case SDLK_DELETE:

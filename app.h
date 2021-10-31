@@ -38,7 +38,7 @@ private:
     void drawPiano(ui::Rect rect);
 
     void keyDown(const SDL_KeyboardEvent &e);
-    void keyDownEvents(const SDL_KeyboardEvent &e, bool ctrl, bool shift);
+    void keyDownEvents(const SDL_KeyboardEvent &e);
     void keyUpEvents(const SDL_KeyboardEvent &e);
 
     void doOperation(unique_ptr<edit::SongOp> op);
