@@ -7,15 +7,15 @@ const int Section::NO_METER = -1;
 
 void Song::clear()
 {
-    for (auto sample : samples) {
+    for (auto &sample : samples) {
         sample->deleted = true;
     }
     samples.clear();
-    for (auto track : tracks) {
+    for (auto &track : tracks) {
         track->deleted = true;
     }
     tracks.clear();
-    for (auto section : sections) {
+    for (auto &section : sections) {
         section->deleted = true;
     }
     sections.clear();
