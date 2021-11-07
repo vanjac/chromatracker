@@ -74,6 +74,8 @@ void App::main(const vector<string> args)
     SDL_PauseAudioDevice(audioDevice, 0); // audio devices start paused
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_MULTISAMPLE);
+    glDisable(GL_DEPTH_TEST);
     FONT_DEFAULT.initGL();
 
     bool running = true;

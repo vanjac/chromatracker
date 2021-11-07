@@ -29,6 +29,20 @@ int main(int argc, char *argv[])
         <<linked<< " (linked)\n";
     
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+
+#ifdef OPENGL_DEBUG
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+#else
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+#endif
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                        SDL_GL_CONTEXT_PROFILE_COMPATIBILITY); // TODO remove
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
+    // must be set before creating window
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+
     SDL_Window *window = SDL_CreateWindow("chromatracker",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         800, 600,
@@ -40,15 +54,6 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-#ifdef OPENGL_DEBUG
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-#else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-#endif
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
-                        SDL_GL_CONTEXT_PROFILE_COMPATIBILITY); // TODO remove
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
     SDL_GLContext gl_context = SDL_GL_CreateContext(window);
     if (!gl_context) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL OpenGL Error",

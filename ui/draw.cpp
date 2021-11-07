@@ -5,7 +5,7 @@ namespace chromatracker::ui {
 
 void drawRect(ui::Rect rect)
 {
-    glBegin(GL_QUADS);
+    glBegin(GL_TRIANGLE_FAN);
     glVertex2f(rect.min.x, rect.min.y);
     glVertex2f(rect.min.x, rect.max.y);
     glVertex2f(rect.max.x, rect.max.y);
