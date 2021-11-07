@@ -11,9 +11,9 @@ struct Cursor
     ObjWeakPtr<Section> section; // null means the cursor is in null state
     ticks time; // in section
 
-    Cursor();
-    Cursor(Song *song);
-    Cursor(Song *song, shared_ptr<Section> section);
+    Cursor(Song *song=nullptr,
+           shared_ptr<Section> section=nullptr,
+           ticks time=0);
 
     void playStep();
 

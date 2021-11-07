@@ -101,6 +101,17 @@ private:
     vector<shared_ptr<Section>> prevLinks;
 };
 
+class SliceSection : public SongOp
+{
+public:
+    SliceSection(shared_ptr<Section> section, ticks pos);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    const shared_ptr<Section> section;
+    const ticks pos;
+};
+
 class AddSample : public SongOp
 {
 public:

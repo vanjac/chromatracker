@@ -3,20 +3,10 @@
 
 namespace chromatracker {
 
-Cursor::Cursor()
-    : song(nullptr)
-    , time(0)
-{}
-
-Cursor::Cursor(Song *song)
-    : song(song)
-    , time(0)
-{}
-
-Cursor::Cursor(Song *song, shared_ptr<Section> section)
+Cursor::Cursor(Song *song, shared_ptr<Section> section, ticks time)
     : song(song)
     , section(section)
-    , time(0)
+    , time(time)
 {}
 
 void Cursor::playStep()

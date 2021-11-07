@@ -270,6 +270,69 @@ void DeleteSection::undoIt(Song *song)
     prevLinks.clear();
 }
 
+SliceSection::SliceSection(shared_ptr<Section> section, ticks pos)
+    : section(section)
+    , pos(pos)
+{}
+
+bool SliceSection::doIt(Song *song)
+{
+    shared_ptr<Section> secondHalf(new Section);
+
+    std::unique_lock sectionLock(section->mu);
+    secondHalf->length = section->length - pos;
+    section->length = pos;
+    secondHalf->next = section->next;
+    section->next = secondHalf;
+
+    int numTracks = section->trackEvents.size();
+    secondHalf->trackEvents.reserve(numTracks);
+
+    TrackCursor tcur {Cursor(song, section, pos)};
+    for (tcur.track = 0; tcur.track < numTracks; tcur.track++) {
+        auto &srcEvents = tcur.events();
+        auto splitPoint = tcur.findEvent();
+        auto &dstEvents = secondHalf->trackEvents.emplace_back(
+            splitPoint, srcEvents.end()); // copy range to new vector
+        srcEvents.erase(splitPoint, srcEvents.end());
+        for (auto &event : dstEvents) {
+            event.time -= pos;
+        }
+    }
+
+    // keep section locked...
+    std::unique_lock songLock(song->mu);
+    auto it = std::find(song->sections.begin(), song->sections.end(), section);
+    song->sections.insert(it + 1, secondHalf);
+    return true;
+}
+
+void SliceSection::undoIt(Song *song)
+{
+    std::unique_lock sectionLock(section->mu);
+    auto secondHalf = section->next.lock();
+    std::unique_lock secondLock(secondHalf->mu);
+    section->length += secondHalf->length;
+    section->next = secondHalf->next;
+
+    for (int t = 0; t < section->trackEvents.size(); t++) {
+        auto &srcEvents = secondHalf->trackEvents[t];
+        auto &dstEvents = section->trackEvents[t];
+        for (auto &event : srcEvents) {
+            event.time += pos;
+        }
+        dstEvents.insert(dstEvents.end(), srcEvents.begin(), srcEvents.end());
+        srcEvents.clear();
+    }
+
+    std::unique_lock songLock(song->mu);
+    auto it = std::find(song->sections.begin(), song->sections.end(),
+                        secondHalf);
+    // second half will probably be completely deleted bc nothing references it
+    song->sections.erase(it);
+    secondHalf->deleted = true;
+}
+
 AddSample::AddSample(int index, shared_ptr<Sample> sample)
     : index(index)
     , sample(sample)

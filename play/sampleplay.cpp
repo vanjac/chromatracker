@@ -97,6 +97,7 @@ void SamplePlay::processTick(float *tickBuffer, frames tickFrames,
         if (playbackPos >= maxPos || playbackPos <= minPos) {
             // invalid position, quit (this shouldn't happen)
             // TODO getting this error sometimes (eg. clock.it, d1993.it)
+            // also when playing an empty sample (eg. problem.it)
             cout << ":( " << sampleP->name<< " " <<playbackPos<<
                 " " <<maxPos<< " " <<minPos<< "\n";
             _sample.reset();

@@ -903,6 +903,20 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             doOperation(std::move(op));
         }
         break;
+    case SDLK_SLASH:
+        if (!e.repeat && ctrl && editCur.cursor.time != 0) {
+            if (auto sectionP = editCur.cursor.section.lock()) {
+                auto op = std::make_unique<edit::ops::SliceSection>(
+                    sectionP, editCur.cursor.time);
+                doOperation(std::move(op));
+                {
+                    std::shared_lock lock(sectionP->mu);
+                    editCur.cursor.section = sectionP->next;
+                    editCur.cursor.time = 0;
+                }
+            }
+        }
+        break;
     case SDLK_BACKQUOTE:
         if (record) {
             Event fadeEvent;
