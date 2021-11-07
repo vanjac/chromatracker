@@ -3,7 +3,7 @@
 
 #include <unordered_map>
 #include <glutils.h>
-#include <ft2build.h>
+#include <ft2build.h> // TODO could we avoid including in header?
 #include FT_FREETYPE_H
 #include <glm/glm.hpp>
 

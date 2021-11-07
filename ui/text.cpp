@@ -1,5 +1,4 @@
 #include "text.h"
-#include "font.h"
 #include <array>
 #include <stdexcept>
 #include <glad/glad.h>
