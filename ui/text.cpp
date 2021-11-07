@@ -32,18 +32,18 @@ void Font::initGL()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-glm::ivec2 drawText(string text, glm::ivec2 position, const Font *font)
+glm::ivec2 drawText(string text, glm::vec2 position, const Font *font)
 {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, font->texture);
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
 
-    glm::ivec2 charSize = font->charDim * 2;
+    glm::vec2 charSize = font->charDim * 2;
     glm::ivec2 charCount = font->bitmapDim / font->charDim;
 
     glBegin(GL_QUADS);
-    glm::ivec2 curPos = position;
+    glm::vec2 curPos = position;
     for (auto &c : text) {
         if (c == '\n') {
             curPos.x = position.x;
@@ -57,7 +57,7 @@ glm::ivec2 drawText(string text, glm::ivec2 position, const Font *font)
         glm::vec2 minCoordF = (glm::vec2)minCoord / (glm::vec2)font->bitmapDim;
         glm::vec2 maxCoordF = (glm::vec2)maxCoord / (glm::vec2)font->bitmapDim;
 
-        glm::ivec2 maxPos = curPos + charSize;
+        glm::vec2 maxPos = curPos + charSize;
 
         glTexCoord2f(minCoordF.x, minCoordF.y);
         glVertex2i(curPos.x, curPos.y);

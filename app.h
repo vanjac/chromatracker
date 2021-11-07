@@ -52,7 +52,7 @@ private:
     int sampleKeymap(SDL_Scancode key);
 
     SDL_Window *window;
-    int winW, winH;
+    ui::Rect winRect {{0, 0}, {0, 0}};
     SDL_AudioDeviceID audioDevice;
 
     Song song;

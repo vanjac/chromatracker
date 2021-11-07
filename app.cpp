@@ -12,6 +12,9 @@
 
 namespace chromatracker {
 
+using namespace ui;
+using glm::vec2;
+
 const float CELL_HEIGHT = 32;
 const float TRACK_SPACING = 80;
 const float TRACK_WIDTH = 70;
@@ -64,13 +67,14 @@ void App::main(const vector<string> args)
     editCur.cursor = Cursor(&song, song.sections.front());
     player.setCursor(Cursor(&song));
 
+    int winW, winH;
     SDL_GetWindowSize(window, &winW, &winH);
     resizeWindow(winW, winH);
 
     SDL_PauseAudioDevice(audioDevice, 0); // audio devices start paused
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    ui::FONT_DEFAULT.initGL();
+    FONT_DEFAULT.initGL();
 
     bool running = true;
     while (running) {
@@ -107,9 +111,9 @@ void App::main(const vector<string> args)
                 break;
             case SDL_MOUSEMOTION:
                 if (event.motion.state & SDL_BUTTON_LMASK != 0
-                        && event.motion.x >= 0 && event.motion.x < winW) {
+                        && winRect.contains({event.motion.x, event.motion.y})) {
                     float volume = velocityToAmplitude(
-                        (float)event.motion.x / winW);
+                        winRect.normalized({event.motion.x, 0}).x);
                     if (!songVolumeOp) {
                         songVolumeOp = std::make_unique
                             <edit::ops::SetSongVolume>(volume);
@@ -157,15 +161,20 @@ void App::main(const vector<string> args)
         glClear(GL_COLOR_BUFFER_BIT);
 
         glEnable(GL_SCISSOR_TEST);
-        drawInfo({{0, 0}, {winW - 180, 20}});
+        drawInfo({winRect[TOP_LEFT], winRect[TOP_RIGHT] + vec2(-180, 20)});
         if (browser) {
-            browser->draw({{0, 20}, {winW - 180, winH - 100}});
+            browser->draw({winRect[TOP_LEFT] + vec2(0, 20),
+                           winRect[BOTTOM_RIGHT] + vec2(-180, -100)});
         } else {
-            drawTracks({{0, 20}, {winW - 180, 40}});
-            drawEvents({{0, 40}, {winW - 180, winH - 100}}, playCur);
+            drawTracks({winRect[TOP_LEFT] + vec2(0, 20),
+                        winRect[TOP_RIGHT] + vec2(-180, 40)});
+            drawEvents({winRect[TOP_LEFT] + vec2(0, 40),
+                        winRect[BOTTOM_RIGHT] + vec2(-180, -100)}, playCur);
         }
-        drawSampleList({{winW - 180, 0}, {winW, winH}});
-        drawPiano({{0, winH - 100}, {winW - 180, winH}});
+        drawSampleList({winRect[TOP_RIGHT] + vec2(-180, 0),
+                        winRect[BOTTOM_RIGHT]});
+        drawPiano({winRect[BOTTOM_LEFT] + vec2(0, -100),
+                   winRect[BOTTOM_RIGHT] + vec2(-180, 0)});
         glDisable(GL_SCISSOR_TEST);
 
         SDL_GL_SwapWindow(window);
@@ -174,8 +183,7 @@ void App::main(const vector<string> args)
 
 void App::resizeWindow(int w, int h)
 {
-    winW = w;
-    winH = h;
+    winRect.max = vec2(w, h);
     glViewport(0, 0, w, h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -184,37 +192,38 @@ void App::resizeWindow(int w, int h)
     glLoadIdentity();
 }
 
-void App::scissorRect(ui::Rect rect) const
+void App::scissorRect(Rect rect) const
 {
-    glScissor(rect.min.x, winH - rect.max.y, rect.width(), rect.height());
+    glScissor(rect.min.x - winRect.min.x, winRect.max.y - rect.max.y,
+              rect.dim().x, rect.dim().y);
 }
 
-void App::drawInfo(ui::Rect rect)
+void App::drawInfo(Rect rect)
 {
     scissorRect(rect);
 
     glColor3f(1, 1, 1);
-    glm::vec2 textPos = rect.min;
-    textPos = ui::drawText("Record: ", textPos);
-    textPos = ui::drawText(std::to_string(record), textPos);
-    textPos = ui::drawText(" Follow: ", textPos);
-    textPos = ui::drawText(std::to_string(followPlayback), textPos);
-    textPos = ui::drawText(" Overwrite: ", textPos);
-    textPos = ui::drawText(std::to_string(overwrite), textPos);
-    textPos = ui::drawText("  ", textPos);
+    vec2 textPos = rect.min;
+    textPos = drawText("Record: ", textPos);
+    textPos = drawText(std::to_string(record), textPos);
+    textPos = drawText(" Follow: ", textPos);
+    textPos = drawText(std::to_string(followPlayback), textPos);
+    textPos = drawText(" Overwrite: ", textPos);
+    textPos = drawText(std::to_string(overwrite), textPos);
+    textPos = drawText("  ", textPos);
 
     std::shared_lock songLock(song.mu);
     float volumeX = textPos.x
         + amplitudeToVelocity(song.volume) * (rect.max.x - textPos.x);
     glColor3f(0, 0.7, 0);
-    ui::drawRect({{textPos.x, rect.min.y}, {volumeX, rect.max.y}});
+    drawRect({{textPos.x, rect.min.y}, {volumeX, rect.max.y}});
     glColor3f(0.2, 0.2, 0.2);
-    ui::drawRect({{volumeX, rect.min.y}, {rect.max.x, rect.max.y}});
+    drawRect({{volumeX, rect.min.y}, {rect.max.x, rect.max.y}});
     glColor3f(1, 1, 1);
-    ui::drawText("Volume", textPos);
+    drawText("Volume", textPos);
 }
 
-void App::drawTracks(ui::Rect rect)
+void App::drawTracks(Rect rect)
 {
     scissorRect(rect);
 
@@ -227,13 +236,13 @@ void App::drawTracks(ui::Rect rect)
         float xEnd = x + TRACK_WIDTH;
         float xCenter = (x + xEnd) / 2;
         glColor3f(0.2, 0.2, 0.2);
-        ui::drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
+        drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
         if (!track->mute) {
             float volumeX = x + amplitudeToVelocity(track->volume) * (xEnd - x);
             float panX = xCenter + track->pan * (xEnd - x) / 2;
             glColor3f(0, 0.7, 0);
-            ui::drawRect({{x, rect.min.y}, {volumeX, rect.center().y}});
-            ui::drawRect({{xCenter, rect.center().y}, {panX, rect.max.y}});
+            drawRect({{x, rect.min.y}, {volumeX, rect.center().y}});
+            drawRect({{xCenter, rect.center().y}, {panX, rect.max.y}});
 
             glColor3f(1, 1, 1);
             glBegin(GL_LINES);
@@ -243,11 +252,11 @@ void App::drawTracks(ui::Rect rect)
         }
 
         glColor3f(1, 1, 1);
-        ui::drawText(std::to_string(i + 1), {x + 20, rect.min.y});
+        drawText(std::to_string(i + 1), {x + 20, rect.min.y});
     }
 }
 
-void App::drawEvents(ui::Rect rect, Cursor playCur)
+void App::drawEvents(Rect rect, Cursor playCur)
 {
     scissorRect(rect);
 
@@ -284,15 +293,15 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
                 continue;
 
             glColor3f(1, 1, 1);
-            glm::ivec2 textPos {rect.min.x, sectionY - 20};
-            textPos = ui::drawText(section->title, textPos);
+            vec2 textPos {rect.min.x, sectionY - 20};
+            textPos = drawText(section->title, textPos);
             if (section->tempo != Section::NO_TEMPO) {
-                textPos = ui::drawText("  Tempo=", textPos);
-                textPos = ui::drawText(std::to_string(section->tempo), textPos);
+                textPos = drawText("  Tempo=", textPos);
+                textPos = drawText(std::to_string(section->tempo), textPos);
             }
             if (section->meter != Section::NO_METER) {
-                textPos = ui::drawText("  Meter=", textPos);
-                textPos = ui::drawText(std::to_string(section->meter), textPos);
+                textPos = drawText("  Meter=", textPos);
+                textPos = drawText(std::to_string(section->meter), textPos);
             }
             for (int t = 0; t < section->trackEvents.size(); t++) {
                 bool mute;
@@ -331,7 +340,7 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
                     else
                         color *= curVelocity; // TODO gamma correct
                     glColor3f(color.r, color.g, color.b);
-                    ui::drawRect({{x, y}, {xEnd, yEnd}});
+                    drawRect({{x, y}, {xEnd, yEnd}});
                     glColor3f(1, 1, 1);
                     glBegin(GL_LINES);
                     glVertex2f(x, y);
@@ -339,12 +348,11 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
                     glEnd();
 
                     // TODO avoid allocation
-                    glm::ivec2 textPos {x, y};
+                    vec2 textPos {x, y};
                     if (sampleP) {
-                        textPos = ui::drawText(sampleP->name.substr(0, 2),
-                                               textPos);
+                        textPos = drawText(sampleP->name.substr(0, 2), textPos);
                     } else {
-                        textPos = ui::drawText("  ", textPos);
+                        textPos = drawText("  ", textPos);
                     }
                     string specialStr = " ";
                     switch (event.special) {
@@ -355,10 +363,9 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
                         specialStr = "/";
                         break;
                     }
-                    textPos = ui::drawText(specialStr, textPos);
+                    textPos = drawText(specialStr, textPos);
                     if (event.pitch != Event::NO_PITCH) {
-                        textPos = ui::drawText(pitchToString(event.pitch),
-                                               textPos);
+                        textPos = drawText(pitchToString(event.pitch), textPos);
                     }
                 } // each event
             } // each track
@@ -398,8 +405,7 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
         float cellY = rect.center().y;
         glColor4f(1, 1, 1, 0.5);
         glEnable(GL_BLEND);
-        ui::drawRect({{cellX, cellY},
-                      {cellX + TRACK_WIDTH, cellY + CELL_HEIGHT}});
+        drawRect({{cellX, cellY}, {cellX + TRACK_WIDTH, cellY + CELL_HEIGHT}});
         glDisable(GL_BLEND);
     }
 
@@ -414,7 +420,7 @@ void App::drawEvents(ui::Rect rect, Cursor playCur)
     }
 }
 
-void App::drawSampleList(ui::Rect rect)
+void App::drawSampleList(Rect rect)
 {
     scissorRect(rect);
     std::shared_lock songLock(song.mu);
@@ -423,17 +429,17 @@ void App::drawSampleList(ui::Rect rect)
             glColor3f(0.7, 1.0, 0.7);
         else
             glColor3f(1, 1, 1);
-        glm::vec2 textPos = rect.min;
+        vec2 textPos = rect.min;
         textPos.y += i * 20;
-        ui::drawText(song.samples[i]->name, textPos);
+        drawText(song.samples[i]->name, textPos);
     }
 }
 
-void App::drawPiano(ui::Rect rect)
+void App::drawPiano(Rect rect)
 {
     scissorRect(rect);
 
-    int numWhiteKeys = rect.width() / PIANO_KEY_WIDTH + 1;
+    int numWhiteKeys = rect.dim().x / PIANO_KEY_WIDTH + 1;
     for (int i = 0; i < numWhiteKeys; i++) {
         int key = WHITE_KEYS[i % 7];
         int octave = selectedOctave + (i / 7);
@@ -446,7 +452,7 @@ void App::drawPiano(ui::Rect rect)
             glColor3f(0.7, 1.0, 0.7);
         else
             glColor3f(1, 1, 1);
-        ui::drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
+        drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
 
         glColor3f(0, 0, 0);
         glBegin(GL_LINES);
@@ -455,11 +461,11 @@ void App::drawPiano(ui::Rect rect)
         glEnd();
 
         if (key == 0) {
-            ui::drawText(std::to_string(octave), {x + 8, rect.max.y - 24});
+            drawText(std::to_string(octave), {x + 8, rect.max.y - 24});
         }
     }
 
-    float blackYEnd = rect.min.y + rect.height() * 0.6;
+    float blackYEnd = rect.min.y + rect.dim().y * 0.6;
     for (int i = 0; i < numWhiteKeys; i++) {
         int key = BLACK_KEYS[i % 7];
         if (key < 0)
@@ -471,7 +477,7 @@ void App::drawPiano(ui::Rect rect)
             glColor3f(0, 0.7, 0);
         else
             glColor3f(0, 0, 0);
-        ui::drawRect({{x, rect.min.y}, {x + PIANO_KEY_WIDTH / 2, blackYEnd}});
+        drawRect({{x, rect.min.y}, {x + PIANO_KEY_WIDTH / 2, blackYEnd}});
     }
 }
 
@@ -518,7 +524,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_KP_PLUS:
         if (ctrl) {
-            browser = std::make_unique<ui::panels::Browser>(this,
+            browser = std::make_unique<panels::Browser>(this,
                 file::FileType::Sample, [this](file::Path path) {
                     if (path.empty()) {
                         browser.reset();
@@ -599,7 +605,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     /* File */
     case SDLK_o:
         if (ctrl) {
-            browser = std::make_unique<ui::panels::Browser>(this,
+            browser = std::make_unique<panels::Browser>(this,
                 file::FileType::Module, [this](file::Path path) {
                     if (path.empty()) {
                         browser.reset();
