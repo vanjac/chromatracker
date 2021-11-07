@@ -49,5 +49,5 @@ add_custom_command(TARGET chromatracker POST_BUILD
 # data files
 add_custom_command(TARGET chromatracker POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${PROJECT_SOURCE_DIR}/assets/Hack-Bold.ttf
+        ${PROJECT_SOURCE_DIR}/assets/NotoSansMono-Bold.ttf
         $<TARGET_FILE_DIR:chromatracker>)
