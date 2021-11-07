@@ -5,9 +5,9 @@
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
 
-#define OPENGL_DEBUG
+#define OPENGL_DEBUG // TODO conditional
 
-// TODO: remove this
+#ifdef OPENGL_DEBUG
 extern "C" 
 {
     // request dedicated graphics card for Nvidia and AMD
@@ -16,6 +16,7 @@ extern "C"
     __declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
     __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
+#endif
 
 std::ostream & operator<<(std::ostream &o, SDL_version version);
 void messageCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
