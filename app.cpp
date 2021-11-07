@@ -15,8 +15,8 @@ namespace chromatracker {
 using namespace ui;
 
 const float CELL_HEIGHT = 32;
-const float TRACK_SPACING = 80;
-const float TRACK_WIDTH = 70;
+const float TRACK_SPACING = 70;
+const float TRACK_WIDTH = 64;
 const float PIANO_KEY_WIDTH = 40;
 const int WHITE_KEYS[] = {0, 2, 4, 5, 7, 9, 11};
 const int BLACK_KEYS[] = {-1, 1, 3, -1, 6, 8, 10};
@@ -161,15 +161,15 @@ void App::main(const vector<string> args)
         glClear(GL_COLOR_BUFFER_BIT);
 
         glEnable(GL_SCISSOR_TEST);
-        drawInfo({winR(TL), winR(TR, {-180, 20})});
+        drawInfo({winR(TL), winR(TR, {-160, 20})});
         if (browser) {
-            browser->draw({winR(TL, {0, 20}), winR(BR, {-180, -100})});
+            browser->draw({winR(TL, {0, 20}), winR(BR, {-160, -100})});
         } else {
-            drawTracks({winR(TL, {0, 20}), winR(TR, {-180, 40})});
-            drawEvents({winR(TL, {0, 40}), winR(BR, {-180, -100})}, playCur);
+            drawTracks({winR(TL, {0, 20}), winR(TR, {-160, 40})});
+            drawEvents({winR(TL, {0, 40}), winR(BR, {-160, -100})}, playCur);
         }
-        drawSampleList({winR(TR, {-180, 0}), winR(BR)});
-        drawPiano({winR(BL, {0, -100}), winR(BR, {-180, 0})});
+        drawSampleList({winR(TR, {-160, 0}), winR(BR)});
+        drawPiano({winR(BL, {0, -100}), winR(BR, {-160, 0})});
         glDisable(GL_SCISSOR_TEST);
 
         SDL_GL_SwapWindow(window);
@@ -337,7 +337,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
                     drawRect(Rect::hLine(eventR(TL), eventR.right(), 1));
 
                     // TODO avoid allocation
-                    glm::vec2 textPos = eventR(TL, {0, 2});
+                    glm::vec2 textPos = eventR(TL, {2, 0});
                     if (sampleP) {
                         textPos = drawText(sampleP->name.substr(0, 2), textPos);
                     } else {

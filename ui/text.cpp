@@ -51,6 +51,7 @@ const FontChar & getChar(Font *font, unsigned c)
 
     fontChar.bitmapDim = glm::ivec2(slot->bitmap.width, slot->bitmap.rows);
 
+    // TODO I think using charHeight is incorrect; measure to baseline?
     fontChar.drawOffset = glm::ivec2(slot->bitmap_left,
                                      font->charHeight - slot->bitmap_top);
     fontChar.advanceX = slot->advance.x / 64.0f;
