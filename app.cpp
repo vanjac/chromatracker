@@ -13,7 +13,6 @@
 namespace chromatracker {
 
 using namespace ui;
-using glm::vec2;
 
 const float CELL_HEIGHT = 32;
 const float TRACK_SPACING = 80;
@@ -163,20 +162,16 @@ void App::main(const vector<string> args)
         glClear(GL_COLOR_BUFFER_BIT);
 
         glEnable(GL_SCISSOR_TEST);
-        drawInfo({winRect[TOP_LEFT], winRect[TOP_RIGHT] + vec2(-180, 20)});
+        drawInfo({winRect(TL), winRect(TR, {-180, 20})});
         if (browser) {
-            browser->draw({winRect[TOP_LEFT] + vec2(0, 20),
-                           winRect[BOTTOM_RIGHT] + vec2(-180, -100)});
+            browser->draw({winRect(TL, {0, 20}), winRect(BR, {-180, -100})});
         } else {
-            drawTracks({winRect[TOP_LEFT] + vec2(0, 20),
-                        winRect[TOP_RIGHT] + vec2(-180, 40)});
-            drawEvents({winRect[TOP_LEFT] + vec2(0, 40),
-                        winRect[BOTTOM_RIGHT] + vec2(-180, -100)}, playCur);
+            drawTracks({winRect(TL, {0, 20}), winRect(TR, {-180, 40})});
+            drawEvents({winRect(TL, {0, 40}), winRect(BR, {-180, -100})},
+                       playCur);
         }
-        drawSampleList({winRect[TOP_RIGHT] + vec2(-180, 0),
-                        winRect[BOTTOM_RIGHT]});
-        drawPiano({winRect[BOTTOM_LEFT] + vec2(0, -100),
-                   winRect[BOTTOM_RIGHT] + vec2(-180, 0)});
+        drawSampleList({winRect(TR, {-180, 0}), winRect(BR)});
+        drawPiano({winRect(BL, {0, -100}), winRect(BR, {-180, 0})});
         glDisable(GL_SCISSOR_TEST);
 
         SDL_GL_SwapWindow(window);
@@ -185,7 +180,7 @@ void App::main(const vector<string> args)
 
 void App::resizeWindow(int w, int h)
 {
-    winRect.max = vec2(w, h);
+    winRect.max = glm::vec2(w, h);
     glViewport(0, 0, w, h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -205,7 +200,7 @@ void App::drawInfo(Rect rect)
     scissorRect(rect);
 
     glColor3f(1, 1, 1);
-    vec2 textPos = rect.min;
+    glm::vec2 textPos = rect.min;
     textPos = drawText("Record: ", textPos);
     textPos = drawText(std::to_string(record), textPos);
     textPos = drawText(" Follow: ", textPos);
@@ -234,27 +229,22 @@ void App::drawTracks(Rect rect)
         auto track = song.tracks[i];
         std::shared_lock trackLock(track->mu);
 
-        float x = rect.min.x + TRACK_SPACING * i;
-        float xEnd = x + TRACK_WIDTH;
-        float xCenter = (x + xEnd) / 2;
+        Rect trackRect = Rect::from(TL, rect(TL, {TRACK_SPACING * i, 0}),
+                                    {TRACK_WIDTH, rect.dim().y});
         glColor3f(0.2, 0.2, 0.2);
-        drawRect({{x, rect.min.y}, {xEnd, rect.max.y}});
+        drawRect(trackRect);
         if (!track->mute) {
-            float volumeX = x + amplitudeToVelocity(track->volume) * (xEnd - x);
-            float panX = xCenter + track->pan * (xEnd - x) / 2;
+            float vol = amplitudeToVelocity(track->volume);
             glColor3f(0, 0.7, 0);
-            drawRect({{x, rect.min.y}, {volumeX, rect.center().y}});
-            drawRect({{xCenter, rect.center().y}, {panX, rect.max.y}});
+            drawRect({trackRect(TL), trackRect({vol, 0.5})});
+            drawRect({trackRect(CC), trackRect({track->pan / 2 + 0.5, 1})});
 
             glColor3f(1, 1, 1);
-            glBegin(GL_LINES);
-            glVertex2f(xCenter, rect.center().y);
-            glVertex2f(xCenter, rect.max.y);
-            glEnd();
+            drawRect(Rect::vLine(trackRect(CC), trackRect.max.y, 1));
         }
 
         glColor3f(1, 1, 1);
-        drawText(std::to_string(i + 1), {x + 20, rect.min.y});
+        drawText(std::to_string(i + 1), trackRect(TL, {20, 0}));
     }
 }
 
@@ -277,7 +267,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
         }
     }
 
-    float scroll = rect.center().y;
+    float scroll = rect(CC).y;
     if (auto sectionP = editCur.cursor.section.lock()) {
         scroll -= sectionPositions[sectionP] + editCur.cursor.time * timeScale;
     }
@@ -295,7 +285,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
                 continue;
 
             glColor3f(1, 1, 1);
-            vec2 textPos {rect.min.x, sectionY - 20};
+            glm::vec2 textPos {rect.min.x, sectionY - 20};
             textPos = drawText(section->title, textPos);
             if (section->tempo != Section::NO_TEMPO) {
                 textPos = drawText("  Tempo=", textPos);
@@ -350,7 +340,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
                     glEnd();
 
                     // TODO avoid allocation
-                    vec2 textPos {x, y};
+                    glm::vec2 textPos {x, y};
                     if (sampleP) {
                         textPos = drawText(sampleP->name.substr(0, 2), textPos);
                     } else {
@@ -399,12 +389,12 @@ void App::drawEvents(Rect rect, Cursor playCur)
     if (editCur.cursor.section.lock()) {
         glColor3f(0.5, 1, 0.5);
         glBegin(GL_LINES);
-        glVertex2f(rect.min.x, rect.center().y);
-        glVertex2f(rect.max.x, rect.center().y);
+        glVertex2f(rect.min.x, rect(CC).y);
+        glVertex2f(rect.max.x, rect(CC).y);
         glEnd();
 
         float cellX = editCur.track * TRACK_SPACING + rect.min.x;
-        float cellY = rect.center().y;
+        float cellY = rect(CC).y;
         glColor4f(1, 1, 1, 0.5);
         glEnable(GL_BLEND);
         drawRect({{cellX, cellY}, {cellX + TRACK_WIDTH, cellY + CELL_HEIGHT}});
@@ -431,7 +421,7 @@ void App::drawSampleList(Rect rect)
             glColor3f(0.7, 1.0, 0.7);
         else
             glColor3f(1, 1, 1);
-        vec2 textPos = rect.min;
+        glm::vec2 textPos = rect.min;
         textPos.y += i * 20;
         drawText(song.samples[i]->name, textPos);
     }
