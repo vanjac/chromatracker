@@ -17,6 +17,10 @@ struct Rect
     glm::vec2 dim() const;
     glm::vec2 operator()(glm::vec2 ref) const;
     glm::vec2 operator()(glm::vec2 ref, glm::vec2 offset) const;
+    float left() const;
+    float right() const;
+    float top() const;
+    float bottom() const;
 
     bool contains(glm::vec2 point) const;
     glm::vec2 normalized(glm::vec2 point) const; // reverse of operator[]

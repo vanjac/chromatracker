@@ -27,6 +27,11 @@ glm::vec2 Rect::operator()(glm::vec2 ref, glm::vec2 offset) const
     return (*this)(ref) + offset;
 }
 
+float Rect::left() const { return min.x; }
+float Rect::right() const { return max.x; }
+float Rect::top() const { return min.y; }
+float Rect::bottom() const { return max.y; }
+
 bool Rect::contains(glm::vec2 point) const
 {
     return point.x >= min.x && point.y >= min.y

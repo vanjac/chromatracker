@@ -27,27 +27,24 @@ void Browser::draw(Rect rect)
     app->scissorRect(rect);
 
     glColor3f(1, 1, 1);
-    glm::vec2 textPos = rect.min;
-    textPos = drawText(path.string(), textPos);
+    drawText(path.string(), rect(TL));
 
     int i = 0;
     for (auto &directory : directories) {
-        textPos.x = rect.min.x;
-        textPos.y += 20;
         if (i == selected)
             glColor3f(1, 0.7, 0.7);
         else
             glColor3f(0.7, 1, 0.7);
+        glm::vec2 textPos = rect(TL, {0, (i + 1) * 20});
         textPos = drawText(directory.filename().string(), textPos);
         i++;
     }
     for (auto &file : files) {
-        textPos.x = rect.min.x;
-        textPos.y += 20;
         if (i == selected)
             glColor3f(1, 0.7, 0.7);
         else
             glColor3f(1, 1, 1);
+        glm::vec2 textPos = rect(TL, {0, (i + 1) * 20});
         textPos = drawText(file.filename().string(), textPos);
         i++;
     }
