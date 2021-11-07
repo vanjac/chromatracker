@@ -1,4 +1,5 @@
 #include "app.h"
+#include "ui/text.h"
 #include <cstdlib>
 #include <exception>
 #include <glad/glad.h>
@@ -27,8 +28,11 @@ int main(int argc, char *argv[])
     SDL_GetVersion(&linked);
     cout << "SDL version: " <<compiled<< " (compiled), "
         <<linked<< " (linked)\n";
-    
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Error",
+                                 SDL_GetError(), nullptr);
+        return EXIT_FAILURE;
+    }
 
 #ifdef OPENGL_DEBUG
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
@@ -81,6 +85,15 @@ int main(int argc, char *argv[])
         GL_DONT_CARE, 0, nullptr, GL_FALSE);
 #endif
 
+    try {
+        chromatracker::ui::initText();
+    } catch (std::exception e) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "FreeType Error",
+                                 e.what(), window);
+        SDL_Quit();
+        return EXIT_FAILURE;
+    }
+
     vector<string> args;
     args.reserve(argc);
     for (int i = 0; i < argc; i++)
@@ -98,6 +111,7 @@ int main(int argc, char *argv[])
 
     SDL_DestroyWindow(window);
     SDL_Quit();
+    chromatracker::ui::closeText();
     return result;
 }
 

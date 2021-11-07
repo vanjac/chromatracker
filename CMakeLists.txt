@@ -36,9 +36,19 @@ target_include_directories(chromatracker PRIVATE
     ${CHROMA_INCLUDE})
 
 # TODO static vs shared?
-target_link_libraries(chromatracker SDL2 SDL2main)
+target_link_libraries(chromatracker SDL2 SDL2main freetype)
 
 add_custom_command(TARGET chromatracker POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CHROMA_LIB}/SDL2.dll
+        $<TARGET_FILE_DIR:chromatracker>)
+# SDL2_ttf
+add_custom_command(TARGET chromatracker POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CHROMA_LIB}/freetype.dll
+        $<TARGET_FILE_DIR:chromatracker>)
+# data files
+add_custom_command(TARGET chromatracker POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${PROJECT_SOURCE_DIR}/assets/Hack-Bold.ttf
         $<TARGET_FILE_DIR:chromatracker>)

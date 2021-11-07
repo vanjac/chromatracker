@@ -1,76 +1,122 @@
 #include "text.h"
 #include "font.h"
 #include <array>
+#include <stdexcept>
 #include <glad/glad.h>
+#include <SDL2/SDL_filesystem.h>
 
 namespace chromatracker::ui {
 
-Font FONT_DEFAULT {FONT_DEFAULT_BITMAP, {96, 48}, {6, 8}};
+Font FONT_DEFAULT;
 
-void Font::initGL()
+FT_Library library;
+uint8_t bitmapBuffer[65536];
+
+void initText()
 {
-    // unpack 1bpp bitmap to 8bpp texture
-    int bitmapSize = bitmapDim.x * bitmapDim.y;
-    std::vector<uint8_t> pixels;
-    pixels.reserve(bitmapSize * 2);
-    for (int i = 0; i < bitmapSize / 8; i++) {
-        uint8_t byteVal = bitmap[i];
-        for (int bit = 0; bit < 8; bit++) {
-            pixels.push_back(0xFF); // luminance
-            pixels.push_back(byteVal & (1<<bit) ? 0xFF : 0x00); // alpha
+    FT_Error error;
+    if (error = FT_Init_FreeType(&library)) {
+        throw std::runtime_error("Error initializing FreeType");
+    }
+
+    string path = string(SDL_GetBasePath()) + "Hack-Bold.ttf";
+    if (error = FT_New_Face(library, path.c_str(), 0, &FONT_DEFAULT.face)) {
+        throw std::runtime_error("Error loading font");
+    }
+
+    FONT_DEFAULT.charHeight = 16;
+    if (error = FT_Set_Pixel_Sizes(FONT_DEFAULT.face,
+                                   0, FONT_DEFAULT.charHeight)) {
+        throw std::runtime_error("Error setting font size");
+    }
+
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);    
+}
+
+void closeText()
+{
+    FT_Done_Face(FONT_DEFAULT.face);
+    FT_Done_FreeType(library);
+}
+
+const FontChar & getChar(Font *font, unsigned c)
+{
+    if (font->chars.count(c))
+        return font->chars[c];
+    FontChar &fontChar = font->chars[c];
+
+    if (FT_Load_Char(font->face, c, FT_LOAD_RENDER))
+        return fontChar;
+    FT_GlyphSlot slot = font->face->glyph;
+
+    fontChar.bitmapDim = glm::ivec2(slot->bitmap.width, slot->bitmap.rows);
+
+    fontChar.drawOffset = glm::ivec2(slot->bitmap_left,
+                                     font->charHeight - slot->bitmap_top);
+    fontChar.advanceX = slot->advance.x / 64.0f;
+
+    int dstI = 0;
+    for (int y = 0; y < fontChar.bitmapDim.y; y++) {
+        int rowI = y * slot->bitmap.pitch;
+        for (int x = 0; x < fontChar.bitmapDim.x; x++) {
+            bitmapBuffer[dstI++] = 0xFF; // luminance
+            bitmapBuffer[dstI++] = slot->bitmap.buffer[rowI + x];
         }
     }
 
-    glGenTextures(1, &texture);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
+    glGenTextures(1, &fontChar.texture);
+    glBindTexture(GL_TEXTURE_2D, fontChar.texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA,
-                 bitmapDim.x, bitmapDim.y, 0,
-                 GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, pixels.data());
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                 fontChar.bitmapDim.x, fontChar.bitmapDim.y, 0,
+                 GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, bitmapBuffer);
     glBindTexture(GL_TEXTURE_2D, 0);
+
+    return fontChar;
 }
 
-glm::ivec2 drawText(string text, glm::vec2 position, const Font *font)
+glm::vec2 drawText(string text, glm::vec2 position, Font *font)
 {
+    if (text.size() == 0) {
+        return position;
+    }
+
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, font->texture);
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
 
-    glm::vec2 charSize = font->charDim * 2;
-    glm::ivec2 charCount = font->bitmapDim / font->charDim;
-
-    glBegin(GL_QUADS);
+    // TODO iterate unicode points
     glm::vec2 curPos = position;
     for (auto &c : text) {
         if (c == '\n') {
             curPos.x = position.x;
-            curPos.y += charSize.y;
+            curPos.y += font->charHeight;
             continue;
         }
-        int charNum = c - ' ';
-        glm::ivec2 minCoord { (charNum % charCount.x) * font->charDim.x,
-                                (charNum / charCount.x) * font->charDim.y };
-        glm::ivec2 maxCoord = minCoord + font->charDim;
-        glm::vec2 minCoordF = (glm::vec2)minCoord / (glm::vec2)font->bitmapDim;
-        glm::vec2 maxCoordF = (glm::vec2)maxCoord / (glm::vec2)font->bitmapDim;
+        const FontChar &fontChar = getChar(font, c);
+        
+        glBindTexture(GL_TEXTURE_2D, fontChar.texture);
 
-        glm::vec2 maxPos = curPos + charSize;
+        glm::vec2 minPos = curPos + glm::vec2(fontChar.drawOffset);
+        glm::vec2 maxPos = minPos + glm::vec2(fontChar.bitmapDim);
 
-        glTexCoord2f(minCoordF.x, minCoordF.y);
-        glVertex2i(curPos.x, curPos.y);
-        glTexCoord2f(minCoordF.x, maxCoordF.y);
-        glVertex2i(curPos.x, maxPos.y);
-        glTexCoord2f(maxCoordF.x, maxCoordF.y);
-        glVertex2i(maxPos.x, maxPos.y);
-        glTexCoord2f(maxCoordF.x, minCoordF.y);
-        glVertex2i(maxPos.x, curPos.y);
+        glBegin(GL_TRIANGLE_FAN);
+        glTexCoord2f(0, 0);
+        glVertex2f(minPos.x, minPos.y);
+        glTexCoord2f(0, 1);
+        glVertex2f(minPos.x, maxPos.y);
+        glTexCoord2f(1, 1);
+        glVertex2f(maxPos.x, maxPos.y);
+        glTexCoord2f(1, 0);
+        glVertex2f(maxPos.x, minPos.y);
+        glEnd();
 
-        curPos.x += charSize.x;
+        curPos.x += fontChar.advanceX;
     }
-    glEnd();
 
     glDisable(GL_TEXTURE_2D);
     glDisable(GL_BLEND);

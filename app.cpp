@@ -36,7 +36,7 @@ App::App(SDL_Window *window)
     audioDevice = SDL_OpenAudioDevice(NULL, 0, &spec, NULL, 0);
     if (!audioDevice) {
         throw std::runtime_error(string("Can't open audio device: ")
-            + SDL_GetError() + "\n");
+            + SDL_GetError());
     }
 }
 
@@ -75,7 +75,6 @@ void App::main(const vector<string> args)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_MULTISAMPLE);
     glDisable(GL_DEPTH_TEST);
-    FONT_DEFAULT.initGL();
 
     bool running = true;
     while (running) {
