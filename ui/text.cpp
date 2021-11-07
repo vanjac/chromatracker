@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <glad/glad.h>
 #include <SDL2/SDL_filesystem.h>
+#include <utf8.h>
 
 namespace chromatracker::ui {
 
@@ -18,7 +19,7 @@ void initText()
         throw std::runtime_error("Error initializing FreeType");
     }
 
-    string path = string(SDL_GetBasePath()) + "Hack-Bold.ttf";
+    string path = string(SDL_GetBasePath()) + "NotoSansMono-Bold.ttf";
     if (error = FT_New_Face(library, path.c_str(), 0, &FONT_DEFAULT.face)) {
         throw std::runtime_error("Error loading font");
     }
@@ -91,7 +92,9 @@ glm::vec2 drawText(string text, glm::vec2 position, Font *font)
 
     // TODO iterate unicode points
     glm::vec2 curPos = position;
-    for (auto &c : text) {
+    auto strIt = text.begin();
+    while (strIt < text.end()) {
+        uint32_t c = utf8::next(strIt, text.end());
         if (c == '\n') {
             curPos.x = position.x;
             curPos.y += font->charHeight;
