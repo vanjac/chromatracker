@@ -110,18 +110,26 @@ void App::main(const vector<string> args)
                 }
                 break;
             case SDL_MOUSEMOTION:
-                if (event.motion.state & SDL_BUTTON_LMASK != 0
-                        && winR.contains({event.motion.x, event.motion.y})) {
-                    float volume = velocityToAmplitude(
-                        winR.normalized({event.motion.x, 0}).x);
-                    if (!songVolumeOp) {
-                        songVolumeOp = std::make_unique
-                            <edit::ops::SetSongVolume>(volume);
-                    } else {
-                        songVolumeOp->undoIt(&song);
-                        *songVolumeOp = edit::ops::SetSongVolume(volume);
+                if (event.motion.state & SDL_BUTTON_LMASK != 0) {
+                    if (selectedEvent.velocity == Event::NO_VELOCITY)
+                        selectedEvent.velocity = 1;
+                    selectedEvent.velocity -=
+                        (float)event.motion.yrel * 2 / winR.dim().y;
+                    if (selectedEvent.velocity > 1) {
+                        selectedEvent.velocity = 1;
+                    } else if (selectedEvent.velocity < 0) {
+                        selectedEvent.velocity = 0;
                     }
-                    songVolumeOp->doIt(&song); // preview before push undo stack
+                    // float volume = velocityToAmplitude(
+                    //     winR.normalized({event.motion.x, 0}).x);
+                    // if (!songVolumeOp) {
+                    //     songVolumeOp = std::make_unique
+                    //         <edit::ops::SetSongVolume>(volume);
+                    // } else {
+                    //     songVolumeOp->undoIt(&song);
+                    //     *songVolumeOp = edit::ops::SetSongVolume(volume);
+                    // }
+                    // songVolumeOp->doIt(&song); // preview before push undo stack
                 }
                 break;
             case SDL_MOUSEBUTTONUP:
@@ -451,6 +459,14 @@ void App::drawPiano(Rect rect)
             glColor3f(0, 0, 0);
         drawRect(Rect::from(TC, rect(TL, {i * PIANO_KEY_WIDTH, 0}),
                             {PIANO_KEY_WIDTH / 2, rect.dim().y * 0.6}));
+    }
+
+    if (selectedEvent.velocity != Event::NO_VELOCITY) {
+        Rect velocityR = Rect::from(TR, rect(TR), {16, rect.dim().y});
+        glColor3f(0.2, 0.2, 0.2);
+        drawRect(velocityR);
+        glColor3f(0, 0.7, 0);
+        drawRect({velocityR({0, 1 - selectedEvent.velocity}),  velocityR(BR)});
     }
 }
 
