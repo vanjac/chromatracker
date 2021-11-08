@@ -48,6 +48,9 @@ private:
     void nextCell();
     void prevCell();
 
+    void jamKey(const SDL_KeyboardEvent &keyEv, Event event, Event::Mask mask,
+                bool write);
+
     ticks calcTickDelay(uint32_t timestamp); // player must be locked
     int pitchKeymap(SDL_Scancode key);
     int sampleKeymap(SDL_Scancode key);

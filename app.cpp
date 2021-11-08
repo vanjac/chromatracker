@@ -132,12 +132,12 @@ void App::main(const vector<string> args)
                     // songVolumeOp->doIt(&song); // preview before push undo stack
                 }
                 break;
-            case SDL_MOUSEBUTTONUP:
-                if (songVolumeOp) {
-                    songVolumeOp->undoIt(&song);
-                    doOperation(std::move(songVolumeOp));
-                    // songVolumeOp will be null after move
-                }
+            // case SDL_MOUSEBUTTONUP:
+            //     if (songVolumeOp) {
+            //         songVolumeOp->undoIt(&song);
+            //         doOperation(std::move(songVolumeOp));
+            //         // songVolumeOp will be null after move
+            //     }
             }
         }
 
@@ -641,6 +641,9 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                         editCur.cursor.section = song.sections.front();
                         editCur.cursor.time = 0;
                     }
+                    if (!song.samples.empty()) {
+                        selectedEvent.sample = song.samples.front();
+                    }
 
                     // call at the end to prevent access violation!
                     browser.reset();
@@ -664,10 +667,12 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
     if (!e.repeat && !ctrl) {
         int pitch = pitchKeymap(e.keysym.scancode);
         int sample = sampleKeymap(e.keysym.scancode);
-        bool pick = e.keysym.sym == SDLK_RETURN;
+        Event::Mask mask = Event::NO_MASK;
         if (pitch >= 0) {
+            mask = Event::PITCH;
             selectedEvent.pitch = pitch + selectedOctave * OCTAVE;
         } else if (sample >= 0) {
+            mask = Event::SAMPLE;
             std::shared_lock songLock(song.mu);
             int index = selectedSampleIndex();
             if (index == -1)
@@ -678,51 +683,44 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             } else {
                 sample = -1;
             }
-        } else if (pick) {
-            pick = false;
-            if (auto sectionP = editCur.cursor.section.lock()) {
-                std::shared_lock sectionLock(sectionP->mu);
-                auto eventIt = editCur.findEvent();
-                if (eventIt != editCur.events().end()) {
-                    // mirrors TrackPlay::processEvent
-                    if (auto sampleP = eventIt->sample.lock())
-                        selectedEvent.sample = sampleP;
-                    if (eventIt->pitch != Event::NO_PITCH) {
-                        selectedEvent.pitch = eventIt->pitch;
-                        selectedOctave = selectedEvent.pitch / OCTAVE;
-                    }
-                    if (eventIt->velocity != Event::NO_VELOCITY)
-                        selectedEvent.velocity = eventIt->velocity;
-                    selectedEvent.special = eventIt->special;
-                    pick = true;
-                }
-            }
         }
-        if (pitch >= 0 || sample >= 0 || pick) {
-            play::JamEvent jam;
-            jam.event = selectedEvent;
-            if (jam.event.sample.lock()) {
-                jam.touchId = e.keysym.scancode;
-                bool isPlaying;
-                {
-                    std::unique_lock playerLock(player.mu);
-                    jam.event.time = calcTickDelay(e.timestamp);
-                    player.jam.queueJamEvent(jam);
-                    isPlaying = (bool)player.cursor().section.lock();
-                }
-                if (record && pitch >= 0) {
-                    auto op = std::make_unique<edit::ops::WriteCell>(editCur,
-                        (overwrite && !isPlaying) ? cellSize : 1, jam.event);
-                    doOperation(std::move(op));
-                    // TODO if overwrite && isPlaying, clear events while held
-                    // TODO combine into single undo operation while playing
-                }
-            }
+        if (mask) {
+            jamKey(e, selectedEvent, mask, true);
             return;
         }
     }
 
     switch (e.keysym.sym) {
+    /* more jam */
+    case SDLK_RETURN:
+        if (!e.repeat) {
+            if (auto sectionP = editCur.cursor.section.lock()) {
+                std::shared_lock sectionLock(sectionP->mu);
+                auto eventIt = editCur.findEvent();
+                if (eventIt != editCur.events().end()) {
+                    selectedEvent.merge(*eventIt);
+                    selectedEvent.special = Event::Special::None; // don't store
+                    if (eventIt->pitch != Event::NO_PITCH)
+                        selectedOctave = selectedEvent.pitch / OCTAVE;
+                    jamKey(e, selectedEvent, Event::NO_MASK, false);
+                }
+            }
+        }
+        break;
+    case SDLK_BACKQUOTE:
+        if (!e.repeat) {
+            Event event = selectedEvent;
+            event.special = Event::Special::FadeOut; // don't store
+            jamKey(e, event, Event::SPECIAL, true);
+        }
+        break;
+    case SDLK_1:
+        if (!e.repeat) {
+            Event event = selectedEvent;
+            event.special = Event::Special::Slide;
+            jamKey(e, event, Event::SPECIAL, true);
+        }
+        break;
     /* Playback */
     case SDLK_SPACE:
         if (!e.repeat) {
@@ -938,14 +936,6 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             }
         }
         break;
-    case SDLK_BACKQUOTE:
-        if (record) {
-            Event fadeEvent;
-            fadeEvent.special = Event::Special::FadeOut;
-            auto op = std::make_unique<edit::ops::WriteCell>(
-                editCur, overwrite ? cellSize : 1, fadeEvent);
-            doOperation(std::move(op));
-        }
     }
 }
 
@@ -955,22 +945,17 @@ void App::keyUpEvents(const SDL_KeyboardEvent &e)
         return;
     int pitch = pitchKeymap(e.keysym.scancode);
     int sampleI = sampleKeymap(e.keysym.scancode);
-    if (pitch >= 0 || sampleI >= 0 || e.keysym.sym == SDLK_RETURN) {
-        play::JamEvent jam;
-        jam.event.special = Event::Special::FadeOut;
-        jam.touchId = e.keysym.scancode;
-        bool isPlaying;
+    auto sym = e.keysym.sym;
+    // not SDLK_BACKQUOTE (already FadeOut)
+    if (pitch >= 0 || sampleI >= 0 || sym == SDLK_RETURN || sym == SDLK_1) {
+        Event fadeEvent;
+        fadeEvent.special = Event::Special::FadeOut;
+        bool playing;
         {
             std::unique_lock playerLock(player.mu);
-            jam.event.time = calcTickDelay(e.timestamp);
-            player.jam.queueJamEvent(jam);
-            isPlaying = (bool)player.cursor().section.lock();
+            playing = (bool)player.cursor().section.lock();
         }
-        if (record && isPlaying && pitch >= 0) {
-            auto op = std::make_unique<edit::ops::WriteCell>(
-                editCur, 1, jam.event);
-            doOperation(std::move(op));
-        }
+        jamKey(e, fadeEvent, Event::ALL, playing);
     }
 }
 
@@ -1039,6 +1024,32 @@ void App::prevCell()
         editCur.cursor.time -= cellSize;
     }
     movedEditCur = true;
+}
+
+void App::jamKey(const SDL_KeyboardEvent &keyEv, Event event, Event::Mask mask,
+                 bool write)
+{
+    play::JamEvent jam;
+    jam.event = event;
+    jam.touchId = keyEv.keysym.sym;
+    bool playing;
+    {
+        std::unique_lock playerLock(player.mu);
+        jam.event.time = calcTickDelay(keyEv.timestamp);
+        player.jam.queueJamEvent(jam);
+        playing = (bool)player.cursor().section.lock();
+    }
+    if (record && write) {
+        if (keyEv.keysym.mod & KMOD_ALT) {
+            event = Event();
+            event.merge(jam.event, mask);
+        }
+        auto op = std::make_unique<edit::ops::WriteCell>(editCur,
+            (overwrite && !playing) ? cellSize : 1, event);
+        doOperation(std::move(op));
+        // TODO if overwrite && playing, clear events while held
+        // TODO combine into single undo operation while playing
+    }
 }
 
 ticks App::calcTickDelay(uint32_t timestamp)
