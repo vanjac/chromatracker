@@ -43,11 +43,12 @@ private:
 
     void doOperation(unique_ptr<edit::SongOp> op);
 
+    int selectedSampleIndex(); // song must be locked
     void snapToGrid();
     void nextCell();
     void prevCell();
 
-    ticks calcTickDelay(uint32_t timestamp); // make sure player is locked
+    ticks calcTickDelay(uint32_t timestamp); // player must be locked
     int pitchKeymap(SDL_Scancode key);
     int sampleKeymap(SDL_Scancode key);
 
@@ -60,9 +61,8 @@ private:
 
     TrackCursor editCur;
     ticks cellSize {TICKS_PER_BEAT / 4};
-    int selectedSample {0};
+    Event selectedEvent {0, {}, MIDDLE_C, 1.0f, Event::Special::None};
     int selectedOctave {MIDDLE_OCTAVE};
-    int selectedPitch {MIDDLE_C};
 
     // mode
     bool followPlayback {true};

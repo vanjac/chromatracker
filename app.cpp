@@ -402,12 +402,14 @@ void App::drawSampleList(Rect rect)
 {
     scissorRect(rect);
     std::shared_lock songLock(song.mu);
-    for (int i = 0; i < song.samples.size(); i++) {
-        if (i == selectedSample)
+    auto selectedSampleP = selectedEvent.sample.lock();
+    int i = 0;
+    for (const auto &sample : song.samples) {
+        if (sample == selectedSampleP)
             glColor3f(0.7, 1.0, 0.7);
         else
             glColor3f(1, 1, 1);
-        drawText(song.samples[i]->name, rect(TL, {0, i * 20}));
+        drawText(sample->name, rect(TL, {0, (i++) * 20}));
     }
 }
 
@@ -423,7 +425,7 @@ void App::drawPiano(Rect rect)
 
         Rect keyR = Rect::from(TL, rect(TL, {PIANO_KEY_WIDTH * i, 0}),
                                {PIANO_KEY_WIDTH, rect.dim().y});
-        if (pitch == selectedPitch)
+        if (pitch == selectedEvent.pitch)
             glColor3f(0.7, 1.0, 0.7);
         else
             glColor3f(1, 1, 1);
@@ -443,7 +445,7 @@ void App::drawPiano(Rect rect)
             continue;
         int pitch = key + (selectedOctave + (i / 7)) * OCTAVE;
 
-        if (pitch == selectedPitch)
+        if (pitch == selectedEvent.pitch)
             glColor3f(0, 0.7, 0);
         else
             glColor3f(0, 0, 0);
@@ -518,59 +520,82 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     auto op = std::make_unique<edit::ops::AddSample>(
                         numSamples, newSample);
                     doOperation(std::move(op));
-                    selectedSample = numSamples;
+                    selectedEvent.sample = newSample;
 
                     // call at the end to prevent access violation!
                     browser.reset();
                 });
         } else {
             std::shared_lock songLock(song.mu);
-            selectedSample++;
-            if (selectedSample >= song.samples.size())
-                selectedSample = song.samples.size() - 1;
+            int index = selectedSampleIndex();
+            if (index == -1) {
+                if (!song.samples.empty())
+                    selectedEvent.sample = song.samples.front();
+            } else if (index < song.samples.size() - 1) {
+                selectedEvent.sample = song.samples[index + 1];
+            }
         }
         break;
     case SDLK_KP_MINUS:
         if (ctrl) {
-            shared_ptr<Sample> sample;
-            {
-                std::shared_lock lock(song.mu);
-                if (selectedSample >= 0 && selectedSample < song.samples.size())
-                    sample = song.samples[selectedSample];
-                if (selectedSample == song.samples.size() - 1)
-                    selectedSample--;
-            }
-            if (sample) {
-                auto op = std::make_unique<edit::ops::DeleteSample>(sample);
+            if (auto sampleP = selectedEvent.sample.lock()) {
+                int index;
+                {
+                    std::shared_lock songLock(song.mu);
+                    index = selectedSampleIndex();
+                    if (index == song.samples.size() - 1)
+                        index--;
+                }
+                auto op = std::make_unique<edit::ops::DeleteSample>(sampleP);
                 doOperation(std::move(op));
+                {
+                    std::shared_lock songLock(song.mu);
+                    if (!song.samples.empty())
+                        selectedEvent.sample = song.samples[index];
+                }
+            }
+        } else {
+            std::shared_lock songLock(song.mu);
+            int index = selectedSampleIndex();
+            if (index > 0) {
+                selectedEvent.sample = song.samples[index - 1];
             }
         }
-        selectedSample--;
-        if (selectedSample < 0)
-            selectedSample = 0;
         break;
     case SDLK_KP_MULTIPLY:
         {
             std::shared_lock songLock(song.mu);
-            if (selectedSample < song.samples.size() - 10)
-                selectedSample += 10;
+            int index = selectedSampleIndex();
+            if (index != -1 && index < song.samples.size() - 10) {
+                selectedEvent.sample = song.samples[index + 10];
+            } else if (!song.samples.empty()) {
+                selectedEvent.sample = song.samples.back();
+            }
         }
         break;
     case SDLK_KP_DIVIDE:
-        selectedSample -= 10;
-        if (selectedSample < 0)
-            selectedSample = 0;
+        {
+            std::shared_lock songLock(song.mu);
+            int index = selectedSampleIndex();
+            if (index >= 10) {
+                selectedEvent.sample = song.samples[index - 10];
+            } else if (!song.samples.empty()) {
+                selectedEvent.sample = song.samples.front();
+            }
+        }
         break;
     case SDLK_EQUALS:
         if (selectedOctave < 9) {
             selectedOctave++;
-            selectedPitch += 12;
+            if (selectedEvent.pitch != Event::NO_PITCH)
+                selectedEvent.pitch += 12;
         }
         break;
     case SDLK_MINUS:
         if (selectedOctave > 0) {
             selectedOctave--;
-            selectedPitch -= 12;
+            if (selectedEvent.pitch != Event::NO_PITCH)
+                selectedEvent.pitch -= 12;
         }
         break;
     /* File */
@@ -625,44 +650,40 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
         int sample = sampleKeymap(e.keysym.scancode);
         bool pick = e.keysym.sym == SDLK_RETURN;
         if (pitch >= 0) {
-            selectedPitch = pitch + selectedOctave * OCTAVE;
+            selectedEvent.pitch = pitch + selectedOctave * OCTAVE;
         } else if (sample >= 0) {
-            selectedSample = sample + (selectedSample / 10) * 10;
+            std::shared_lock songLock(song.mu);
+            int index = selectedSampleIndex();
+            if (index == -1)
+                index = 0;
+            index = sample + (index / 10) * 10;
+            if (index < song.samples.size()) {
+                selectedEvent.sample = song.samples[index];
+            } else {
+                sample = -1;
+            }
         } else if (pick) {
             pick = false;
             if (auto sectionP = editCur.cursor.section.lock()) {
                 std::shared_lock sectionLock(sectionP->mu);
                 auto eventIt = editCur.findEvent();
                 if (eventIt != editCur.events().end()) {
-                    if (eventIt->pitch != Event::NO_PITCH) {
-                        selectedPitch = eventIt->pitch;
-                        selectedOctave = selectedPitch / OCTAVE;
-                        pick = true;
-                    }
-                    if (auto sampleP = eventIt->sample.lock()) {
-                        std::shared_lock songLock(song.mu);
-                        selectedSample = std::find(song.samples.begin(),
-                            song.samples.end(), sampleP) - song.samples.begin();
-                        pick = true;
-                    }
+                    selectedEvent = *eventIt;
+                    if (selectedEvent.pitch != Event::NO_PITCH)
+                        selectedOctave = selectedEvent.pitch / OCTAVE;
+                    pick = true;
                 }
             }
         }
         if (pitch >= 0 || sample >= 0 || pick) {
             play::JamEvent jam;
-            {
-                std::shared_lock songLock(song.mu);
-                if (selectedSample >= 0 && selectedSample < song.samples.size())
-                    jam.event.sample = song.samples[selectedSample];
-            }
+            jam.event = selectedEvent;
             if (jam.event.sample.lock()) {
-                jam.event.pitch = selectedPitch;
-                jam.event.velocity = 1;
-                jam.event.time = calcTickDelay(e.timestamp);
                 jam.touchId = e.keysym.scancode;
                 bool isPlaying;
                 {
                     std::unique_lock playerLock(player.mu);
+                    jam.event.time = calcTickDelay(e.timestamp);
                     player.jam.queueJamEvent(jam);
                     isPlaying = (bool)player.cursor().section.lock();
                 }
@@ -914,11 +935,11 @@ void App::keyUpEvents(const SDL_KeyboardEvent &e)
     if (pitch >= 0 || sampleI >= 0 || e.keysym.sym == SDLK_RETURN) {
         play::JamEvent jam;
         jam.event.special = Event::Special::FadeOut;
-        jam.event.time = calcTickDelay(e.timestamp);
         jam.touchId = e.keysym.scancode;
         bool isPlaying;
         {
             std::unique_lock playerLock(player.mu);
+            jam.event.time = calcTickDelay(e.timestamp);
             player.jam.queueJamEvent(jam);
             isPlaying = (bool)player.cursor().section.lock();
         }
@@ -936,6 +957,17 @@ void App::doOperation(unique_ptr<edit::SongOp> op)
         undoStack.push_back(std::move(op));
         redoStack.clear();
     }
+}
+
+int App::selectedSampleIndex()
+{
+    // indices are easier to work with than iterators in this case
+    auto it = std::find(song.samples.begin(), song.samples.end(),
+                        selectedEvent.sample.lock());
+    if (it == song.samples.end())
+        return -1;
+    else
+        return it - song.samples.begin();
 }
 
 void App::snapToGrid()
