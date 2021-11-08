@@ -668,9 +668,16 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
                 std::shared_lock sectionLock(sectionP->mu);
                 auto eventIt = editCur.findEvent();
                 if (eventIt != editCur.events().end()) {
-                    selectedEvent = *eventIt;
-                    if (selectedEvent.pitch != Event::NO_PITCH)
+                    // mirrors TrackPlay::processEvent
+                    if (auto sampleP = eventIt->sample.lock())
+                        selectedEvent.sample = sampleP;
+                    if (eventIt->pitch != Event::NO_PITCH) {
+                        selectedEvent.pitch = eventIt->pitch;
                         selectedOctave = selectedEvent.pitch / OCTAVE;
+                    }
+                    if (eventIt->velocity != Event::NO_VELOCITY)
+                        selectedEvent.velocity = eventIt->velocity;
+                    selectedEvent.special = eventIt->special;
                     pick = true;
                 }
             }
