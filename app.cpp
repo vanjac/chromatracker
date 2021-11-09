@@ -1007,7 +1007,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
 
 void App::keyUpEvents(const SDL_KeyboardEvent &e)
 {
-    int pitch = 0, sampleI = 0;
+    int pitch = -1, sampleI = -1;
     if (!(e.keysym.mod & KMOD_CTRL)) {
         pitch = pitchKeymap(e.keysym.scancode);
         sampleI = sampleKeymap(e.keysym.scancode);
