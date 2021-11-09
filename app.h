@@ -69,7 +69,6 @@ private:
 
     // mode
     bool followPlayback {true};
-    bool record {false};
 
     // main loop flags
     bool movedEditCur {false}; // TODO replace with accumulator to move play cur

@@ -208,6 +208,7 @@ void App::drawInfo(Rect rect)
     glColor3f(1, 1, 1);
     glm::vec2 textPos = rect(TL);
     textPos = drawText("Record: ", textPos);
+    bool record = SDL_GetModState() & KMOD_CAPS;
     textPos = drawText(std::to_string(record), textPos);
     textPos = drawText(" Follow: ", textPos);
     textPos = drawText(std::to_string(followPlayback), textPos);
@@ -495,11 +496,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         }
         break;
     /* Mode */
-    case SDLK_F5:
-        if (e.repeat) break;
-        record = !record;
-        break;
-    case SDLK_F6:
+    case SDLK_SCROLLLOCK:
         if (e.repeat) break;
         followPlayback = !followPlayback;
         if (!followPlayback)
@@ -716,7 +713,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             jamKey(e, event, Event::PITCH, true);
         }
         break;
-    case SDLK_CAPSLOCK:
+    case SDLK_KP_ENTER:
         if (!e.repeat) {
             // selectedEvent already shouldn't have special
             jamKey(e, selectedEvent, Event::SPECIAL, true);
@@ -965,7 +962,7 @@ void App::keyUpEvents(const SDL_KeyboardEvent &e)
     // not SDLK_BACKQUOTE (already FadeOut)
     if (pitch >= 0 || sampleI >= 0 || sym == SDLK_RETURN || sym == SDLK_1
             || sym == SDLK_KP_PERIOD || sym == SDLK_BACKSLASH
-            || sym == SDLK_CAPSLOCK) {
+            || sym == SDLK_KP_ENTER) {
         Event fadeEvent;
         fadeEvent.special = Event::Special::FadeOut;
         bool playing;
@@ -1057,12 +1054,12 @@ void App::jamKey(const SDL_KeyboardEvent &keyEv, Event event, Event::Mask mask,
         player.jam.queueJamEvent(jam);
         playing = (bool)player.cursor().section.lock();
     }
-    if (record && write) {
+    if (write) {
         if (keyEv.keysym.mod & KMOD_ALT) {
             auto op = std::make_unique<edit::ops::MergeEvent>(
                 editCur, event, mask);
             doOperation(std::move(op));
-        } else {
+        } else if (keyEv.keysym.mod & KMOD_CAPS) {
             auto op = std::make_unique<edit::ops::WriteCell>(
                 editCur, !playing ? cellSize : 1, event);
             doOperation(std::move(op));
