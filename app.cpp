@@ -349,21 +349,24 @@ void App::drawEvents(Rect rect, Cursor playCur)
                     Rect eventR = Rect::from(TL,
                         sectionR(TL, {TRACK_SPACING*t, event.time * timeScale}),
                         {TRACK_WIDTH, (nextEventTime-event.time) * timeScale});
-                    glm::vec3 color = mute ? glm::vec3{0.3, 0.3, 0.3}
-                        : glm::vec3{0.5, 0, 0.2};
-                    if (!curSample)
-                        color = glm::vec3(0);
-                    else
+                    glm::vec3 color {0, 0, 0};
+                    if (curSample) {
+                        color = mute ? glm::vec3{0.3, 0.3, 0.3}
+                            : (curSample->color * 0.5f);
                         color *= curVelocity; // TODO gamma correct
+                    }
                     drawRect(eventR, {color, 1});
                     drawRect(Rect::hLine(eventR(TL), eventR.right(),
                         event.velocity != Event::NO_VELOCITY ? 3 : 1), C_WHITE);
 
                     // TODO avoid allocation
                     glm::vec2 textPos = eventR(TL, {2, 1});
-                    if (sampleP) {
+                    if (sampleP && sampleP->name.size() >= 2) {
                         textPos = drawText(sampleP->name.substr(0, 2), textPos,
                                            C_WHITE);
+                    } else if (sampleP && sampleP->name.size() == 1) {
+                        textPos = drawText(sampleP->name, textPos, C_WHITE);
+                        textPos = drawText(" ", textPos, C_WHITE);
                     } else {
                         textPos = drawText("  ", textPos, C_WHITE);
                     }
@@ -426,8 +429,12 @@ void App::drawSampleList(Rect rect)
     auto selectedSampleP = selectedEvent.sample.lock();
     int i = 0;
     for (const auto &sample : song.samples) {
-        drawText(sample->name, rect(TL, {0, (i++) * 20}),
-                 sample == selectedSampleP ? C_ACCENT_LIGHT : C_WHITE);
+        Rect sampleR = Rect::from(TL, rect(TL, {0, (i++) * 20}),
+                                  {rect.dim().x, 20});
+        if (sample == selectedSampleP)
+            drawRect(sampleR, C_DARK_GRAY);
+        drawText(sample->name, sampleR(TL),sample == selectedSampleP ? C_WHITE
+            : glm::vec4(sample->color * 0.5f + 0.5f, 1));
     }
 }
 
