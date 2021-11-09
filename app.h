@@ -52,7 +52,8 @@ private:
     // return if playing
     bool jamEvent(play::JamEvent jam, uint32_t timestamp);
     bool jamEvent(const SDL_KeyboardEvent &e, const Event &jam);
-    void writeEvent(bool playing, const Event &event, Event::Mask mask);
+    void writeEvent(bool playing, const Event &event, Event::Mask mask,
+                    bool continuous=false);
 
     ticks calcTickDelay(uint32_t timestamp); // player must be locked
     int pitchKeymap(SDL_Scancode key);

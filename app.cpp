@@ -111,8 +111,16 @@ void App::main(const vector<string> args)
                 break;
             case SDL_MOUSEBUTTONDOWN:
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    jamEvent({selectedEvent, (int)event.button.which + 1},
-                             event.button.timestamp);
+                    play::JamEvent jam {selectedEvent,
+                                        (int)event.button.which + 1};
+                    writeEvent(jamEvent(jam, event.button.timestamp),
+                               jam.event, Event::VELOCITY, true);
+                } else if (event.button.button == SDL_BUTTON_RIGHT) {
+                    play::JamEvent jam {selectedEvent,
+                                        (int)event.button.which + 1};
+                    jam.event.velocity = Event::NO_VELOCITY;
+                    writeEvent(jamEvent(jam, event.button.timestamp),
+                               jam.event, Event::VELOCITY, true);
                 }
                 break;
             case SDL_MOUSEMOTION:
@@ -126,30 +134,23 @@ void App::main(const vector<string> args)
                     } else if (selectedEvent.velocity < 0) {
                         selectedEvent.velocity = 0;
                     }
-                    Event velEvent = selectedEvent.masked(Event::VELOCITY);
-                    jamEvent({velEvent, (int)event.button.which + 1},
-                             event.button.timestamp);
-                    // float volume = velocityToAmplitude(
-                    //     winR.normalized({event.motion.x, 0}).x);
-                    // if (auto prevOp = dynamic_cast<edit::ops::SetSongVolume*>(
-                    //         continuousOp)) {
-                    //     prevOp->undoIt(&song);
-                    //     *prevOp = edit::ops::SetSongVolume(volume);
-                    //     prevOp->doIt(&song);
-                    // } else {
-                    //     auto op = std::make_unique<edit::ops::SetSongVolume>(
-                    //         volume);
-                    //     doOperation(std::move(op), true);
-                    // }
+                    // note we jam the masked event but write the selectedEvent
+                    play::JamEvent jam {selectedEvent.masked(Event::VELOCITY),
+                                        (int)event.button.which + 1};
+                    writeEvent(jamEvent(jam, event.button.timestamp),
+                               selectedEvent, Event::VELOCITY, true);
                 }
                 break;
             case SDL_MOUSEBUTTONUP:
-                if (event.button.button == SDL_BUTTON_LEFT) {
+                if (event.button.button == SDL_BUTTON_LEFT
+                        || event.button.button == SDL_BUTTON_RIGHT) {
                     Event fadeEvent;
                     fadeEvent.special = Event::Special::FadeOut;
-                    jamEvent({fadeEvent, (int)event.button.which + 1},
-                             event.button.timestamp);
-                    // endContinuous(); // end set song volume
+                    if (jamEvent({fadeEvent, (int)event.button.which + 1},
+                                 event.button.timestamp)) { // if playing
+                        writeEvent(true, fadeEvent, Event::ALL);
+                    }
+                    endContinuous();
                 }
                 break;
             }
@@ -1077,17 +1078,35 @@ bool App::jamEvent(const SDL_KeyboardEvent &e, const Event &event)
     return jamEvent({event, -e.keysym.scancode}, e.timestamp);
 }
 
-void App::writeEvent(bool playing, const Event &event, Event::Mask mask)
+void App::writeEvent(bool playing, const Event &event, Event::Mask mask,
+                     bool continuous)
 {
     SDL_Keymod mod = SDL_GetModState();
     if (mod & KMOD_ALT) {
-        auto op = std::make_unique<edit::ops::MergeEvent>(
-            editCur, event, mask);
-        doOperation(std::move(op));
+        // TODO this could all be done with a template
+        auto prevOp = dynamic_cast<edit::ops::MergeEvent*>(continuousOp);
+        if (continuous && prevOp) {
+            prevOp->undoIt(&song);
+            *prevOp = edit::ops::MergeEvent(editCur, event, mask);
+            prevOp->doIt(&song);
+        } else {
+            auto op = std::make_unique<edit::ops::MergeEvent>(
+                editCur, event, mask);
+            doOperation(std::move(op), continuous);
+        }
     } else if (mod & (KMOD_CAPS | KMOD_SHIFT)) {
-        auto op = std::make_unique<edit::ops::WriteCell>(
-            editCur, !playing ? cellSize : 1, event);
-        doOperation(std::move(op));
+        ticks size = playing ? 1 : cellSize;
+
+        auto prevOp = dynamic_cast<edit::ops::WriteCell*>(continuousOp);
+        if (continuous && prevOp) {
+            prevOp->undoIt(&song);
+            *prevOp = edit::ops::WriteCell(editCur, size, event);
+            prevOp->doIt(&song);
+        } else {
+            auto op = std::make_unique<edit::ops::WriteCell>(
+                editCur, !playing ? cellSize : 1, event);
+            doOperation(std::move(op), continuous);
+        }
         // TODO if playing, clear events while held
     }
     // TODO combine into single undo operation while playing

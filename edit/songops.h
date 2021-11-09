@@ -25,8 +25,8 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const int index;
-    const shared_ptr<Track> track;
+    int index;
+    shared_ptr<Track> track;
 };
 
 class DeleteTrack : public SongOp
@@ -36,7 +36,7 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const shared_ptr<Track> track;
+    shared_ptr<Track> track;
 private:
     int index {-1};
     vector<vector<Event>> clearedEvents;
@@ -49,7 +49,7 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const int track;
+    int track;
     bool mute;
 };
 
@@ -60,9 +60,9 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const TrackCursor tcur;
-    const ticks size;
-    const shared_ptr<Section> section;
+    TrackCursor tcur;
+    ticks size;
+    shared_ptr<Section> section;
 private:
     vector<Event> clearedEvents;
 };
@@ -84,10 +84,10 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const TrackCursor tcur;
+    TrackCursor tcur;
     Event event;
-    const Event::Mask mask;
-    const shared_ptr<Section> section;
+    Event::Mask mask;
+    shared_ptr<Section> section;
 protected:
     Event prevEvent;
 };
@@ -99,8 +99,8 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const int index;
-    const shared_ptr<Section> section;
+    int index;
+    shared_ptr<Section> section;
 };
 
 class DeleteSection : public SongOp
@@ -110,7 +110,7 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const shared_ptr<Section> section;
+    shared_ptr<Section> section;
 private:
     int index {-1};
     vector<shared_ptr<Section>> prevLinks;
@@ -123,8 +123,8 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const shared_ptr<Section> section;
-    const ticks pos;
+    shared_ptr<Section> section;
+    ticks pos;
 };
 
 class AddSample : public SongOp
@@ -134,8 +134,8 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const int index;
-    const shared_ptr<Sample> sample;
+    int index;
+    shared_ptr<Sample> sample;
 };
 
 class DeleteSample : public SongOp
@@ -145,7 +145,7 @@ public:
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    const shared_ptr<Sample> sample;
+    shared_ptr<Sample> sample;
 private:
     int index {-1};
     vector<EventRef> sampleEvents;
