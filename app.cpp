@@ -660,7 +660,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             }
         }
         if (mask) {
-            jamKey(e, selectedEvent, mask, true);
+            writeEvent(jamEvent(e, selectedEvent), selectedEvent, mask);
             return;
         }
     }
@@ -677,7 +677,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
                     selectedEvent.special = Event::Special::None; // don't store
                     if (eventIt->pitch != Event::NO_PITCH)
                         selectedOctave = selectedEvent.pitch / OCTAVE;
-                    jamKey(e, selectedEvent, Event::NO_MASK, false);
+                    jamEvent(e, selectedEvent); // no write
                 }
             }
         }
@@ -686,14 +686,14 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
         if (!e.repeat) {
             Event event = selectedEvent;
             event.special = Event::Special::FadeOut; // don't store
-            jamKey(e, event, Event::SPECIAL, true);
+            writeEvent(jamEvent(e, event), event, Event::SPECIAL);
         }
         break;
     case SDLK_1:
         if (!e.repeat) {
             Event event = selectedEvent;
             event.special = Event::Special::Slide;
-            jamKey(e, event, Event::SPECIAL, true);
+            writeEvent(jamEvent(e, event), event, Event::SPECIAL);
         }
         break;
     /* jam clear */
@@ -701,20 +701,21 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
         if (!e.repeat) {
             Event event = selectedEvent;
             event.sample.reset();
-            jamKey(e, event, Event::SAMPLE, true);
+            writeEvent(jamEvent(e, event), event, Event::SAMPLE);
         }
         break;
     case SDLK_BACKSLASH:
         if (!e.repeat) {
             Event event = selectedEvent;
             event.pitch = Event::NO_PITCH;
-            jamKey(e, event, Event::PITCH, true);
+            writeEvent(jamEvent(e, event), event, Event::PITCH);
         }
         break;
     case SDLK_KP_ENTER:
         if (!e.repeat) {
             // selectedEvent already shouldn't have special
-            jamKey(e, selectedEvent, Event::SPECIAL, true);
+            writeEvent(jamEvent(e, selectedEvent),
+                       selectedEvent, Event::SPECIAL);
         }
         break;
     /* Playback */
@@ -964,12 +965,9 @@ void App::keyUpEvents(const SDL_KeyboardEvent &e)
             || sym == SDLK_KP_ENTER) {
         Event fadeEvent;
         fadeEvent.special = Event::Special::FadeOut;
-        bool playing;
-        {
-            std::unique_lock playerLock(player.mu);
-            playing = (bool)player.cursor().section.lock();
+        if (jamEvent(e, fadeEvent)) { // if playing
+            writeEvent(true, fadeEvent, Event::ALL);
         }
-        jamKey(e, fadeEvent, Event::ALL, playing);
     }
 }
 
@@ -1050,32 +1048,33 @@ void App::prevCell()
     movedEditCur = true;
 }
 
-void App::jamKey(const SDL_KeyboardEvent &keyEv, Event event, Event::Mask mask,
-                 bool write)
+bool App::jamEvent(play::JamEvent jam, uint32_t timestamp)
 {
-    play::JamEvent jam;
-    jam.event = event;
-    jam.touchId = keyEv.keysym.sym;
-    bool playing;
-    {
-        std::unique_lock playerLock(player.mu);
-        jam.event.time = calcTickDelay(keyEv.timestamp);
-        player.jam.queueJamEvent(jam);
-        playing = (bool)player.cursor().section.lock();
+    std::unique_lock playerLock(player.mu);
+    jam.event.time = calcTickDelay(timestamp);
+    player.jam.queueJamEvent(jam);
+    return (bool)player.cursor().section.lock();
+}
+
+bool App::jamEvent(const SDL_KeyboardEvent &e, const Event &event)
+{
+    return jamEvent({event, e.keysym.scancode}, e.timestamp);
+}
+
+void App::writeEvent(bool playing, const Event &event, Event::Mask mask)
+{
+    SDL_Keymod mod = SDL_GetModState();
+    if (mod & KMOD_ALT) {
+        auto op = std::make_unique<edit::ops::MergeEvent>(
+            editCur, event, mask);
+        doOperation(std::move(op));
+    } else if (mod & (KMOD_CAPS | KMOD_SHIFT)) {
+        auto op = std::make_unique<edit::ops::WriteCell>(
+            editCur, !playing ? cellSize : 1, event);
+        doOperation(std::move(op));
+        // TODO if playing, clear events while held
     }
-    if (write) {
-        if (keyEv.keysym.mod & KMOD_ALT) {
-            auto op = std::make_unique<edit::ops::MergeEvent>(
-                editCur, event, mask);
-            doOperation(std::move(op));
-        } else if (keyEv.keysym.mod & (KMOD_CAPS | KMOD_SHIFT)) {
-            auto op = std::make_unique<edit::ops::WriteCell>(
-                editCur, !playing ? cellSize : 1, event);
-            doOperation(std::move(op));
-            // TODO if playing, clear events while held
-        }
-        // TODO combine into single undo operation while playing
-    }
+    // TODO combine into single undo operation while playing
 }
 
 ticks App::calcTickDelay(uint32_t timestamp)
