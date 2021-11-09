@@ -43,7 +43,6 @@ private:
     void keyDownEvents(const SDL_KeyboardEvent &e);
     void keyUpEvents(const SDL_KeyboardEvent &e);
 
-    bool doOperation(unique_ptr<edit::SongOp> op);
     void endContinuous();
 
     std::shared_ptr<ui::Touch> findTouch(int id);
@@ -100,8 +99,26 @@ private:
     int tickBufferPos {0};
     std::atomic<uint32_t> audioCallbackTime {0};
 
+    // op is by value not by reference for move semantics since operations are
+    // typically constructed in place
+    // (I think??? is there a better way to do this? TODO)
     template<typename T>
-    void doOperation(const T &op, bool continuous)
+    bool doOperation(T op)
+    {
+        // remember that there will be less to copy/move before doIt is called
+        // than after
+        auto uniqueOp = std::make_unique<T>(std::move(op));
+        if (uniqueOp->doIt(&song)) {
+            undoStack.push_back(std::move(uniqueOp));
+            redoStack.clear();
+            continuousOp = nullptr;
+            return true;
+        }
+        return false;
+    }
+
+    template<typename T>
+    void doOperation(T op, bool continuous)
     {
         if (auto prevOp = continuous ? dynamic_cast<T*>(continuousOp)
                 : nullptr) {
@@ -109,8 +126,7 @@ private:
             *prevOp = op;
             prevOp->doIt(&song);
         } else {
-            auto newOp = std::make_unique<T>(op);
-            if (doOperation(std::move(newOp)))
+            if (doOperation(std::move(op)))
                 continuousOp = undoStack.back().get();
         }
     }
