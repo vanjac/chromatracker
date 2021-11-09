@@ -43,7 +43,7 @@ private:
     void keyDownEvents(const SDL_KeyboardEvent &e);
     void keyUpEvents(const SDL_KeyboardEvent &e);
 
-    void doOperation(unique_ptr<edit::SongOp> op, bool continuous=false);
+    bool doOperation(unique_ptr<edit::SongOp> op);
     void endContinuous();
 
     std::shared_ptr<ui::Touch> findTouch(int id);
@@ -99,6 +99,21 @@ private:
     int tickBufferLen {0}; // in SAMPLES (not frames!)
     int tickBufferPos {0};
     std::atomic<uint32_t> audioCallbackTime {0};
+
+    template<typename T>
+    void doOperation(const T &op, bool continuous)
+    {
+        if (auto prevOp = continuous ? dynamic_cast<T*>(continuousOp)
+                : nullptr) {
+            prevOp->undoIt(&song);
+            *prevOp = op;
+            prevOp->doIt(&song);
+        } else {
+            auto newOp = std::make_unique<T>(op);
+            if (doOperation(std::move(newOp)))
+                continuousOp = undoStack.back().get();
+        }
+    }
 };
 
 } // namespace

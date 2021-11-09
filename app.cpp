@@ -1119,17 +1119,15 @@ void App::keyUpEvents(const SDL_KeyboardEvent &e)
     }
 }
 
-void App::doOperation(unique_ptr<edit::SongOp> op, bool continuous)
+bool App::doOperation(unique_ptr<edit::SongOp> op)
 {
     if (op->doIt(&song)) {
-        if (continuous) {
-            continuousOp = op.get();
-        } else {
-            continuousOp = nullptr;
-        }
         undoStack.push_back(std::move(op));
         redoStack.clear();
+        continuousOp = nullptr;
+        return true;
     }
+    return false;
 }
 
 void App::endContinuous()
@@ -1246,30 +1244,10 @@ void App::writeEvent(bool playing, const Event &event, Event::Mask mask,
 {
     SDL_Keymod mod = SDL_GetModState();
     if (mod & KMOD_ALT) {
-        // TODO this could all be done with a template
-        auto prevOp = dynamic_cast<edit::ops::MergeEvent*>(continuousOp);
-        if (continuous && prevOp) {
-            prevOp->undoIt(&song);
-            *prevOp = edit::ops::MergeEvent(editCur, event, mask);
-            prevOp->doIt(&song);
-        } else {
-            auto op = std::make_unique<edit::ops::MergeEvent>(
-                editCur, event, mask);
-            doOperation(std::move(op), continuous);
-        }
+        doOperation(edit::ops::MergeEvent(editCur, event, mask), continuous);
     } else if (mod & (KMOD_CAPS | KMOD_SHIFT)) {
-        ticks size = playing ? 1 : cellSize;
-
-        auto prevOp = dynamic_cast<edit::ops::WriteCell*>(continuousOp);
-        if (continuous && prevOp) {
-            prevOp->undoIt(&song);
-            *prevOp = edit::ops::WriteCell(editCur, size, event);
-            prevOp->doIt(&song);
-        } else {
-            auto op = std::make_unique<edit::ops::WriteCell>(
-                editCur, !playing ? cellSize : 1, event);
-            doOperation(std::move(op), continuous);
-        }
+        doOperation(edit::ops::WriteCell(
+            editCur, playing ? 1 : cellSize, event), continuous);
         // TODO if playing, clear events while held
     }
     // TODO combine into single undo operation while playing
