@@ -35,6 +35,7 @@ struct Event
     Special special {Special::None};
 
     bool empty() const;
+    Event masked(Mask mask) const;
     void merge(const Event &other); // fields of other take precedence
     void merge(const Event &other, Mask mask);
 };

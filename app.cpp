@@ -211,8 +211,6 @@ void App::drawInfo(Rect rect)
     textPos = drawText(std::to_string(record), textPos);
     textPos = drawText(" Follow: ", textPos);
     textPos = drawText(std::to_string(followPlayback), textPos);
-    textPos = drawText(" Overwrite: ", textPos);
-    textPos = drawText(std::to_string(overwrite), textPos);
     textPos = drawText("  ", textPos);
 
     Rect volumeR {{textPos.x, rect.top()}, rect(BR)};
@@ -507,10 +505,6 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         if (!followPlayback)
             snapToGrid();
         break;
-    case SDLK_F7:
-        if (e.repeat) break;
-        overwrite = !overwrite;
-        break;
     case SDLK_KP_PLUS:
         if (ctrl) {
             browser = std::make_unique<panels::Browser>(this,
@@ -705,6 +699,27 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             Event event = selectedEvent;
             event.special = Event::Special::Slide;
             jamKey(e, event, Event::SPECIAL, true);
+        }
+        break;
+    /* jam clear */
+    case SDLK_KP_PERIOD:
+        if (!e.repeat) {
+            Event event = selectedEvent;
+            event.sample.reset();
+            jamKey(e, event, Event::SAMPLE, true);
+        }
+        break;
+    case SDLK_BACKSLASH:
+        if (!e.repeat) {
+            Event event = selectedEvent;
+            event.pitch = Event::NO_PITCH;
+            jamKey(e, event, Event::PITCH, true);
+        }
+        break;
+    case SDLK_CAPSLOCK:
+        if (!e.repeat) {
+            // selectedEvent already shouldn't have special
+            jamKey(e, selectedEvent, Event::SPECIAL, true);
         }
         break;
     /* Playback */
@@ -919,7 +934,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             doOperation(std::move(op));
         } else {
             auto op = std::make_unique<edit::ops::ClearCell>(
-                editCur, overwrite ? cellSize : 1);
+                editCur, alt ? 1 : cellSize);
             doOperation(std::move(op));
         }
         break;
@@ -948,7 +963,9 @@ void App::keyUpEvents(const SDL_KeyboardEvent &e)
     int sampleI = sampleKeymap(e.keysym.scancode);
     auto sym = e.keysym.sym;
     // not SDLK_BACKQUOTE (already FadeOut)
-    if (pitch >= 0 || sampleI >= 0 || sym == SDLK_RETURN || sym == SDLK_1) {
+    if (pitch >= 0 || sampleI >= 0 || sym == SDLK_RETURN || sym == SDLK_1
+            || sym == SDLK_KP_PERIOD || sym == SDLK_BACKSLASH
+            || sym == SDLK_CAPSLOCK) {
         Event fadeEvent;
         fadeEvent.special = Event::Special::FadeOut;
         bool playing;
@@ -1042,13 +1059,15 @@ void App::jamKey(const SDL_KeyboardEvent &keyEv, Event event, Event::Mask mask,
     }
     if (record && write) {
         if (keyEv.keysym.mod & KMOD_ALT) {
-            event = Event();
-            event.merge(jam.event, mask);
+            auto op = std::make_unique<edit::ops::MergeEvent>(
+                editCur, event, mask);
+            doOperation(std::move(op));
+        } else {
+            auto op = std::make_unique<edit::ops::WriteCell>(
+                editCur, !playing ? cellSize : 1, event);
+            doOperation(std::move(op));
+            // TODO if playing, clear events while held
         }
-        auto op = std::make_unique<edit::ops::WriteCell>(editCur,
-            (overwrite && !playing) ? cellSize : 1, event);
-        doOperation(std::move(op));
-        // TODO if overwrite && playing, clear events while held
         // TODO combine into single undo operation while playing
     }
 }

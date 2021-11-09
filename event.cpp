@@ -11,6 +11,13 @@ bool Event::empty() const
         && special == Special::None;
 }
 
+Event Event::masked(Mask mask) const
+{
+    Event e;
+    e.merge(*this, mask);
+    return e;
+}
+
 void Event::merge(const Event &other)
 {
     if (auto sampleP = other.sample.lock())

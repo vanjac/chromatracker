@@ -188,6 +188,48 @@ void WriteCell::undoIt(Song *song)
     ClearCell::undoIt(song);
 }
 
+MergeEvent::MergeEvent(TrackCursor tcur, Event event, Event::Mask mask)
+    : tcur(tcur)
+    , mask(mask)
+    , section(tcur.cursor.section.lockDeleted())
+{
+    this->event = event.masked(mask);
+    this->event.time = tcur.cursor.time;
+}
+
+bool MergeEvent::doIt(Song *song)
+{
+    std::unique_lock lock(section->mu);
+    auto it = tcur.findEvent();
+    if (it == tcur.events().end() || it->time != event.time) {
+        if (event.empty())
+            return false;
+        tcur.events().insert(it, event);
+    } else if (it->time == event.time) {
+        prevEvent = *it;
+        it->merge(event, mask);
+        if (it->empty()) {
+            tcur.events().erase(it);
+        }
+    }
+    return true;
+}
+
+void MergeEvent::undoIt(Song *song)
+{
+    std::unique_lock lock(section->mu);
+    auto it = tcur.findEvent();
+    if (it == tcur.events().end() || it->time != event.time) {
+        if (!prevEvent.empty())
+            tcur.events().insert(it, prevEvent);
+    } else if (!prevEvent.empty()) {
+        *it = prevEvent;
+    } else {
+        tcur.events().erase(it);
+    }
+    prevEvent = Event();
+}
+
 AddSection::AddSection(int index, shared_ptr<Section> section)
     : index(index)
     , section(section)
@@ -310,7 +352,7 @@ bool SliceSection::doIt(Song *song)
 void SliceSection::undoIt(Song *song)
 {
     std::unique_lock sectionLock(section->mu);
-    auto secondHalf = section->next.lock();
+    auto secondHalf = section->next.lockDeleted();
     std::unique_lock secondLock(secondHalf->mu);
     section->length += secondHalf->length;
     section->next = secondHalf->next;

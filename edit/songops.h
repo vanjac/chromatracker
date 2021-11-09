@@ -77,6 +77,21 @@ protected:
     Event event;
 };
 
+class MergeEvent : public SongOp
+{
+public:
+    MergeEvent(TrackCursor tcur, Event event, Event::Mask mask);
+    bool doIt(Song *song) override;
+    void undoIt(Song *song) override;
+protected:
+    const TrackCursor tcur;
+    Event event;
+    const Event::Mask mask;
+    const shared_ptr<Section> section;
+protected:
+    Event prevEvent;
+};
+
 class AddSection : public SongOp
 {
 public:

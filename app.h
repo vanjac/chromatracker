@@ -69,7 +69,6 @@ private:
 
     // mode
     bool followPlayback {true};
-    bool overwrite {true};
     bool record {false};
 
     // main loop flags
