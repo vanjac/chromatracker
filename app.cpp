@@ -353,10 +353,11 @@ void App::drawEvents(Rect rect, Cursor playCur)
                     glColor3f(color.r, color.g, color.b);
                     drawRect(eventR);
                     glColor3f(1, 1, 1);
-                    drawRect(Rect::hLine(eventR(TL), eventR.right(), 1));
+                    drawRect(Rect::hLine(eventR(TL), eventR.right(),
+                        event.velocity != Event::NO_VELOCITY ? 3 : 1));
 
                     // TODO avoid allocation
-                    glm::vec2 textPos = eventR(TL, {2, 0});
+                    glm::vec2 textPos = eventR(TL, {2, 1});
                     if (sampleP) {
                         textPos = drawText(sampleP->name.substr(0, 2), textPos);
                     } else {
