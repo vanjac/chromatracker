@@ -954,10 +954,11 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
 
 void App::keyUpEvents(const SDL_KeyboardEvent &e)
 {
-    if (e.keysym.mod & KMOD_CTRL)
-        return;
-    int pitch = pitchKeymap(e.keysym.scancode);
-    int sampleI = sampleKeymap(e.keysym.scancode);
+    int pitch = 0, sampleI = 0;
+    if (!(e.keysym.mod & KMOD_CTRL)) {
+        pitch = pitchKeymap(e.keysym.scancode);
+        sampleI = sampleKeymap(e.keysym.scancode);
+    }
     auto sym = e.keysym.sym;
     // not SDLK_BACKQUOTE (already FadeOut)
     if (pitch >= 0 || sampleI >= 0 || sym == SDLK_RETURN || sym == SDLK_1
