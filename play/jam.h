@@ -11,7 +11,7 @@ namespace chromatracker::play {
 struct JamEvent
 {
     Event event;
-    int touchId {-1};
+    int touchId {0}; // 0 should not be used
 };
 
 class Jam

@@ -9,7 +9,7 @@ Jam::Jam()
 {
     jamTracks.resize(NUM_JAM_TRACKS);
     jamTrackTouches.resize(NUM_JAM_TRACKS);
-    std::fill(jamTrackTouches.begin(), jamTrackTouches.end(), -1);
+    std::fill(jamTrackTouches.begin(), jamTrackTouches.end(), 0);
 }
 
 void Jam::stop()
@@ -18,7 +18,7 @@ void Jam::stop()
         track.stop();
     }
     jamTouchTracks.clear();
-    std::fill(jamTrackTouches.begin(), jamTrackTouches.end(), -1);
+    std::fill(jamTrackTouches.begin(), jamTrackTouches.end(), 0);
 }
 
 void Jam::queueJamEvent(const JamEvent &jam)
@@ -37,7 +37,7 @@ void Jam::processJamEvent(const JamEvent &jam)
     if (jamTouchTracks.count(jam.touchId)) {
         trackIndex = jamTouchTracks[jam.touchId];
     } else {
-        auto it = std::find(jamTrackTouches.begin(), jamTrackTouches.end(), -1);
+        auto it = std::find(jamTrackTouches.begin(), jamTrackTouches.end(), 0);
         if (it == jamTrackTouches.end())
             return; // limit number of touches at once
         trackIndex = it - jamTrackTouches.begin();
@@ -48,7 +48,7 @@ void Jam::processJamEvent(const JamEvent &jam)
     jamTracks[trackIndex].processEvent(jam.event);
     if (jam.event.special == Event::Special::FadeOut) {
         jamTouchTracks.erase(jam.touchId);
-        jamTrackTouches[trackIndex] = -1;
+        jamTrackTouches[trackIndex] = 0;
     }
 }
 

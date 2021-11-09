@@ -109,8 +109,14 @@ void App::main(const vector<string> args)
                     }
                 }
                 break;
+            case SDL_MOUSEBUTTONDOWN:
+                if (event.button.button == SDL_BUTTON_LEFT) {
+                    jamEvent({selectedEvent, (int)event.button.which + 1},
+                             event.button.timestamp);
+                }
+                break;
             case SDL_MOUSEMOTION:
-                if (event.motion.state & SDL_BUTTON_LMASK != 0) {
+                if (event.motion.state & SDL_BUTTON_LMASK) {
                     if (selectedEvent.velocity == Event::NO_VELOCITY)
                         selectedEvent.velocity = 1;
                     selectedEvent.velocity -=
@@ -120,6 +126,9 @@ void App::main(const vector<string> args)
                     } else if (selectedEvent.velocity < 0) {
                         selectedEvent.velocity = 0;
                     }
+                    Event velEvent = selectedEvent.masked(Event::VELOCITY);
+                    jamEvent({velEvent, (int)event.button.which + 1},
+                             event.button.timestamp);
                     // float volume = velocityToAmplitude(
                     //     winR.normalized({event.motion.x, 0}).x);
                     // if (auto prevOp = dynamic_cast<edit::ops::SetSongVolume*>(
@@ -134,9 +143,15 @@ void App::main(const vector<string> args)
                     // }
                 }
                 break;
-            // case SDL_MOUSEBUTTONUP:
-            //     endContinuous(); // end set song volume
-            //     break;
+            case SDL_MOUSEBUTTONUP:
+                if (event.button.button == SDL_BUTTON_LEFT) {
+                    Event fadeEvent;
+                    fadeEvent.special = Event::Special::FadeOut;
+                    jamEvent({fadeEvent, (int)event.button.which + 1},
+                             event.button.timestamp);
+                    // endContinuous(); // end set song volume
+                }
+                break;
             }
         }
 
@@ -1059,7 +1074,7 @@ bool App::jamEvent(play::JamEvent jam, uint32_t timestamp)
 
 bool App::jamEvent(const SDL_KeyboardEvent &e, const Event &event)
 {
-    return jamEvent({event, e.keysym.scancode}, e.timestamp);
+    return jamEvent({event, -e.keysym.scancode}, e.timestamp);
 }
 
 void App::writeEvent(bool playing, const Event &event, Event::Mask mask)
