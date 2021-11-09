@@ -519,6 +519,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         if (!followPlayback)
             snapToGrid();
         break;
+    /* Sample select */
     case SDLK_KP_PLUS:
         if (ctrl) {
             browser = std::make_unique<panels::Browser>(this,
@@ -851,6 +852,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
         break;
     case SDLK_RIGHTBRACKET:
         cellSize *= ctrl ? 3 : 2;
+        snapToGrid();
         break;
     case SDLK_LEFTBRACKET:
         {
