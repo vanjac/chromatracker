@@ -1,10 +1,12 @@
 #include "browser.h"
 #include <app.h>
 #include <ui/text.h>
-#include <glad/glad.h>
+#include <ui/theme.h>
 #include <SDL2/SDL_filesystem.h>
 
 namespace chromatracker::ui::panels {
+
+const glm::vec4 C_DIRECTORY {0.8, 0.8, 0.8, 1};
 
 Browser::Browser(const App *app, file::FileType type,
                  std::function<void(file::Path)> callback)
@@ -26,26 +28,19 @@ void Browser::draw(Rect rect)
 {
     app->scissorRect(rect);
 
-    glColor3f(1, 1, 1);
-    drawText(path.string(), rect(TL));
+    drawText(path.string(), rect(TL), C_ACCENT_LIGHT);
 
     int i = 0;
     for (auto &directory : directories) {
-        if (i == selected)
-            glColor3f(1, 0.7, 0.7);
-        else
-            glColor3f(0.7, 1, 0.7);
         glm::vec2 textPos = rect(TL, {0, (i + 1) * 20});
-        textPos = drawText(directory.filename().string(), textPos);
+        textPos = drawText(directory.filename().string(), textPos,
+                           i == selected ? C_ACCENT_LIGHT : C_DIRECTORY);
         i++;
     }
     for (auto &file : files) {
-        if (i == selected)
-            glColor3f(1, 0.7, 0.7);
-        else
-            glColor3f(1, 1, 1);
         glm::vec2 textPos = rect(TL, {0, (i + 1) * 20});
-        textPos = drawText(file.filename().string(), textPos);
+        textPos = drawText(file.filename().string(), textPos,
+                           i == selected ? C_ACCENT_LIGHT : C_WHITE);
         i++;
     }
 }

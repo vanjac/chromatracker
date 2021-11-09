@@ -80,7 +80,7 @@ const FontChar & getChar(Font *font, unsigned c)
     return fontChar;
 }
 
-glm::vec2 drawText(string text, glm::vec2 position, Font *font)
+glm::vec2 drawText(string text, glm::vec2 position, glm::vec4 color, Font *font)
 {
     if (text.size() == 0) {
         return position;
@@ -88,7 +88,9 @@ glm::vec2 drawText(string text, glm::vec2 position, Font *font)
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
+
     glEnable(GL_BLEND);
+    glColor4f(color.r, color.g, color.b, color.a);
 
     // TODO iterate unicode points
     glm::vec2 curPos = position;
@@ -127,7 +129,6 @@ glm::vec2 drawText(string text, glm::vec2 position, Font *font)
     }
 
     glDisable(GL_TEXTURE_2D);
-    glDisable(GL_BLEND);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     return curPos;

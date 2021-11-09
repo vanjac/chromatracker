@@ -29,7 +29,7 @@ extern Font FONT_DEFAULT;
 void initText();
 void closeText();
 
-glm::vec2 drawText(string text, glm::vec2 position,
+glm::vec2 drawText(string text, glm::vec2 position, glm::vec4 color,
                    Font *font = &FONT_DEFAULT);
 
 } // namespace
