@@ -122,22 +122,21 @@ void App::main(const vector<string> args)
                     }
                     // float volume = velocityToAmplitude(
                     //     winR.normalized({event.motion.x, 0}).x);
-                    // if (!songVolumeOp) {
-                    //     songVolumeOp = std::make_unique
-                    //         <edit::ops::SetSongVolume>(volume);
+                    // if (auto prevOp = dynamic_cast<edit::ops::SetSongVolume*>(
+                    //         continuousOp)) {
+                    //     prevOp->undoIt(&song);
+                    //     *prevOp = edit::ops::SetSongVolume(volume);
+                    //     prevOp->doIt(&song);
                     // } else {
-                    //     songVolumeOp->undoIt(&song);
-                    //     *songVolumeOp = edit::ops::SetSongVolume(volume);
+                    //     auto op = std::make_unique<edit::ops::SetSongVolume>(
+                    //         volume);
+                    //     doOperation(std::move(op), true);
                     // }
-                    // songVolumeOp->doIt(&song); // preview before push undo stack
                 }
                 break;
             // case SDL_MOUSEBUTTONUP:
-            //     if (songVolumeOp) {
-            //         songVolumeOp->undoIt(&song);
-            //         doOperation(std::move(songVolumeOp));
-            //         // songVolumeOp will be null after move
-            //     }
+            //     endContinuous(); // end set song volume
+            //     break;
             }
         }
 
@@ -476,6 +475,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 undoStack.back()->undoIt(&song);
                 redoStack.push_back(std::move(undoStack.back()));
                 undoStack.pop_back();
+                continuousOp = nullptr;
             } else {
                 cout << "Nothing to undo\n";
             }
@@ -487,6 +487,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 redoStack.back()->doIt(&song);
                 undoStack.push_back(std::move(redoStack.back()));
                 redoStack.pop_back();
+                continuousOp = nullptr;
             } else {
                 cout << "Nothing to redo\n";
             }
@@ -913,6 +914,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
 
             undoStack.clear();
             redoStack.clear();
+            continuousOp = nullptr;
         } else if (ctrl) {
             auto deleteSection = editCur.cursor.section.lock();
             auto next = editCur.cursor.nextSection();
@@ -971,12 +973,22 @@ void App::keyUpEvents(const SDL_KeyboardEvent &e)
     }
 }
 
-void App::doOperation(unique_ptr<edit::SongOp> op)
+void App::doOperation(unique_ptr<edit::SongOp> op, bool continuous)
 {
     if (op->doIt(&song)) {
+        if (continuous) {
+            continuousOp = op.get();
+        } else {
+            continuousOp = nullptr;
+        }
         undoStack.push_back(std::move(op));
         redoStack.clear();
     }
+}
+
+void App::endContinuous()
+{
+    continuousOp = nullptr;
 }
 
 int App::selectedSampleIndex()

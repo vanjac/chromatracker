@@ -41,7 +41,8 @@ private:
     void keyDownEvents(const SDL_KeyboardEvent &e);
     void keyUpEvents(const SDL_KeyboardEvent &e);
 
-    void doOperation(unique_ptr<edit::SongOp> op);
+    void doOperation(unique_ptr<edit::SongOp> op, bool continuous=false);
+    void endContinuous();
 
     int selectedSampleIndex(); // song must be locked
     void snapToGrid();
@@ -77,8 +78,8 @@ private:
 
     vector<unique_ptr<edit::SongOp>> undoStack;
     vector<unique_ptr<edit::SongOp>> redoStack;
-
-    unique_ptr<edit::ops::SetSongVolume> songVolumeOp;
+    // should either be back of undo stack or null
+    edit::SongOp *continuousOp {nullptr};
 
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)
