@@ -600,20 +600,6 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             }
         }
         break;
-    case SDLK_EQUALS:
-        if (selectedOctave < 9) {
-            selectedOctave++;
-            if (selectedEvent.pitch != Event::NO_PITCH)
-                selectedEvent.pitch += 12;
-        }
-        break;
-    case SDLK_MINUS:
-        if (selectedOctave > 0) {
-            selectedOctave--;
-            if (selectedEvent.pitch != Event::NO_PITCH)
-                selectedEvent.pitch -= 12;
-        }
-        break;
     /* File */
     case SDLK_o:
         if (ctrl) {
@@ -830,6 +816,45 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             }
         }
         break;
+    case SDLK_EQUALS:
+        if (ctrl) {
+            editCur.track++;
+            {
+                std::shared_lock lock(song.mu);
+                if (editCur.track > song.tracks.size()) {
+                    editCur.track = song.tracks.size();
+                } else if (editCur.track < 0) {
+                    editCur.track = 0;
+                }
+            }
+            shared_ptr<Track> newTrack(new Track);
+            auto op = std::make_unique<edit::ops::AddTrack>(
+                editCur.track, newTrack);
+            doOperation(std::move(op));
+        } else if (selectedOctave < 9) {
+            selectedOctave++;
+            if (selectedEvent.pitch != Event::NO_PITCH)
+                selectedEvent.pitch += 12;
+        }
+        break;
+    case SDLK_MINUS:
+        if (ctrl) {
+            std::shared_ptr<Track> deleteTrack;
+            {
+                std::shared_lock lock(song.mu);
+                if (editCur.track >= 0 && editCur.track < song.tracks.size())
+                    deleteTrack = song.tracks[editCur.track];
+            }
+            if (deleteTrack) {
+                auto op = std::make_unique<edit::ops::DeleteTrack>(deleteTrack);
+                doOperation(std::move(op));
+            }
+        } else if (selectedOctave > 0) {
+            selectedOctave--;
+            if (selectedEvent.pitch != Event::NO_PITCH)
+                selectedEvent.pitch -= 12;
+        }
+        break;
     case SDLK_INSERT:
         if (ctrl && !e.repeat) {
             if (auto sectionP = editCur.cursor.section.lock()) {
@@ -854,19 +879,6 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
                 editCur.cursor.time = 0;
                 movedEditCur = true;
             }
-        } else if (alt) {
-            {
-                std::shared_lock lock(song.mu);
-                if (editCur.track >= song.tracks.size()) {
-                    editCur.track = song.tracks.size() - 1;
-                } else if (editCur.track < 0) {
-                    editCur.track = 0;
-                }
-            }
-            shared_ptr<Track> newTrack(new Track);
-            auto op = std::make_unique<edit::ops::AddTrack>(
-                editCur.track + 1, newTrack);
-            doOperation(std::move(op));
         }
         break;
     case SDLK_DELETE:
@@ -905,17 +917,6 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             auto op = std::make_unique<edit::ops::DeleteSection>(
                 deleteSection);
             doOperation(std::move(op));
-        } else if (alt) {
-            std::shared_ptr<Track> deleteTrack;
-            {
-                std::shared_lock lock(song.mu);
-                if (editCur.track >= 0 && editCur.track < song.tracks.size())
-                    deleteTrack = song.tracks[editCur.track];
-            }
-            if (deleteTrack) {
-                auto op = std::make_unique<edit::ops::DeleteTrack>(deleteTrack);
-                doOperation(std::move(op));
-            }
         } else {
             auto op = std::make_unique<edit::ops::ClearCell>(
                 editCur, overwrite ? cellSize : 1);
