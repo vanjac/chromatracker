@@ -1223,6 +1223,7 @@ void App::selectEvent(const Event &event)
 {
     selectedEvent.merge(event);
     selectedEvent.special = Event::Special::None; // don't store
+    selectedEvent.time = 0;
     if (event.pitch != Event::NO_PITCH)
         selectedOctave = selectedEvent.pitch / OCTAVE;
 }
