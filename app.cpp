@@ -111,48 +111,31 @@ void App::main(const vector<string> args)
                 }
                 break;
             case SDL_MOUSEBUTTONDOWN:
-                if (event.button.button == SDL_BUTTON_LEFT) {
-                    play::JamEvent jam {selectedEvent,
-                                        (int)event.button.which + 1};
-                    bool playing = jamEvent(jam, event.button.timestamp);
-                    writeEvent(playing, jam.event, Event::VELOCITY, !playing);
-                } else if (event.button.button == SDL_BUTTON_RIGHT) {
-                    play::JamEvent jam {selectedEvent,
-                                        (int)event.button.which + 1};
-                    jam.event.velocity = Event::NO_VELOCITY;
-                    writeEvent(jamEvent(jam, event.button.timestamp),
-                               jam.event, Event::VELOCITY);
+                {
+                    int id = event.button.button;
+                    auto touch = std::make_shared<Touch>();
+                    uncapturedTouches[id] = touch;
+                    touch->id = id;
+                    touch->button = id;
+                    touch->events.push_back(event);
+                    touch->pos = glm::vec2(event.button.x, event.button.y);
                 }
                 break;
             case SDL_MOUSEMOTION:
-                if (event.motion.state & SDL_BUTTON_LMASK) {
-                    if (selectedEvent.velocity == Event::NO_VELOCITY)
-                        selectedEvent.velocity = 1;
-                    selectedEvent.velocity -=
-                        (float)event.motion.yrel * 2 / winR.dim().y;
-                    if (selectedEvent.velocity > 1) {
-                        selectedEvent.velocity = 1;
-                    } else if (selectedEvent.velocity < 0) {
-                        selectedEvent.velocity = 0;
+                for (int i = 1; i < 5; i++) {
+                    if (SDL_BUTTON(i) & event.motion.state) {
+                        if (auto t = findTouch(i)) {
+                            t->events.push_back(event);
+                            t->pos = glm::vec2(event.motion.x, event.motion.y);
+                        }
                     }
-                    play::JamEvent jam {selectedEvent.masked(Event::VELOCITY),
-                                        (int)event.button.which + 1};
-                    bool playing = jamEvent(jam, event.button.timestamp);
-                    writeEvent(playing, playing ? jam.event : selectedEvent,
-                               Event::VELOCITY, !playing);
                 }
                 break;
             case SDL_MOUSEBUTTONUP:
-                if (event.button.button == SDL_BUTTON_LEFT
-                        || event.button.button == SDL_BUTTON_RIGHT) {
-                    Event fadeEvent;
-                    fadeEvent.special = Event::Special::FadeOut;
-                    if (jamEvent({fadeEvent, (int)event.button.which + 1},
-                                 event.button.timestamp)) { // if playing
-                        writeEvent(true, fadeEvent, Event::ALL);
-                    }
-                    if (event.button.button == SDL_BUTTON_LEFT)
-                        endContinuous();
+                if (auto t = findTouch(event.button.button)) {
+                    t->events.push_back(event);
+                    t->pos = glm::vec2(event.button.x, event.button.y);
+                    t->captured = false;
                 }
                 break;
             }
@@ -196,6 +179,24 @@ void App::main(const vector<string> args)
         drawSampleList({winR(TR, {-160, 0}), winR(BR)});
         drawPiano({winR(BL, {0, -100}), winR(BR, {-160, 0})});
         glDisable(GL_SCISSOR_TEST);
+
+        for (auto it = uncapturedTouches.begin();
+                it != uncapturedTouches.end(); ) {
+            if (!it->second->captured) {
+                it = uncapturedTouches.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        for (auto it = capturedTouches.begin(); it != capturedTouches.end(); ) {
+            auto &touch = it->second;
+            // widget must process touch events every frame
+            if (!touch->captured || !touch->events.empty()) {
+                it = capturedTouches.erase(it);
+            } else {
+                ++it;
+            }
+        }
 
         SDL_GL_SwapWindow(window);
     }
@@ -477,6 +478,65 @@ void App::drawPiano(Rect rect)
 
     if (selectedEvent.velocity != Event::NO_VELOCITY) {
         Rect velocityR = Rect::from(TR, rect(TR), {16, rect.dim().y});
+
+        if (velocityTouch.expired())
+            velocityTouch = captureTouch(velocityR);
+        if (auto touch = velocityTouch.lock()) {
+            bool left = touch->button == SDL_BUTTON_LEFT;
+            bool right = touch->button == SDL_BUTTON_RIGHT;
+            for (auto &event : touch->events) {
+                switch (event.type) {
+                case SDL_MOUSEBUTTONDOWN:
+                    if (left) {
+                        play::JamEvent jam {selectedEvent,
+                                            (int)event.button.which + 1};
+                        bool playing = jamEvent(jam, event.button.timestamp);
+                        writeEvent(playing,
+                                   jam.event, Event::VELOCITY, !playing);
+                    } else if (right) {
+                        play::JamEvent jam {selectedEvent,
+                                            (int)event.button.which + 1};
+                        jam.event.velocity = Event::NO_VELOCITY;
+                        writeEvent(jamEvent(jam, event.button.timestamp),
+                                   jam.event, Event::VELOCITY);
+                    }
+                    break;
+                case SDL_MOUSEMOTION:
+                    if (left) {
+                        if (selectedEvent.velocity == Event::NO_VELOCITY)
+                            selectedEvent.velocity = 1;
+                        selectedEvent.velocity -=
+                            (float)event.motion.yrel * 2 / velocityR.dim().y;
+                        if (selectedEvent.velocity > 1) {
+                            selectedEvent.velocity = 1;
+                        } else if (selectedEvent.velocity < 0) {
+                            selectedEvent.velocity = 0;
+                        }
+                        play::JamEvent jam {
+                            selectedEvent.masked(Event::VELOCITY),
+                            (int)event.button.which + 1};
+                        bool playing = jamEvent(jam, event.button.timestamp);
+                        writeEvent(playing, playing ? jam.event : selectedEvent,
+                                Event::VELOCITY, !playing);
+                    }
+                    break;
+                case SDL_MOUSEBUTTONUP:
+                    if (left || right) {
+                        Event fadeEvent;
+                        fadeEvent.special = Event::Special::FadeOut;
+                        if (jamEvent({fadeEvent, (int)event.button.which + 1},
+                                    event.button.timestamp)) { // if playing
+                            writeEvent(true, fadeEvent, Event::ALL);
+                        }
+                        if (left)
+                            endContinuous();
+                    }
+                    break;
+                }
+            }
+            touch->events.clear();
+        }
+
         glColor3f(0.2, 0.2, 0.2);
         drawRect(velocityR);
         glColor3f(0, 0.7, 0);
@@ -1075,6 +1135,29 @@ void App::doOperation(unique_ptr<edit::SongOp> op, bool continuous)
 void App::endContinuous()
 {
     continuousOp = nullptr;
+}
+
+std::shared_ptr<ui::Touch> App::findTouch(int id)
+{
+    if (uncapturedTouches.count(id)) {
+        return uncapturedTouches[id];
+    } else if (capturedTouches.count(id)) {
+        return capturedTouches[id];
+    }
+    return nullptr;
+}
+
+std::shared_ptr<ui::Touch> App::captureTouch(const Rect &r) {
+    for (auto &pair : uncapturedTouches) {
+        if (r.contains(pair.second->pos)) {
+            pair.second->captured = true;
+            auto touch = pair.second;
+            capturedTouches[pair.first] = pair.second;
+            uncapturedTouches.erase(pair.first);
+            return touch;
+        }
+    }
+    return nullptr;
 }
 
 int App::selectedSampleIndex()

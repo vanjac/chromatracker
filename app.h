@@ -7,7 +7,9 @@
 #include "play/songplay.h"
 #include "ui/layout.h"
 #include "ui/panels/browser.h"
+#include "ui/touch.h"
 #include <atomic>
+#include <unordered_map>
 #include <SDL2/SDL.h>
 
 namespace chromatracker {
@@ -43,6 +45,9 @@ private:
 
     void doOperation(unique_ptr<edit::SongOp> op, bool continuous=false);
     void endContinuous();
+
+    std::shared_ptr<ui::Touch> findTouch(int id);
+    std::shared_ptr<ui::Touch> captureTouch(const ui::Rect &r);
 
     int selectedSampleIndex(); // song must be locked
     void snapToGrid();
@@ -84,6 +89,11 @@ private:
     vector<unique_ptr<edit::SongOp>> redoStack;
     // should either be back of undo stack or null
     edit::SongOp *continuousOp {nullptr};
+
+    std::unordered_map<int, shared_ptr<ui::Touch>> uncapturedTouches;
+    std::unordered_map<int, shared_ptr<ui::Touch>> capturedTouches;
+
+    std::weak_ptr<ui::Touch> velocityTouch;
 
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)
