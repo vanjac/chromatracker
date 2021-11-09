@@ -860,7 +860,21 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
         break;
     /* Commands */
     case SDLK_m:
-        if (!e.repeat && ctrl) {
+        if (!e.repeat && ctrl && shift) {
+            bool solo = true;
+            {
+                std::shared_lock songLock(song.mu);
+                for (int i = 0; i < song.tracks.size(); i++) {
+                    if (i != editCur.track && !song.tracks[i]->mute) {
+                        solo = false;
+                        break;
+                    }
+                }
+            }
+            auto op = std::make_unique<edit::ops::SetTrackSolo>(
+                editCur.track, !solo);
+            doOperation(std::move(op));
+        } else if (!e.repeat && ctrl) {
             shared_ptr<Track> track;
             {
                 std::shared_lock songLock(song.mu);

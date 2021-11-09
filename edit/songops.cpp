@@ -136,6 +136,35 @@ void SetTrackMute::undoIt(Song *song)
     doIt(song);
 }
 
+SetTrackSolo::SetTrackSolo(int track, bool solo)
+    : track(track)
+    , solo(solo)
+{}
+
+bool SetTrackSolo::doIt(Song *song)
+{
+    std::shared_lock songLock(song->mu);
+    trackMute.resize(song->tracks.size());
+    for (int i = 0; i < song->tracks.size(); i++) {
+        auto &t = song->tracks[i];
+        std::unique_lock trackLock(t->mu);
+        trackMute[i] = t->mute;
+        t->mute = (solo && i != track);
+    }
+    return true;
+}
+
+void SetTrackSolo::undoIt(Song *song)
+{
+    std::shared_lock songLock(song->mu);
+    for (int i = 0; i < trackMute.size(); i++) {
+        auto &t = song->tracks[i];
+        std::unique_lock trackLock(t->mu);
+        t->mute = trackMute[i];
+    }
+    trackMute.clear();
+}
+
 ClearCell::ClearCell(TrackCursor tcur, ticks size)
     : tcur(tcur)
     , size(size)
