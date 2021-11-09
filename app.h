@@ -49,6 +49,7 @@ private:
     void nextCell();
     void prevCell();
 
+    void selectEvent(const Event &event);
     // return if playing
     bool jamEvent(play::JamEvent jam, uint32_t timestamp);
     bool jamEvent(const SDL_KeyboardEvent &e, const Event &jam);

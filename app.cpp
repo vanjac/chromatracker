@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 #include <unordered_map>
@@ -690,10 +691,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
                 std::shared_lock sectionLock(sectionP->mu);
                 auto eventIt = editCur.findEvent();
                 if (eventIt != editCur.events().end()) {
-                    selectedEvent.merge(*eventIt);
-                    selectedEvent.special = Event::Special::None; // don't store
-                    if (eventIt->pitch != Event::NO_PITCH)
-                        selectedOctave = selectedEvent.pitch / OCTAVE;
+                    selectEvent(*eventIt);
                     jamEvent(e, selectedEvent); // no write
                 }
             }
@@ -807,10 +805,48 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
         }
         break;
     case SDLK_DOWN:
-        nextCell();
+        if (alt && !e.repeat) {
+            TrackCursor searchCur = editCur;
+            searchCur.cursor.time ++; // after current event
+            while (auto sectionP = searchCur.cursor.section.lock()) {
+                std::shared_lock sectionLock(sectionP->mu);
+                auto eventIt = searchCur.findEvent();
+                if (eventIt != searchCur.events().end()) {
+                    editCur.cursor.time = eventIt->time;
+                    editCur.cursor.section = sectionP;
+                    movedEditCur = true;
+                    selectEvent(*eventIt);
+                    jamEvent(e, selectedEvent); // no write
+                    break;
+                }
+                searchCur.cursor.section = searchCur.cursor.nextSection();
+                searchCur.cursor.time = 0;
+            }
+        } else if (!alt) {
+            nextCell();
+        }
         break;
     case SDLK_UP:
-        prevCell();
+        if (alt && !e.repeat) {
+            TrackCursor searchCur = editCur;
+            while (auto sectionP = searchCur.cursor.section.lock()) {
+                std::shared_lock sectionLock(sectionP->mu);
+                auto eventIt = searchCur.findEvent();
+                if (eventIt != searchCur.events().begin()) {
+                    eventIt--;
+                    editCur.cursor.time = eventIt->time;
+                    editCur.cursor.section = sectionP;
+                    movedEditCur = true;
+                    selectEvent(*eventIt);
+                    jamEvent(e, selectedEvent); // no write
+                    break;
+                }
+                searchCur.cursor.section = searchCur.cursor.prevSection();
+                searchCur.cursor.time = std::numeric_limits<ticks>().max();
+            }
+        } else if (!alt) {
+            prevCell();
+        }
         break;
     case SDLK_RIGHTBRACKET:
         cellSize *= ctrl ? 3 : 2;
@@ -976,16 +1012,33 @@ void App::keyUpEvents(const SDL_KeyboardEvent &e)
         pitch = pitchKeymap(e.keysym.scancode);
         sampleI = sampleKeymap(e.keysym.scancode);
     }
-    auto sym = e.keysym.sym;
-    // not SDLK_BACKQUOTE (already FadeOut)
-    if (pitch >= 0 || sampleI >= 0 || sym == SDLK_RETURN || sym == SDLK_1
-            || sym == SDLK_KP_PERIOD || sym == SDLK_BACKSLASH
-            || sym == SDLK_KP_ENTER) {
-        Event fadeEvent;
-        fadeEvent.special = Event::Special::FadeOut;
-        if (jamEvent(e, fadeEvent)) { // if playing
-            writeEvent(true, fadeEvent, Event::ALL);
+    bool write = true;
+    if (pitch < 0 && sampleI < 0) {
+        switch (e.keysym.sym) {
+            // not SDLK_BACKQUOTE (already FadeOut)
+            case SDLK_1:
+            case SDLK_KP_PERIOD:
+            case SDLK_BACKSLASH:
+            case SDLK_KP_ENTER:
+                break; // good
+            case SDLK_RETURN:
+                write = false;
+                break;
+            case SDLK_UP:
+            case SDLK_DOWN:
+                if (!(e.keysym.mod & KMOD_ALT))
+                    return;
+                write = false;
+                break;
+            default:
+                return;
         }
+    }
+
+    Event fadeEvent;
+    fadeEvent.special = Event::Special::FadeOut;
+    if (jamEvent(e, fadeEvent) && write) { // if playing and write
+        writeEvent(true, fadeEvent, Event::ALL);
     }
 }
 
@@ -1064,6 +1117,14 @@ void App::prevCell()
         editCur.cursor.time -= cellSize;
     }
     movedEditCur = true;
+}
+
+void App::selectEvent(const Event &event)
+{
+    selectedEvent.merge(event);
+    selectedEvent.special = Event::Special::None; // don't store
+    if (event.pitch != Event::NO_PITCH)
+        selectedOctave = selectedEvent.pitch / OCTAVE;
 }
 
 bool App::jamEvent(play::JamEvent jam, uint32_t timestamp)
