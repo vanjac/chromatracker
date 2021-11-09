@@ -114,14 +114,14 @@ void App::main(const vector<string> args)
                 if (event.button.button == SDL_BUTTON_LEFT) {
                     play::JamEvent jam {selectedEvent,
                                         (int)event.button.which + 1};
-                    writeEvent(jamEvent(jam, event.button.timestamp),
-                               jam.event, Event::VELOCITY, true);
+                    bool playing = jamEvent(jam, event.button.timestamp);
+                    writeEvent(playing, jam.event, Event::VELOCITY, !playing);
                 } else if (event.button.button == SDL_BUTTON_RIGHT) {
                     play::JamEvent jam {selectedEvent,
                                         (int)event.button.which + 1};
                     jam.event.velocity = Event::NO_VELOCITY;
                     writeEvent(jamEvent(jam, event.button.timestamp),
-                               jam.event, Event::VELOCITY, true);
+                               jam.event, Event::VELOCITY);
                 }
                 break;
             case SDL_MOUSEMOTION:
@@ -135,11 +135,11 @@ void App::main(const vector<string> args)
                     } else if (selectedEvent.velocity < 0) {
                         selectedEvent.velocity = 0;
                     }
-                    // note we jam the masked event but write the selectedEvent
                     play::JamEvent jam {selectedEvent.masked(Event::VELOCITY),
                                         (int)event.button.which + 1};
-                    writeEvent(jamEvent(jam, event.button.timestamp),
-                               selectedEvent, Event::VELOCITY, true);
+                    bool playing = jamEvent(jam, event.button.timestamp);
+                    writeEvent(playing, playing ? jam.event : selectedEvent,
+                               Event::VELOCITY, !playing);
                 }
                 break;
             case SDL_MOUSEBUTTONUP:
@@ -151,7 +151,8 @@ void App::main(const vector<string> args)
                                  event.button.timestamp)) { // if playing
                         writeEvent(true, fadeEvent, Event::ALL);
                     }
-                    endContinuous();
+                    if (event.button.button == SDL_BUTTON_LEFT)
+                        endContinuous();
                 }
                 break;
             }
