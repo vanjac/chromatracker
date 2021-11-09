@@ -207,9 +207,6 @@ void App::drawInfo(Rect rect)
 
     glColor3f(1, 1, 1);
     glm::vec2 textPos = rect(TL);
-    textPos = drawText("Record: ", textPos);
-    bool record = SDL_GetModState() & KMOD_CAPS;
-    textPos = drawText(std::to_string(record), textPos);
     textPos = drawText(" Follow: ", textPos);
     textPos = drawText(std::to_string(followPlayback), textPos);
     textPos = drawText("  ", textPos);
@@ -1059,7 +1056,7 @@ void App::jamKey(const SDL_KeyboardEvent &keyEv, Event event, Event::Mask mask,
             auto op = std::make_unique<edit::ops::MergeEvent>(
                 editCur, event, mask);
             doOperation(std::move(op));
-        } else if (keyEv.keysym.mod & KMOD_CAPS) {
+        } else if (keyEv.keysym.mod & (KMOD_CAPS | KMOD_SHIFT)) {
             auto op = std::make_unique<edit::ops::WriteCell>(
                 editCur, !playing ? cellSize : 1, event);
             doOperation(std::move(op));
