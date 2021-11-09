@@ -506,7 +506,7 @@ void App::drawPiano(Rect rect)
                         if (selectedEvent.velocity == Event::NO_VELOCITY)
                             selectedEvent.velocity = 1;
                         selectedEvent.velocity -=
-                            (float)event.motion.yrel * 2 / velocityR.dim().y;
+                            (float)event.motion.yrel * 1.5 / velocityR.dim().y;
                         if (selectedEvent.velocity > 1) {
                             selectedEvent.velocity = 1;
                         } else if (selectedEvent.velocity < 0) {
