@@ -94,7 +94,12 @@ glm::vec2 drawText(string text, glm::vec2 position, Font *font)
     glm::vec2 curPos = position;
     auto strIt = text.begin();
     while (strIt < text.end()) {
-        uint32_t c = utf8::next(strIt, text.end());
+        uint32_t c;
+        try {
+            c = utf8::next(strIt, text.end());
+        } catch (utf8::exception e) {
+            break;
+        }
         if (c == '\n') {
             curPos.x = position.x;
             curPos.y += font->charHeight;
