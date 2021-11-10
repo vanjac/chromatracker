@@ -452,7 +452,7 @@ void App::drawSampleList(Rect rect)
         Rect sampleR = Rect::from(TL, rect(TL, {0, (i++) * 20}),
                                   {rect.dim().x, 20});
         if (sample == selectedSampleP)
-            drawRect(sampleR, C_DARK_GRAY);
+            drawRect(sampleR, glm::vec4(sample->color * 0.25f, 1));
         drawText(sample->name, sampleR(TL),sample == selectedSampleP ? C_WHITE
             : glm::vec4(sample->color * 0.5f + 0.5f, 1));
     }
