@@ -471,68 +471,47 @@ void App::drawPiano(Rect rect)
                  pitch == selectedEvent.pitch ? C_ACCENT : C_BLACK);
     }
 
-    if (selectedEvent.velocity != Event::NO_VELOCITY) {
-        Rect velocityR = Rect::from(TR, rect(TR), {16, rect.dim().y});
+    Rect velocityR = Rect::from(TR, rect(TR), {16, rect.dim().y});
 
-        if (velocityTouch.expired())
-            velocityTouch = captureTouch(velocityR);
-        auto touch = velocityTouch.lock();
-        if (touch) {
-            bool left = touch->button == SDL_BUTTON_LEFT;
-            bool right = touch->button == SDL_BUTTON_RIGHT;
-            for (auto &event : touch->events) {
-                switch (event.type) {
-                case SDL_MOUSEBUTTONDOWN:
-                    if (left) {
-                        play::JamEvent jam {selectedEvent,
-                                            (int)event.button.which + 1};
-                        bool playing = jamEvent(jam, event.button.timestamp);
-                        writeEvent(playing,
-                                   jam.event, Event::VELOCITY, !playing);
-                    } else if (right) {
-                        play::JamEvent jam {selectedEvent,
-                                            (int)event.button.which + 1};
-                        jam.event.velocity = Event::NO_VELOCITY;
-                        writeEvent(jamEvent(jam, event.button.timestamp),
-                                   jam.event, Event::VELOCITY);
-                    }
-                    break;
-                case SDL_MOUSEMOTION:
-                    if (left) {
-                        if (selectedEvent.velocity == Event::NO_VELOCITY)
-                            selectedEvent.velocity = 1;
-                        selectedEvent.velocity -=
-                            (float)event.motion.yrel * 1.5 / velocityR.dim().y;
-                        if (selectedEvent.velocity > 1) {
-                            selectedEvent.velocity = 1;
-                        } else if (selectedEvent.velocity < 0) {
-                            selectedEvent.velocity = 0;
-                        }
-                        play::JamEvent jam {
-                            selectedEvent.masked(Event::VELOCITY),
-                            (int)event.button.which + 1};
-                        bool playing = jamEvent(jam, event.button.timestamp);
-                        writeEvent(playing, playing ? jam.event : selectedEvent,
-                                Event::VELOCITY, !playing);
-                    }
-                    break;
-                case SDL_MOUSEBUTTONUP:
-                    if (left || right) {
-                        Event fadeEvent;
-                        fadeEvent.special = Event::Special::FadeOut;
-                        if (jamEvent({fadeEvent, (int)event.button.which + 1},
-                                    event.button.timestamp)) { // if playing
-                            writeEvent(true, fadeEvent, Event::ALL);
-                        }
-                        if (left)
-                            endContinuous();
-                    }
-                    break;
-                }
+    if (velocityTouch.expired())
+        velocityTouch = captureTouch(velocityR);
+    auto touch = velocityTouch.lock();
+    if (touch) {
+        bool right = touch->button == SDL_BUTTON_RIGHT;
+        for (auto &event : touch->events) {
+            if (event.type == SDL_MOUSEBUTTONDOWN) {
+                play::JamEvent jam {selectedEvent, (int)event.button.which + 1};
+                if (right)
+                    jam.event.velocity = Event::NO_VELOCITY;
+                bool playing = jamEvent(jam, event.button.timestamp);
+                writeEvent(playing, jam.event, Event::VELOCITY,
+                           !right && !playing); // continuous?
+            } else if (event.type == SDL_MOUSEMOTION && !right) {
+                if (selectedEvent.velocity == Event::NO_VELOCITY)
+                    selectedEvent.velocity = 1;
+                selectedEvent.velocity -=
+                    (float)event.motion.yrel * 1.5 / velocityR.dim().y;
+                selectedEvent.velocity =
+                    glm::clamp(selectedEvent.velocity, 0.0f, 1.0f);
+                play::JamEvent jam {selectedEvent.masked(Event::VELOCITY),
+                                    (int)event.button.which + 1};
+                bool playing = jamEvent(jam, event.button.timestamp);
+                writeEvent(playing, playing ? jam.event : selectedEvent,
+                           Event::VELOCITY, !playing);
+            } else if (event.type == SDL_MOUSEBUTTONUP) {
+                Event fadeEvent;
+                fadeEvent.special = Event::Special::FadeOut;
+                if (jamEvent({fadeEvent, (int)event.button.which + 1},
+                             event.button.timestamp)) // if playing
+                    writeEvent(true, fadeEvent, Event::ALL);
+                if (!right)
+                    endContinuous();
             }
-            touch->events.clear();
         }
+        touch->events.clear();
+    }
 
+    if (selectedEvent.velocity != Event::NO_VELOCITY) {
         drawRect(velocityR,
                  C_DARK_GRAY * (touch ? SELECT_COLOR : NORMAL_COLOR));
         drawRect({velocityR({0, 1 - selectedEvent.velocity}),  velocityR(BR)},
