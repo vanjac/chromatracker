@@ -93,6 +93,7 @@ private:
     std::unordered_map<int, shared_ptr<ui::Touch>> capturedTouches;
 
     std::weak_ptr<ui::Touch> velocityTouch;
+    std::weak_ptr<ui::Touch> songVolumeTouch;
 
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)

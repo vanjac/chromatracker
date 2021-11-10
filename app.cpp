@@ -238,13 +238,32 @@ void App::drawInfo(Rect rect)
     textPos = drawText("  ", textPos, C_WHITE);
 
     Rect volumeR {{textPos.x, rect.top()}, rect(BR)};
-    drawRect(volumeR, C_DARK_GRAY);
     float vol;
     {
         std::shared_lock songLock(song.mu);
         vol = amplitudeToVelocity(song.volume);
     }
-    drawRect({volumeR(TL), volumeR({vol, 1})}, C_ACCENT);
+
+    if (songVolumeTouch.expired())
+        songVolumeTouch = captureTouch(volumeR);
+    auto touch = songVolumeTouch.lock();
+    if (touch) {
+        for (auto &event : touch->events) {
+            if (event.type == SDL_MOUSEMOTION) {
+                vol += (float)event.motion.xrel / volumeR.dim().x;
+                vol = glm::clamp(vol, 0.0f, 1.0f);
+                doOperation(edit::ops::SetSongVolume(velocityToAmplitude(vol)),
+                            true);
+            } else if (event.type == SDL_MOUSEBUTTONUP) {
+                endContinuous();
+            }
+        }
+        touch->events.clear();
+    }
+
+    drawRect(volumeR, C_DARK_GRAY * (touch ? SELECT_COLOR : NORMAL_COLOR));
+    drawRect({volumeR(TL), volumeR({vol, 1})},
+             C_ACCENT * (touch ? SELECT_COLOR : NORMAL_COLOR));
     drawText("Volume", textPos, C_WHITE);
 }
 
