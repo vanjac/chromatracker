@@ -16,12 +16,18 @@ public:
 
     void stop();
     void processEvent(const Event &event);
+    // call after processEvent
+    void setSlideTarget(const Event &event, ticks time);
+
     void processTick(float *tickBuffer, frames tickFrames,
                      frames outFrameRate, float lAmp, float rAmp);
 
 private:
     SamplePlay samplePlay;
     Event::Special _special {Event::Special::None};
+
+    Event slideTarget;
+    float pitchSlide, velocitySlide;
 };
 
 } // namespace

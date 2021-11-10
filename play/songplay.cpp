@@ -82,8 +82,11 @@ frames SongPlay::processTick(float *tickBuffer, frames maxFrames,
             for (tcur.track; tcur.track < tracks.size(); tcur.track++) {
                 auto eventIt = tcur.findEvent();
                 if (eventIt != tcur.events().end()
-                        && eventIt->time == _cursor.time)
+                        && eventIt->time == _cursor.time) {
                     tracks[tcur.track].processEvent(*eventIt);
+                    if (eventIt->special == Event::Special::Slide)
+                        doSlide(tcur, sectionP, eventIt);
+                }
             }
             if (sectionP->tempo != Section::NO_TEMPO) {
                 _tempo = sectionP->tempo;
@@ -113,6 +116,24 @@ frames SongPlay::processTick(float *tickBuffer, frames maxFrames,
     }
 
     return tickFrames;
+}
+
+void SongPlay::doSlide(TrackCursor tcur, shared_ptr<Section> sectionP,
+                       vector<Event>::iterator eventIt)
+{
+    TrackPlay &trackPlay = tracks[tcur.track];
+    // find the next event
+    eventIt++;
+    if (eventIt != tcur.events().end()) {
+        trackPlay.setSlideTarget(*eventIt, eventIt->time - _cursor.time);
+    } else if (auto nextP = sectionP->next.lock()) {
+        std::shared_lock nextLock(nextP->mu);
+        auto &events = nextP->trackEvents[tcur.track];
+        if (!events.empty()) {
+            trackPlay.setSlideTarget(events.front(),
+                events.front().time + sectionP->length - _cursor.time);
+        } // otherwise don't keep searching, could encounter a section cycle
+    }
 }
 
 } // namespace

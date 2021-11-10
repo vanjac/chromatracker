@@ -29,6 +29,10 @@ public:
     Jam jam;
 
 private:
+    // section must be locked
+    void doSlide(TrackCursor tcur, shared_ptr<Section> sectionP,
+                 vector<Event>::iterator eventIt);
+
     Cursor _cursor;
     int _tempo {125};
 
