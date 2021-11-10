@@ -179,12 +179,15 @@ void App::main(const vector<string> args)
         glClear(GL_COLOR_BUFFER_BIT);
         glEnable(GL_SCISSOR_TEST);
 
-        drawInfo({winR(TL), winR(TR, {-160, 20})});
+        float lineHeight = FONT_DEFAULT.lineHeight;
+        drawInfo({winR(TL), winR(TR, {-160, lineHeight})});
         if (browser) {
-            browser->draw({winR(TL, {0, 20}), winR(BR, {-160, -100})});
+            browser->draw({winR(TL, {0, lineHeight}), winR(BR, {-160, -100})});
         } else {
-            drawTracks({winR(TL, {0, 20}), winR(TR, {-160, 40})});
-            drawEvents({winR(TL, {0, 40}), winR(BR, {-160, -100})}, playCur);
+            drawTracks({winR(TL, {0, lineHeight}),
+                        winR(TR, {-160, lineHeight * 2})});
+            drawEvents({winR(TL, {0, lineHeight * 2}),
+                        winR(BR, {-160, -100})}, playCur);
         }
         eventKeyboard.drawSampleList({winR(TR, {-160, 0}), winR(BR)});
         eventKeyboard.drawPiano({winR(BL, {0, -100}), winR(BR, {-160, 0})});
@@ -233,9 +236,9 @@ void App::drawInfo(Rect rect)
     scissorRect(rect);
 
     glm::vec2 textPos = rect(TL);
-    textPos = drawText(" Follow: ", textPos, C_WHITE);
-    textPos = drawText(std::to_string(followPlayback), textPos, C_WHITE);
-    textPos = drawText("  ", textPos, C_WHITE);
+    textPos = drawText("Follow: ", textPos, C_WHITE)(TR);
+    textPos = drawText(std::to_string(followPlayback), textPos, C_WHITE)(TR);
+    textPos = drawText("  ", textPos, C_WHITE)(TR);
 
     Rect volumeR {{textPos.x, rect.top()}, rect(BR)};
     float vol;
@@ -328,17 +331,17 @@ void App::drawEvents(Rect rect, Cursor playCur)
             if (sectionR.max.y < rect.min.y || sectionR.min.y >= rect.max.y)
                 continue;
 
-            glm::vec2 textPos = sectionR(TL, {0, -20});
-            textPos = drawText(section->title, textPos, C_WHITE);
+            glm::vec2 textPos = sectionR(TL, {0, -FONT_DEFAULT.lineHeight});
+            textPos = drawText(section->title, textPos, C_WHITE)(TR);
             if (section->tempo != Section::NO_TEMPO) {
-                textPos = drawText("  Tempo=", textPos, C_WHITE);
+                textPos = drawText("  Tempo=", textPos, C_WHITE)(TR);
                 textPos = drawText(std::to_string(section->tempo), textPos,
-                                   C_WHITE);
+                                   C_WHITE)(TR);
             }
             if (section->meter != Section::NO_METER) {
-                textPos = drawText("  Meter=", textPos, C_WHITE);
+                textPos = drawText("  Meter=", textPos, C_WHITE)(TR);
                 textPos = drawText(std::to_string(section->meter), textPos,
-                                   C_WHITE);
+                                   C_WHITE)(TR);
             }
             for (int t = 0; t < section->trackEvents.size(); t++) {
                 bool mute;
@@ -380,15 +383,15 @@ void App::drawEvents(Rect rect, Cursor playCur)
                         event.velocity != Event::NO_VELOCITY ? 3 : 1), C_WHITE);
 
                     // TODO avoid allocation
-                    glm::vec2 textPos = eventR(TL, {2, 1});
+                    glm::vec2 textPos = eventR(TL, {2, 0});
                     if (sampleP && sampleP->name.size() >= 2) {
                         textPos = drawText(sampleP->name.substr(0, 2), textPos,
-                                           C_WHITE);
+                                           C_WHITE)(TR);
                     } else if (sampleP && sampleP->name.size() == 1) {
-                        textPos = drawText(sampleP->name, textPos, C_WHITE);
-                        textPos = drawText(" ", textPos, C_WHITE);
+                        textPos = drawText(sampleP->name, textPos, C_WHITE)(TR);
+                        textPos = drawText(" ", textPos, C_WHITE)(TR);
                     } else {
-                        textPos = drawText("  ", textPos, C_WHITE);
+                        textPos = drawText("  ", textPos, C_WHITE)(TR);
                     }
                     string specialStr = " ";
                     switch (event.special) {
@@ -399,10 +402,10 @@ void App::drawEvents(Rect rect, Cursor playCur)
                         specialStr = "/";
                         break;
                     }
-                    textPos = drawText(specialStr, textPos, C_WHITE);
+                    textPos = drawText(specialStr, textPos, C_WHITE)(TR);
                     if (event.pitch != Event::NO_PITCH) {
                         textPos = drawText(pitchToString(event.pitch), textPos,
-                                           C_WHITE);
+                                           C_WHITE)(TR);
                     }
                 } // each event
             } // each track

@@ -96,14 +96,14 @@ void EventKeyboard::drawSampleList(Rect rect)
     app->scissorRect(rect);
     std::shared_lock songLock(app->song.mu);
     auto selectedSampleP = selected.sample.lock();
-    int i = 0;
+    glm::vec2 textPos = rect(TL);
     for (const auto &sample : app->song.samples) {
-        Rect sampleR = Rect::from(TL, rect(TL, {0, (i++) * 20}),
-                                  {rect.dim().x, 20});
+        Rect sampleR = Rect::from(TL, textPos,
+                                  {rect.dim().x, FONT_DEFAULT.lineHeight});
         if (sample == selectedSampleP)
             drawRect(sampleR, glm::vec4(sample->color * 0.25f, 1));
-        drawText(sample->name, sampleR(TL),sample == selectedSampleP ? C_WHITE
-            : glm::vec4(sample->color * 0.5f + 0.5f, 1));
+        textPos = drawText(sample->name, textPos, sample == selectedSampleP ?
+            C_WHITE : glm::vec4(sample->color * 0.5f + 0.5f, 1))(BL);
     }
 }
 

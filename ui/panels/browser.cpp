@@ -28,19 +28,18 @@ void Browser::draw(Rect rect)
 {
     app->scissorRect(rect);
 
-    drawText(path.string(), rect(TL), C_ACCENT_LIGHT);
+    glm::vec2 textPos = rect(TL);
+    textPos = drawText(path.string(), rect(TL), C_ACCENT_LIGHT)(BL);
 
     int i = 0;
     for (auto &directory : directories) {
-        glm::vec2 textPos = rect(TL, {0, (i + 1) * 20});
         textPos = drawText(directory.filename().string(), textPos,
-                           i == selected ? C_ACCENT_LIGHT : C_DIRECTORY);
+                           i == selected ? C_ACCENT_LIGHT : C_DIRECTORY)(BL);
         i++;
     }
     for (auto &file : files) {
-        glm::vec2 textPos = rect(TL, {0, (i + 1) * 20});
         textPos = drawText(file.filename().string(), textPos,
-                           i == selected ? C_ACCENT_LIGHT : C_WHITE);
+                           i == selected ? C_ACCENT_LIGHT : C_WHITE)(BL);
         i++;
     }
 }

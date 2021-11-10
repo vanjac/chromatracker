@@ -1,8 +1,9 @@
 #pragma once
 #include <common.h>
 
-#include <unordered_map>
+#include "layout.h"
 #include <glutils.h>
+#include <unordered_map>
 #include <ft2build.h> // TODO could we avoid including in header?
 #include FT_FREETYPE_H
 #include <glm/glm.hpp>
@@ -21,7 +22,7 @@ struct Font
 {
     FT_Face face;
     std::unordered_map<unsigned, FontChar> chars;
-    int charHeight;
+    float lineHeight;
 };
 
 extern Font FONT_DEFAULT;
@@ -29,7 +30,7 @@ extern Font FONT_DEFAULT;
 void initText();
 void closeText();
 
-glm::vec2 drawText(string text, glm::vec2 position, glm::vec4 color,
-                   Font *font = &FONT_DEFAULT);
+Rect drawText(string text, glm::vec2 position, glm::vec4 color,
+              Font *font = &FONT_DEFAULT);
 
 } // namespace

@@ -26,11 +26,10 @@ void initText()
         throw std::runtime_error("Error loading font");
     }
 
-    FONT_DEFAULT.charHeight = 16;
-    if (error = FT_Set_Pixel_Sizes(FONT_DEFAULT.face,
-                                   0, FONT_DEFAULT.charHeight)) {
+    if (error = FT_Set_Pixel_Sizes(FONT_DEFAULT.face, 0, 16)) {
         throw std::runtime_error("Error setting font size");
     }
+    FONT_DEFAULT.lineHeight = FONT_DEFAULT.face->size->metrics.height / 64.0f;
 
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);    
@@ -55,8 +54,7 @@ const FontChar & getChar(Font *font, unsigned c)
     fontChar.bitmapDim = glm::ivec2(slot->bitmap.width, slot->bitmap.rows);
 
     // TODO I think using charHeight is incorrect; measure to baseline?
-    fontChar.drawOffset = glm::ivec2(slot->bitmap_left,
-                                     font->charHeight - slot->bitmap_top);
+    fontChar.drawOffset = glm::ivec2(slot->bitmap_left, -slot->bitmap_top);
     fontChar.advanceX = slot->advance.x / 64.0f;
 
     int dstI = 0;
@@ -82,11 +80,13 @@ const FontChar & getChar(Font *font, unsigned c)
     return fontChar;
 }
 
-glm::vec2 drawText(string text, glm::vec2 position, glm::vec4 color, Font *font)
+Rect drawText(string text, glm::vec2 position, glm::vec4 color, Font *font)
 {
-    if (text.size() == 0) {
-        return position;
-    }
+    if (text.size() == 0)
+        return {position, {position.x, position.y + font->lineHeight}};
+    FT_Size_Metrics &metrics = font->face->size->metrics;
+    glm::vec2 pen = position;
+    pen.y += metrics.ascender / 64.0f; // TODO ?
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
@@ -99,8 +99,6 @@ glm::vec2 drawText(string text, glm::vec2 position, glm::vec4 color, Font *font)
     glEnable(GL_BLEND);
     glColor4f(color.r, color.g, color.b, color.a);
 
-    // TODO iterate unicode points
-    glm::vec2 curPos = position;
     auto strIt = text.begin();
     while (strIt < text.end()) {
         uint32_t c;
@@ -109,14 +107,9 @@ glm::vec2 drawText(string text, glm::vec2 position, glm::vec4 color, Font *font)
         } catch (utf8::exception e) {
             break;
         }
-        if (c == '\n') {
-            curPos.x = position.x;
-            curPos.y += font->charHeight;
-            continue;
-        }
         const FontChar &fontChar = getChar(font, c);
 
-        glm::vec2 minPos = curPos + glm::vec2(fontChar.drawOffset);
+        glm::vec2 minPos = pen + glm::vec2(fontChar.drawOffset);
         glm::vec2 maxPos = minPos + glm::vec2(fontChar.bitmapDim);
 
         vertices[0] = minPos;
@@ -126,14 +119,14 @@ glm::vec2 drawText(string text, glm::vec2 position, glm::vec4 color, Font *font)
         glBindTexture(GL_TEXTURE_2D, fontChar.texture);
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-        curPos.x += fontChar.advanceX;
+        pen.x += fontChar.advanceX;
     }
 
     glBindTexture(GL_TEXTURE_2D, 0);
     glDisable(GL_TEXTURE_2D);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
-    return curPos;
+    return {position, {pen.x, position.y + font->lineHeight}};
 }
 
 } // namespace
