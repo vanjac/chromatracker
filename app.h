@@ -101,13 +101,13 @@ public:
     template<typename T>
     bool doOperation(T op)
     {
+        continuousOp = nullptr;
         // remember that there will be less to copy/move before doIt is called
         // than after
         auto uniqueOp = std::make_unique<T>(std::move(op));
         if (uniqueOp->doIt(&song)) {
             undoStack.push_back(std::move(uniqueOp));
             redoStack.clear();
-            continuousOp = nullptr;
             return true;
         }
         return false;
@@ -116,8 +116,9 @@ public:
     template<typename T>
     void doOperation(T op, bool continuous)
     {
-        if (auto prevOp = continuous ? dynamic_cast<T*>(continuousOp)
-                : nullptr) {
+        if (!continuous) {
+            doOperation(std::move(op));
+        } else if (auto prevOp = dynamic_cast<T*>(continuousOp)) {
             prevOp->undoIt(&song);
             *prevOp = op;
             prevOp->doIt(&song);
