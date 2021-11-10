@@ -7,6 +7,7 @@
 #include "play/songplay.h"
 #include "ui/layout.h"
 #include "ui/panels/browser.h"
+#include "ui/panels/eventkeyboard.h"
 #include "ui/touch.h"
 #include <atomic>
 #include <unordered_map>
@@ -28,7 +29,18 @@ public:
 
     void audioCallback(uint8_t *stream, int len);
 
+    // general panel api
     void scissorRect(ui::Rect rect) const;
+    std::shared_ptr<ui::Touch> captureTouch(const ui::Rect &r);
+    void endContinuous();
+
+    // return if playing
+    bool jamEvent(play::JamEvent jam, uint32_t timestamp);
+    bool jamEvent(const SDL_KeyboardEvent &e, const Event &jam);
+    void writeEvent(bool playing, const Event &event, Event::Mask mask,
+                    bool continuous=false);
+
+    Song song;
 
 private:
     void resizeWindow(int w, int h);
@@ -36,45 +48,27 @@ private:
     void drawInfo(ui::Rect rect);
     void drawTracks(ui::Rect rect);
     void drawEvents(ui::Rect rect, Cursor playCur);
-    void drawSampleList(ui::Rect rect);
-    void drawPiano(ui::Rect rect);
 
     void keyDown(const SDL_KeyboardEvent &e);
     void keyDownEvents(const SDL_KeyboardEvent &e);
     void keyUpEvents(const SDL_KeyboardEvent &e);
 
-    void endContinuous();
-
     std::shared_ptr<ui::Touch> findTouch(int id);
-    std::shared_ptr<ui::Touch> captureTouch(const ui::Rect &r);
 
-    int selectedSampleIndex(); // song must be locked
     void snapToGrid();
     void nextCell();
     void prevCell();
 
-    void selectEvent(const Event &event);
-    // return if playing
-    bool jamEvent(play::JamEvent jam, uint32_t timestamp);
-    bool jamEvent(const SDL_KeyboardEvent &e, const Event &jam);
-    void writeEvent(bool playing, const Event &event, Event::Mask mask,
-                    bool continuous=false);
-
     ticks calcTickDelay(uint32_t timestamp); // player must be locked
-    int pitchKeymap(SDL_Scancode key);
-    int sampleKeymap(SDL_Scancode key);
 
     SDL_Window *window;
     ui::Rect winR {{0, 0}, {0, 0}};
     SDL_AudioDeviceID audioDevice;
 
-    Song song;
     play::SongPlay player;
 
     TrackCursor editCur;
     ticks cellSize {TICKS_PER_BEAT / 4};
-    Event selectedEvent {0, {}, MIDDLE_C, 1.0f, Event::Special::None};
-    int selectedOctave {MIDDLE_OCTAVE};
 
     // mode
     bool followPlayback {true};
@@ -82,6 +76,7 @@ private:
     // main loop flags
     bool movedEditCur {false}; // TODO replace with accumulator to move play cur
 
+    ui::panels::EventKeyboard eventKeyboard;
     unique_ptr<ui::panels::Browser> browser;
 
     vector<unique_ptr<edit::SongOp>> undoStack;
@@ -92,7 +87,6 @@ private:
     std::unordered_map<int, shared_ptr<ui::Touch>> uncapturedTouches;
     std::unordered_map<int, shared_ptr<ui::Touch>> capturedTouches;
 
-    std::weak_ptr<ui::Touch> velocityTouch;
     std::weak_ptr<ui::Touch> songVolumeTouch;
 
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
@@ -100,6 +94,7 @@ private:
     int tickBufferPos {0};
     std::atomic<uint32_t> audioCallbackTime {0};
 
+public:
     // op is by value not by reference for move semantics since operations are
     // typically constructed in place
     // (I think??? is there a better way to do this? TODO)

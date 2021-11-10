@@ -19,9 +19,6 @@ using namespace ui;
 const float CELL_HEIGHT = 32;
 const float TRACK_SPACING = 70;
 const float TRACK_WIDTH = 64;
-const float PIANO_KEY_WIDTH = 40;
-const int WHITE_KEYS[] = {0, 2, 4, 5, 7, 9, 11};
-const int BLACK_KEYS[] = {-1, 1, 3, -1, 6, 8, 10};
 
 const glm::vec4 C_GRID_CELL     {1, 1, 1, 0.4};
 const glm::vec4 C_GRID_BEAT     {1, 1, 1, 0.7};
@@ -34,6 +31,7 @@ void cAudioCallback(void * userdata, uint8_t *stream, int len);
 
 App::App(SDL_Window *window)
     : window(window)
+    , eventKeyboard(this)
 {
     SDL_AudioSpec spec;
     spec.freq = OUT_FRAME_RATE;
@@ -106,8 +104,10 @@ void App::main(const vector<string> args)
                 keyDown(event.key);
                 break;
             case SDL_KEYUP:
-                if (!browser)
+                if (!browser) {
+                    eventKeyboard.keyUp(event.key);
                     keyUpEvents(event.key);
+                }
                 break;
             case SDL_MOUSEWHEEL:
                 if (event.wheel.y < 0) {
@@ -186,8 +186,8 @@ void App::main(const vector<string> args)
             drawTracks({winR(TL, {0, 20}), winR(TR, {-160, 40})});
             drawEvents({winR(TL, {0, 40}), winR(BR, {-160, -100})}, playCur);
         }
-        drawSampleList({winR(TR, {-160, 0}), winR(BR)});
-        drawPiano({winR(BL, {0, -100}), winR(BR, {-160, 0})});
+        eventKeyboard.drawSampleList({winR(TR, {-160, 0}), winR(BR)});
+        eventKeyboard.drawPiano({winR(BL, {0, -100}), winR(BR, {-160, 0})});
 
         for (auto it = uncapturedTouches.begin();
                 it != uncapturedTouches.end(); ) {
@@ -442,102 +442,6 @@ void App::drawEvents(Rect rect, Cursor playCur)
     }
 }
 
-void App::drawSampleList(Rect rect)
-{
-    scissorRect(rect);
-    std::shared_lock songLock(song.mu);
-    auto selectedSampleP = selectedEvent.sample.lock();
-    int i = 0;
-    for (const auto &sample : song.samples) {
-        Rect sampleR = Rect::from(TL, rect(TL, {0, (i++) * 20}),
-                                  {rect.dim().x, 20});
-        if (sample == selectedSampleP)
-            drawRect(sampleR, glm::vec4(sample->color * 0.25f, 1));
-        drawText(sample->name, sampleR(TL),sample == selectedSampleP ? C_WHITE
-            : glm::vec4(sample->color * 0.5f + 0.5f, 1));
-    }
-}
-
-void App::drawPiano(Rect rect)
-{
-    scissorRect(rect);
-
-    int numWhiteKeys = rect.dim().x / PIANO_KEY_WIDTH + 1;
-    for (int i = 0; i < numWhiteKeys; i++) {
-        int key = WHITE_KEYS[i % 7];
-        int octave = selectedOctave + (i / 7);
-        int pitch = key + octave * OCTAVE;
-
-        Rect keyR = Rect::from(TL, rect(TL, {PIANO_KEY_WIDTH * i, 0}),
-                               {PIANO_KEY_WIDTH, rect.dim().y});
-        drawRect(keyR, pitch == selectedEvent.pitch ? C_ACCENT_LIGHT : C_WHITE);
-
-        drawRect(Rect::vLine(keyR(TL), keyR.bottom(), 1), C_BLACK);
-
-        if (key == 0) {
-            drawText(std::to_string(octave), keyR(BL, {8, -24}), C_BLACK);
-        }
-    }
-
-    for (int i = 0; i < numWhiteKeys + 1; i++) {
-        int key = BLACK_KEYS[i % 7];
-        if (key < 0)
-            continue;
-        int pitch = key + (selectedOctave + (i / 7)) * OCTAVE;
-
-        drawRect(Rect::from(TC, rect(TL, {i * PIANO_KEY_WIDTH, 0}),
-                            {PIANO_KEY_WIDTH / 2, rect.dim().y * 0.6}),
-                 pitch == selectedEvent.pitch ? C_ACCENT : C_BLACK);
-    }
-
-    Rect velocityR = Rect::from(TR, rect(TR), {16, rect.dim().y});
-
-    if (velocityTouch.expired())
-        velocityTouch = captureTouch(velocityR);
-    auto touch = velocityTouch.lock();
-    if (touch) {
-        bool right = touch->button == SDL_BUTTON_RIGHT;
-        for (auto &event : touch->events) {
-            if (event.type == SDL_MOUSEBUTTONDOWN) {
-                play::JamEvent jam {selectedEvent, (int)event.button.which + 1};
-                if (right)
-                    jam.event.velocity = Event::NO_VELOCITY;
-                bool playing = jamEvent(jam, event.button.timestamp);
-                writeEvent(playing, jam.event, Event::VELOCITY,
-                           !right && !playing); // continuous?
-            } else if (event.type == SDL_MOUSEMOTION && !right) {
-                if (selectedEvent.velocity == Event::NO_VELOCITY)
-                    selectedEvent.velocity = 1;
-                selectedEvent.velocity -=
-                    (float)event.motion.yrel * 1.5 / velocityR.dim().y;
-                selectedEvent.velocity =
-                    glm::clamp(selectedEvent.velocity, 0.0f, 1.0f);
-                play::JamEvent jam {selectedEvent.masked(Event::VELOCITY),
-                                    (int)event.button.which + 1};
-                bool playing = jamEvent(jam, event.button.timestamp);
-                writeEvent(playing, playing ? jam.event : selectedEvent,
-                           Event::VELOCITY, !playing);
-            } else if (event.type == SDL_MOUSEBUTTONUP) {
-                Event fadeEvent;
-                fadeEvent.special = Event::Special::FadeOut;
-                if (jamEvent({fadeEvent, (int)event.button.which + 1},
-                             event.button.timestamp)) // if playing
-                    writeEvent(true, fadeEvent, Event::ALL);
-                if (!right)
-                    endContinuous();
-            }
-        }
-        touch->events.clear();
-    }
-
-    if (selectedEvent.velocity != Event::NO_VELOCITY) {
-        drawRect(velocityR,
-                 C_DARK_GRAY * (touch ? SELECT_COLOR : NORMAL_COLOR));
-        drawRect({velocityR({0, 1 - selectedEvent.velocity}),  velocityR(BR)},
-                 C_ACCENT * (touch ? SELECT_COLOR : NORMAL_COLOR));
-    }
-}
-
 void App::keyDown(const SDL_KeyboardEvent &e)
 {
     bool ctrl = e.keysym.mod & KMOD_CTRL;
@@ -597,29 +501,20 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     shared_ptr<Sample> newSample(new Sample);
                     loader->loadSample(newSample);
                     doOperation(edit::ops::AddSample(numSamples, newSample));
-                    selectedEvent.sample = newSample;
+                    eventKeyboard.selected.sample = newSample;
 
                     // call at the end to prevent access violation!
                     browser.reset();
                 });
-        } else {
-            std::shared_lock songLock(song.mu);
-            int index = selectedSampleIndex();
-            if (index == -1) {
-                if (!song.samples.empty())
-                    selectedEvent.sample = song.samples.front();
-            } else if (index < song.samples.size() - 1) {
-                selectedEvent.sample = song.samples[index + 1];
-            }
         }
         break;
     case SDLK_KP_MINUS:
         if (ctrl) {
-            if (auto sampleP = selectedEvent.sample.lock()) {
+            if (auto sampleP = eventKeyboard.selected.sample.lock()) {
                 int index;
                 {
                     std::shared_lock songLock(song.mu);
-                    index = selectedSampleIndex();
+                    index = eventKeyboard.sampleIndex();
                     if (index == song.samples.size() - 1)
                         index--;
                 }
@@ -627,36 +522,8 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 {
                     std::shared_lock songLock(song.mu);
                     if (!song.samples.empty())
-                        selectedEvent.sample = song.samples[index];
+                        eventKeyboard.selected.sample = song.samples[index];
                 }
-            }
-        } else {
-            std::shared_lock songLock(song.mu);
-            int index = selectedSampleIndex();
-            if (index > 0) {
-                selectedEvent.sample = song.samples[index - 1];
-            }
-        }
-        break;
-    case SDLK_KP_MULTIPLY:
-        {
-            std::shared_lock songLock(song.mu);
-            int index = selectedSampleIndex();
-            if (index != -1 && index < song.samples.size() - 10) {
-                selectedEvent.sample = song.samples[index + 10];
-            } else if (!song.samples.empty()) {
-                selectedEvent.sample = song.samples.back();
-            }
-        }
-        break;
-    case SDLK_KP_DIVIDE:
-        {
-            std::shared_lock songLock(song.mu);
-            int index = selectedSampleIndex();
-            if (index >= 10) {
-                selectedEvent.sample = song.samples[index - 10];
-            } else if (!song.samples.empty()) {
-                selectedEvent.sample = song.samples.front();
             }
         }
         break;
@@ -680,16 +547,16 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                         std::unique_lock playerLock(player.mu);
                         player.stop();
                     }
-                    std::unique_lock lock(song.mu);
-                    song.clear();
-                    loader->loadSong(&song);
-                    if (!song.sections.empty()) {
-                        editCur.cursor.section = song.sections.front();
-                        editCur.cursor.time = 0;
+                    {
+                        std::unique_lock lock(song.mu);
+                        song.clear();
+                        loader->loadSong(&song);
+                        if (!song.sections.empty()) {
+                            editCur.cursor.section = song.sections.front();
+                            editCur.cursor.time = 0;
+                        }
                     }
-                    if (!song.samples.empty()) {
-                        selectedEvent.sample = song.samples.front();
-                    }
+                    eventKeyboard.reset();
 
                     // call at the end to prevent access violation!
                     browser.reset();
@@ -701,6 +568,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     if (browser) {
         browser->keyDown(e);
     } else {
+        eventKeyboard.keyDown(e);
         keyDownEvents(e);
     }
 }
@@ -710,82 +578,8 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
     bool ctrl = e.keysym.mod & KMOD_CTRL;
     bool shift = e.keysym.mod & KMOD_SHIFT;
     bool alt = e.keysym.mod & KMOD_ALT;
-    if (!e.repeat && !ctrl) {
-        int pitch = pitchKeymap(e.keysym.scancode);
-        int sample = sampleKeymap(e.keysym.scancode);
-        Event::Mask mask = Event::NO_MASK;
-        if (pitch >= 0) {
-            mask = Event::PITCH;
-            selectedEvent.pitch = pitch + selectedOctave * OCTAVE;
-        } else if (sample >= 0) {
-            mask = Event::SAMPLE;
-            std::shared_lock songLock(song.mu);
-            int index = selectedSampleIndex();
-            if (index == -1)
-                index = 0;
-            index = sample + (index / 10) * 10;
-            if (index < song.samples.size()) {
-                selectedEvent.sample = song.samples[index];
-            } else {
-                sample = -1;
-            }
-        }
-        if (mask) {
-            writeEvent(jamEvent(e, selectedEvent), selectedEvent, mask);
-            return;
-        }
-    }
 
     switch (e.keysym.sym) {
-    /* more jam */
-    case SDLK_RETURN:
-        if (!e.repeat) {
-            if (auto sectionP = editCur.cursor.section.lock()) {
-                std::shared_lock sectionLock(sectionP->mu);
-                auto eventIt = editCur.findEvent();
-                if (eventIt != editCur.events().end()) {
-                    selectEvent(*eventIt);
-                    jamEvent(e, selectedEvent); // no write
-                }
-            }
-        }
-        break;
-    case SDLK_BACKQUOTE:
-        if (!e.repeat) {
-            Event event = selectedEvent;
-            event.special = Event::Special::FadeOut; // don't store
-            writeEvent(jamEvent(e, event), event, Event::SPECIAL);
-        }
-        break;
-    case SDLK_1:
-        if (!e.repeat) {
-            Event event = selectedEvent;
-            event.special = Event::Special::Slide;
-            writeEvent(jamEvent(e, event), event, Event::SPECIAL);
-        }
-        break;
-    /* jam clear */
-    case SDLK_KP_PERIOD:
-        if (!e.repeat) {
-            Event event = selectedEvent;
-            event.sample.reset();
-            writeEvent(jamEvent(e, event), event, Event::SAMPLE);
-        }
-        break;
-    case SDLK_BACKSLASH:
-        if (!e.repeat) {
-            Event event = selectedEvent;
-            event.pitch = Event::NO_PITCH;
-            writeEvent(jamEvent(e, event), event, Event::PITCH);
-        }
-        break;
-    case SDLK_KP_ENTER:
-        if (!e.repeat) {
-            // selectedEvent already shouldn't have special
-            writeEvent(jamEvent(e, selectedEvent),
-                       selectedEvent, Event::SPECIAL);
-        }
-        break;
     /* Playback */
     case SDLK_SPACE:
         if (!e.repeat) {
@@ -868,8 +662,8 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
                     editCur.cursor.time = eventIt->time;
                     editCur.cursor.section = sectionP;
                     movedEditCur = true;
-                    selectEvent(*eventIt);
-                    jamEvent(e, selectedEvent); // no write
+                    eventKeyboard.select(*eventIt);
+                    jamEvent(e, eventKeyboard.selected); // no write
                     break;
                 }
                 searchCur.cursor.section = searchCur.cursor.nextSection();
@@ -890,8 +684,8 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
                     editCur.cursor.time = eventIt->time;
                     editCur.cursor.section = sectionP;
                     movedEditCur = true;
-                    selectEvent(*eventIt);
-                    jamEvent(e, selectedEvent); // no write
+                    eventKeyboard.select(*eventIt);
+                    jamEvent(e, eventKeyboard.selected); // no write
                     break;
                 }
                 searchCur.cursor.section = searchCur.cursor.prevSection();
@@ -899,6 +693,18 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             }
         } else if (!alt) {
             prevCell();
+        }
+        break;
+    case SDLK_RETURN:
+        if (!e.repeat) {
+            if (auto sectionP = editCur.cursor.section.lock()) {
+                std::shared_lock sectionLock(sectionP->mu);
+                auto eventIt = editCur.findEvent();
+                if (eventIt != editCur.events().end()) {
+                    eventKeyboard.select(*eventIt);
+                    jamEvent(e, eventKeyboard.selected); // no write
+                }
+            }
         }
         break;
     case SDLK_RIGHTBRACKET:
@@ -957,10 +763,6 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             }
             shared_ptr<Track> newTrack(new Track);
             doOperation(edit::ops::AddTrack(editCur.track, newTrack));
-        } else if (selectedOctave < 9) {
-            selectedOctave++;
-            if (selectedEvent.pitch != Event::NO_PITCH)
-                selectedEvent.pitch += 12;
         }
         break;
     case SDLK_MINUS:
@@ -974,10 +776,6 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             if (deleteTrack) {
                 doOperation(edit::ops::DeleteTrack(deleteTrack));
             }
-        } else if (selectedOctave > 0) {
-            selectedOctave--;
-            if (selectedEvent.pitch != Event::NO_PITCH)
-                selectedEvent.pitch -= 12;
         }
         break;
     case SDLK_INSERT:
@@ -1061,38 +859,12 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
 
 void App::keyUpEvents(const SDL_KeyboardEvent &e)
 {
-    int pitch = -1, sampleI = -1;
-    if (!(e.keysym.mod & KMOD_CTRL)) {
-        pitch = pitchKeymap(e.keysym.scancode);
-        sampleI = sampleKeymap(e.keysym.scancode);
-    }
-    bool write = true;
-    if (pitch < 0 && sampleI < 0) {
-        switch (e.keysym.sym) {
-            // not SDLK_BACKQUOTE (already FadeOut)
-            case SDLK_1:
-            case SDLK_KP_PERIOD:
-            case SDLK_BACKSLASH:
-            case SDLK_KP_ENTER:
-                break; // good
-            case SDLK_RETURN:
-                write = false;
-                break;
-            case SDLK_UP:
-            case SDLK_DOWN:
-                if (!(e.keysym.mod & KMOD_ALT))
-                    return;
-                write = false;
-                break;
-            default:
-                return;
-        }
-    }
-
-    Event fadeEvent;
-    fadeEvent.special = Event::Special::FadeOut;
-    if (jamEvent(e, fadeEvent) && write) { // if playing and write
-        writeEvent(true, fadeEvent, Event::ALL);
+    SDL_Keycode sym = e.keysym.sym;
+    bool alt = e.keysym.mod & KMOD_ALT;
+    if (sym == SDLK_RETURN || (alt && (sym == SDLK_UP || sym == SDLK_DOWN))) {
+        Event fadeEvent;
+        fadeEvent.special = Event::Special::FadeOut;
+        jamEvent(e, fadeEvent); // these keys don't write
     }
 }
 
@@ -1122,17 +894,6 @@ std::shared_ptr<ui::Touch> App::captureTouch(const Rect &r) {
         }
     }
     return nullptr;
-}
-
-int App::selectedSampleIndex()
-{
-    // indices are easier to work with than iterators in this case
-    auto it = std::find(song.samples.begin(), song.samples.end(),
-                        selectedEvent.sample.lock());
-    if (it == song.samples.end())
-        return -1;
-    else
-        return it - song.samples.begin();
 }
 
 void App::snapToGrid()
@@ -1181,15 +942,6 @@ void App::prevCell()
         editCur.cursor.time -= cellSize;
     }
     movedEditCur = true;
-}
-
-void App::selectEvent(const Event &event)
-{
-    selectedEvent.merge(event);
-    selectedEvent.special = Event::Special::None; // don't store
-    selectedEvent.time = 0;
-    if (event.pitch != Event::NO_PITCH)
-        selectedOctave = selectedEvent.pitch / OCTAVE;
 }
 
 bool App::jamEvent(play::JamEvent jam, uint32_t timestamp)
@@ -1276,105 +1028,6 @@ void App::audioCallback(uint8_t *stream, int len)
             sampleStream[i] = 1.0f;
         else if (sampleStream[i] < -1.0f)
             sampleStream[i] = -1.0f;
-    }
-}
-
-int App::pitchKeymap(SDL_Scancode key)
-{
-    switch (key) {
-    case SDL_SCANCODE_Z:
-        return 0;
-    case SDL_SCANCODE_S:
-        return 1;
-    case SDL_SCANCODE_X:
-        return 2;
-    case SDL_SCANCODE_D:
-        return 3;
-    case SDL_SCANCODE_C:
-        return 4;
-    case SDL_SCANCODE_V:
-        return 5;
-    case SDL_SCANCODE_G:
-        return 6;
-    case SDL_SCANCODE_B:
-        return 7;
-    case SDL_SCANCODE_H:
-        return 8;
-    case SDL_SCANCODE_N:
-        return 9;
-    case SDL_SCANCODE_J:
-        return 10;
-    case SDL_SCANCODE_M:
-        return 11;
-    case SDL_SCANCODE_COMMA:
-    case SDL_SCANCODE_Q:
-        return 12;
-    case SDL_SCANCODE_L:
-    case SDL_SCANCODE_2:
-        return 13;
-    case SDL_SCANCODE_PERIOD:
-    case SDL_SCANCODE_W:
-        return 14;
-    case SDL_SCANCODE_SEMICOLON:
-    case SDL_SCANCODE_3:
-        return 15;
-    case SDL_SCANCODE_SLASH:
-    case SDL_SCANCODE_E:
-        return 16;
-    case SDL_SCANCODE_R:
-        return 17;
-    case SDL_SCANCODE_5:
-        return 18;
-    case SDL_SCANCODE_T:
-        return 19;
-    case SDL_SCANCODE_6:
-        return 20;
-    case SDL_SCANCODE_Y:
-        return 21;
-    case SDL_SCANCODE_7:
-        return 22;
-    case SDL_SCANCODE_U:
-        return 23;
-    case SDL_SCANCODE_I:
-        return 24;
-    case SDL_SCANCODE_9:
-        return 25;
-    case SDL_SCANCODE_O:
-        return 26;
-    case SDL_SCANCODE_0:
-        return 27;
-    case SDL_SCANCODE_P:
-        return 28;
-    default:
-        return -1;
-    }
-}
-
-int App::sampleKeymap(SDL_Scancode key)
-{
-    switch (key) {
-    case SDL_SCANCODE_KP_1:
-        return 0;
-    case SDL_SCANCODE_KP_2:
-        return 1;
-    case SDL_SCANCODE_KP_3:
-        return 2;
-    case SDL_SCANCODE_KP_4:
-        return 3;
-    case SDL_SCANCODE_KP_5:
-        return 4;
-    case SDL_SCANCODE_KP_6:
-        return 5;
-    case SDL_SCANCODE_KP_7:
-        return 6;
-    case SDL_SCANCODE_KP_8:
-        return 7;
-    case SDL_SCANCODE_KP_9:
-        return 8;
-    case SDL_SCANCODE_KP_0:
-        return 9;
-    default:
-        return -1;
     }
 }
 
