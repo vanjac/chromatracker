@@ -12,6 +12,8 @@ Font FONT_DEFAULT;
 FT_Library library;
 uint8_t bitmapBuffer[65536];
 
+glm::vec2 QUAD_TEX_COORDS[] = {{0, 0}, {0, 1}, {1, 1}, {1, 0}};
+
 void initText()
 {
     FT_Error error;
@@ -89,6 +91,11 @@ glm::vec2 drawText(string text, glm::vec2 position, glm::vec4 color, Font *font)
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
 
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glTexCoordPointer(2, GL_FLOAT, 0, QUAD_TEX_COORDS);
+    glm::vec2 vertices[4];
+    glVertexPointer(2, GL_FLOAT, 0, vertices);
+
     glEnable(GL_BLEND);
     glColor4f(color.r, color.g, color.b, color.a);
 
@@ -108,28 +115,23 @@ glm::vec2 drawText(string text, glm::vec2 position, glm::vec4 color, Font *font)
             continue;
         }
         const FontChar &fontChar = getChar(font, c);
-        
-        glBindTexture(GL_TEXTURE_2D, fontChar.texture);
 
         glm::vec2 minPos = curPos + glm::vec2(fontChar.drawOffset);
         glm::vec2 maxPos = minPos + glm::vec2(fontChar.bitmapDim);
 
-        glBegin(GL_TRIANGLE_FAN);
-        glTexCoord2f(0, 0);
-        glVertex2f(minPos.x, minPos.y);
-        glTexCoord2f(0, 1);
-        glVertex2f(minPos.x, maxPos.y);
-        glTexCoord2f(1, 1);
-        glVertex2f(maxPos.x, maxPos.y);
-        glTexCoord2f(1, 0);
-        glVertex2f(maxPos.x, minPos.y);
-        glEnd();
+        vertices[0] = minPos;
+        vertices[1] = glm::vec2(minPos.x, maxPos.y);
+        vertices[2] = maxPos;
+        vertices[3] = glm::vec2(maxPos.x, minPos.y);
+        glBindTexture(GL_TEXTURE_2D, fontChar.texture);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
         curPos.x += fontChar.advanceX;
     }
 
-    glDisable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
+    glDisable(GL_TEXTURE_2D);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
     return curPos;
 }

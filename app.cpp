@@ -85,6 +85,7 @@ void App::main(const vector<string> args)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_MULTISAMPLE);
     glDisable(GL_DEPTH_TEST);
+    glEnableClientState(GL_VERTEX_ARRAY);
 
     bool running = true;
     while (running) {
