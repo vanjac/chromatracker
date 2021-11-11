@@ -8,6 +8,7 @@
 #include "ui/layout.h"
 #include "ui/panels/browser.h"
 #include "ui/panels/eventkeyboard.h"
+#include "ui/panels/trackedit.h"
 #include "ui/touch.h"
 #include <atomic>
 #include <unordered_map>
@@ -78,6 +79,7 @@ private:
 
     ui::panels::EventKeyboard eventKeyboard;
     unique_ptr<ui::panels::Browser> browser;
+    vector<ui::panels::TrackEdit> trackEdits;
 
     vector<unique_ptr<edit::SongOp>> undoStack;
     vector<unique_ptr<edit::SongOp>> redoStack;

@@ -114,21 +114,16 @@ void DeleteTrack::undoIt(Song *song)
     clearedEvents.clear();
 }
 
-SetTrackMute::SetTrackMute(int track, bool mute)
+SetTrackMute::SetTrackMute(shared_ptr<Track> track, bool mute)
     : track(track)
     , mute(mute)
 {}
 
 bool SetTrackMute::doIt(Song *song)
 {
-    shared_ptr<Track> t;
-    {
-        std::shared_lock songLock(song->mu);
-        t = song->tracks[track];
-    }
-    std::unique_lock trackLock(t->mu);
-    std::swap(mute, t->mute);
-    return mute != t->mute;
+    std::unique_lock trackLock(track->mu);
+    std::swap(mute, track->mute);
+    return mute != track->mute;
 }
 
 void SetTrackMute::undoIt(Song *song)
@@ -136,7 +131,7 @@ void SetTrackMute::undoIt(Song *song)
     doIt(song);
 }
 
-SetTrackSolo::SetTrackSolo(int track, bool solo)
+SetTrackSolo::SetTrackSolo(shared_ptr<Track> track, bool solo)
     : track(track)
     , solo(solo)
 {}
@@ -144,12 +139,11 @@ SetTrackSolo::SetTrackSolo(int track, bool solo)
 bool SetTrackSolo::doIt(Song *song)
 {
     std::shared_lock songLock(song->mu);
-    trackMute.resize(song->tracks.size());
-    for (int i = 0; i < song->tracks.size(); i++) {
-        auto &t = song->tracks[i];
+    trackMute.reserve(song->tracks.size());
+    for (auto &t : song->tracks) {
         std::unique_lock trackLock(t->mu);
-        trackMute[i] = t->mute;
-        t->mute = (solo && i != track);
+        trackMute.push_back(t->mute);
+        t->mute = (solo && t != track);
     }
     return true;
 }

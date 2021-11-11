@@ -45,22 +45,22 @@ private:
 class SetTrackMute : public SongOp
 {
 public:
-    SetTrackMute(int track, bool mute);
+    SetTrackMute(shared_ptr<Track> track, bool mute);
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    int track;
+    shared_ptr<Track> track;
     bool mute;
 };
 
 class SetTrackSolo : public SongOp
 {
 public:
-    SetTrackSolo(int track, bool solo);
+    SetTrackSolo(shared_ptr<Track> track, bool solo);
     bool doIt(Song *song) override;
     void undoIt(Song *song) override;
 protected:
-    int track;
+    shared_ptr<Track> track;
     bool solo;
     vector<bool> trackMute;
 };

@@ -275,22 +275,13 @@ void App::drawTracks(Rect rect)
     scissorRect(rect);
 
     std::shared_lock songLock(song.mu);
-    for (int i = 0; i < song.tracks.size(); i++) {
-        auto track = song.tracks[i];
-        std::shared_lock trackLock(track->mu);
+    if (trackEdits.size() != song.tracks.size())
+        trackEdits.resize(song.tracks.size());
 
+    for (int i = 0; i < song.tracks.size(); i++) {
         Rect trackR = Rect::from(TL, rect(TL, {TRACK_SPACING * i, 0}),
                                  {TRACK_WIDTH, rect.dim().y});
-        drawRect(trackR, C_DARK_GRAY);
-        if (!track->mute) {
-            float vol = amplitudeToVelocity(track->volume);
-            drawRect({trackR(TL), trackR({vol, 0.5})}, C_ACCENT);
-            drawRect({trackR(CC), trackR({track->pan / 2 + 0.5, 1})},
-                     C_ACCENT);
-
-            drawRect(Rect::vLine(trackR(CC), trackR.bottom(), 1), C_WHITE);
-        }
-
+        trackEdits[i].draw(this, trackR, song.tracks[i]);
         drawText(std::to_string(i + 1), trackR(TL, {20, 0}), C_WHITE);
     }
 }
@@ -735,33 +726,33 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
         break;
     /* Commands */
     case SDLK_m:
-        if (!e.repeat && ctrl && shift) {
-            bool solo = true;
-            {
-                std::shared_lock songLock(song.mu);
-                for (int i = 0; i < song.tracks.size(); i++) {
-                    if (i != editCur.track && !song.tracks[i]->mute) {
-                        solo = false;
-                        break;
-                    }
-                }
-            }
-            doOperation(edit::ops::SetTrackSolo(editCur.track, !solo));
-        } else if (!e.repeat && ctrl) {
+        if (!e.repeat) {
             shared_ptr<Track> track;
+            bool solo = true;
             {
                 std::shared_lock songLock(song.mu);
                 if (editCur.track >= 0 && editCur.track < song.tracks.size()) {
                     track = song.tracks[editCur.track];
                 }
+
+                if (ctrl && shift) {
+                    for (auto &t : song.tracks) {
+                        if (t != track && !t->mute) {
+                            solo = false;
+                            break;
+                        }
+                    }
+                }
             }
-            if (track) {
+            if (ctrl && shift) {
+                doOperation(edit::ops::SetTrackSolo(track, !solo));
+            } else if (ctrl && track) {
                 bool muted;
                 {
                     std::shared_lock trackLock(track->mu);
                     muted = track->mute;
                 }
-                doOperation(edit::ops::SetTrackMute(editCur.track, !muted));
+                doOperation(edit::ops::SetTrackMute(track, !muted));
             }
         }
         break;
@@ -787,6 +778,9 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
                 std::shared_lock lock(song.mu);
                 if (editCur.track >= 0 && editCur.track < song.tracks.size())
                     deleteTrack = song.tracks[editCur.track];
+                if (editCur.track == song.tracks.size() - 1
+                        && editCur.track != 0)
+                    editCur.track--;
             }
             if (deleteTrack) {
                 doOperation(edit::ops::DeleteTrack(deleteTrack));
