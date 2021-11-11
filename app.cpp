@@ -64,8 +64,7 @@ void App::main(const vector<string> args)
     {
         auto section = song.sections.emplace_back(new Section);
         section->length = TICKS_PER_BEAT * 16;
-        section->trackEvents.insert(section->trackEvents.end(),
-            song.tracks.size(), vector<Event>());
+        section->trackEvents.resize(song.tracks.size());
         section->tempo = 125;
         section->meter = 4;
     }
@@ -383,6 +382,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
                         event.velocity != Event::NO_VELOCITY ? 3 : 1), C_WHITE);
 
                     // TODO avoid allocation
+                    // TODO handle utf-8 correctly
                     glm::vec2 textPos = eventR(TL, {2, 0});
                     if (sampleP && sampleP->name.size() >= 2) {
                         textPos = drawText(sampleP->name.substr(0, 2), textPos,
@@ -792,9 +792,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
                 int index;
                 {
                     std::shared_lock songLock(song.mu);
-                    newSection->trackEvents.insert(
-                        newSection->trackEvents.end(), song.tracks.size(),
-                        vector<Event>());
+                    newSection->trackEvents.resize(song.tracks.size());
                     auto it = editCur.cursor.findSection();
                     index = it - song.sections.begin() + 1;
                 }
@@ -819,8 +817,7 @@ void App::keyDownEvents(const SDL_KeyboardEvent &e)
             song.sections.clear();
             auto section = song.sections.emplace_back(new Section);
             section->length = TICKS_PER_BEAT * 16;
-            section->trackEvents.insert(section->trackEvents.end(),
-                song.tracks.size(), vector<Event>());
+            section->trackEvents.resize(song.tracks.size());
             section->tempo = 125;
             section->meter = 4;
 

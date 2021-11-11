@@ -34,7 +34,7 @@ void ITLoader::checkHeader()
 {
     SDL_RWseek(stream, 0, RW_SEEK_SET);
     char signature[5]{0};
-    SDL_RWread(stream, signature, sizeof(char), 4);
+    SDL_RWread(stream, signature, 1, 4);
     if (memcmp(signature, "IMPM", 4)) {
         throw std::runtime_error("Unrecognized format");
     }
@@ -76,7 +76,7 @@ void ITLoader::loadSong(Song *song)
 
     char songName[27]{0};
     SDL_RWseek(stream, 0x04, RW_SEEK_SET);
-    SDL_RWread(stream, songName, sizeof(char), 26);
+    SDL_RWread(stream, songName, 1, 26);
     firstSection->title = string(songName);
 
     // highlight information (not used for playback)
@@ -165,8 +165,7 @@ void ITLoader::loadSong(Song *song)
             section = song->sections.emplace_back(new Section);
             prevSection->next = section;
         }
-        section->trackEvents.insert(section->trackEvents.end(), MAX_CHANNELS,
-                                    vector<Event>());
+        section->trackEvents.resize(MAX_CHANNELS);
 
         uint32_t patternOffset = patternOffsets[order];
         if (patternOffset == 0) { // empty
@@ -194,7 +193,7 @@ vector<string> ITLoader::listSamples()
         checkSampleHeader(sampleOffsets[i]);
         SDL_RWseek(stream, sampleOffsets[i] + 0x14, RW_SEEK_SET);
         char nameBuf[27]{0};
-        SDL_RWread(stream, nameBuf, sizeof(char), 26);
+        SDL_RWread(stream, nameBuf, 1, 26);
         sampleNames.push_back(nameBuf);
     }
     if (!instrumentMode) {
@@ -210,7 +209,7 @@ vector<string> ITLoader::listSamples()
         uint8_t sampleNum = SDL_ReadU8(stream);
         SDL_RWseek(stream, instOffsets[i] + 0x20, RW_SEEK_SET);
         char nameBuf[27]{0};
-        SDL_RWread(stream, nameBuf, sizeof(char), 26);
+        SDL_RWread(stream, nameBuf, 1, 26);
         string name = nameBuf;
         if (!name.empty()) {
             instrumentNames.push_back(name);
@@ -244,6 +243,7 @@ void loadWave(SDL_RWops *stream, shared_ptr<Sample> sample,
 {
     int numSamples = numFrames * numChannels;
     unique_ptr<T[]> data(new T[numSamples]);
+    // TODO endianess
     SDL_RWread(stream, data.get(), sizeof(T), numSamples);
 
     std::numeric_limits<T> limits;
@@ -262,7 +262,7 @@ void ITLoader::checkSampleHeader(uint32_t offset)
 {
     SDL_RWseek(stream, offset, RW_SEEK_SET);
     char signature[5]{0};
-    SDL_RWread(stream, signature, sizeof(char), 4);
+    SDL_RWread(stream, signature, 1, 4);
     if (memcmp(signature, "IMPS", 4)) {
         throw std::runtime_error("Invalid sample header");
     }
@@ -298,7 +298,7 @@ void ITLoader::loadITSample(uint32_t offset, shared_ptr<Sample> sample,
     extra->defaultVolume = SDL_ReadU8(stream);
 
     char nameBuf[27]{0};
-    SDL_RWread(stream, nameBuf, sizeof(char), 26);
+    SDL_RWread(stream, nameBuf, 1, 26);
     sample->name = nameBuf;
 
     uint8_t convertFlags = SDL_ReadU8(stream);
@@ -361,7 +361,7 @@ void ITLoader::checkInstrumentHeader(uint32_t offset)
 {
     SDL_RWseek(stream, offset, RW_SEEK_SET);
     char signature[5]{0};
-    SDL_RWread(stream, signature, sizeof(char), 4);
+    SDL_RWread(stream, signature, 1, 4);
     if (memcmp(signature, "IMPI", 4)) {
         throw std::runtime_error("Invalid instrument header");
     }
@@ -400,7 +400,7 @@ void ITLoader::loadInstrument(uint32_t offset, shared_ptr<Sample> sample,
 
     SDL_RWseek(stream, offset + 0x20, RW_SEEK_SET);
     char nameBuf[27]{0};
-    SDL_RWread(stream, nameBuf, sizeof(char), 26);
+    SDL_RWread(stream, nameBuf, 1, 26);
     string name = nameBuf;
     if (!name.empty()) // otherwise keep sample name
         sample->name = nameBuf;
