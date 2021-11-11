@@ -1,4 +1,5 @@
 #include "app.h"
+#include "file/chromawriter.h"
 #include "ui/draw.h"
 #include "ui/text.h"
 #include "ui/theme.h"
@@ -564,6 +565,17 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     // call at the end to prevent access violation!
                     browser.reset();
                 });
+        }
+        break;
+    case SDLK_s:
+        if (ctrl) {
+            SDL_RWops *stream = SDL_RWFromFile("out.chroma", "w");
+            if (!stream) {
+                cout << "Error opening stream: " <<SDL_GetError()<< "\n";
+                break;
+            }
+            file::chroma::Writer writer(stream);
+            writer.writeSong(&song);
         }
         break;
     }

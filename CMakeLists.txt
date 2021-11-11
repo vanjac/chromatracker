@@ -16,6 +16,8 @@ add_executable(chromatracker
     cursor.cpp
     edit/songops.cpp
     event.cpp
+    file/chromaloader.cpp
+    file/chromawriter.cpp
     file/itloader.cpp
     file/types.cpp
     glad/glad.c

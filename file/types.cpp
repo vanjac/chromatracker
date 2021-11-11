@@ -1,4 +1,5 @@
 #include "types.h"
+#include "chromaloader.h"
 #include "itloader.h"
 #include <algorithm>
 #include <cctype>
@@ -19,7 +20,7 @@ string normalizedExtension(Path path)
 FileType typeForPath(Path path)
 {
     string ext = normalizedExtension(path);
-    if (ext == ".it")
+    if (ext == ".it" || ext == ".chroma")
         return FileType::Module;
     else if (ext == ".wav" || ext == ".iti")
         return FileType::Sample;
@@ -37,6 +38,8 @@ ModuleLoader * moduleLoaderForPath(Path path)
     string ext = normalizedExtension(path);
     if (ext == ".it") {
         return new ITLoader(stream);
+    } else if (ext == ".chroma") {
+        return new chroma::Loader(stream);
     } else {
         SDL_RWclose(stream);
         return nullptr;
