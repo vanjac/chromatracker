@@ -114,6 +114,40 @@ void DeleteTrack::undoIt(Song *song)
     clearedEvents.clear();
 }
 
+SetTrackVolume::SetTrackVolume(shared_ptr<Track> track, float volume)
+    : track(track)
+    , volume(volume)
+{}
+
+bool SetTrackVolume::doIt(Song *song)
+{
+    std::unique_lock trackLock(track->mu);
+    std::swap(volume, track->volume);
+    return volume != track->volume;
+}
+
+void SetTrackVolume::undoIt(Song *song)
+{
+    doIt(song);
+}
+
+SetTrackPan::SetTrackPan(shared_ptr<Track> track, float pan)
+    : track(track)
+    , pan(pan)
+{}
+
+bool SetTrackPan::doIt(Song *song)
+{
+    std::unique_lock trackLock(track->mu);
+    std::swap(pan, track->pan);
+    return pan != track->pan;
+}
+
+void SetTrackPan::undoIt(Song *song)
+{
+    doIt(song);
+}
+
 SetTrackMute::SetTrackMute(shared_ptr<Track> track, bool mute)
     : track(track)
     , mute(mute)

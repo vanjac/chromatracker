@@ -13,6 +13,9 @@ class TrackEdit
 {
 public:
     void draw(App *app, Rect rect, shared_ptr<Track> track);
+
+private:
+    std::weak_ptr<ui::Touch> volumeTouch, panTouch;
 };
 
 } // namespace
