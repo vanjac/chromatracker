@@ -35,6 +35,10 @@ App::App(SDL_Window *window)
     : window(window)
     , eventKeyboard(this)
 {
+    // TODO
+    settings.bookmarks.push_back("D:\\Google Drive\\mods");
+    settings.bookmarks.push_back("D:\\Google Drive\\mods\\downloaded");
+
     SDL_AudioSpec spec;
     spec.freq = OUT_FRAME_RATE;
     spec.format = AUDIO_F32;

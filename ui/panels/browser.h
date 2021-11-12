@@ -14,8 +14,9 @@ namespace chromatracker::ui::panels {
 class Browser
 {
 public:
-    Browser(const App *app, file::FileType type,
+    Browser(App *app, file::FileType type,
             std::function<void(file::Path)> callback);
+    ~Browser();
 
     void draw(Rect rect);
     void keyDown(const SDL_KeyboardEvent &e);
@@ -23,7 +24,7 @@ public:
 private:
     void open(file::Path path);
 
-    const App * const app;
+    App * const app;
     const file::FileType type;
     const std::function<void(file::Path)> callback;
 

@@ -9,6 +9,7 @@
 #include "ui/panels/browser.h"
 #include "ui/panels/eventkeyboard.h"
 #include "ui/panels/trackedit.h"
+#include "ui/settings.h"
 #include "ui/touch.h"
 #include <atomic>
 #include <unordered_map>
@@ -42,6 +43,7 @@ public:
                     bool continuous=false);
 
     Song song;
+    ui::Settings settings;
 
 private:
     void resizeWindow(int w, int h);

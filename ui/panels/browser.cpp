@@ -8,13 +8,22 @@ namespace chromatracker::ui::panels {
 
 const glm::vec4 C_DIRECTORY {0.8, 0.8, 0.8, 1};
 
-Browser::Browser(const App *app, file::FileType type,
+Browser::Browser(App *app, file::FileType type,
                  std::function<void(file::Path)> callback)
     : app(app)
     , type(type)
     , callback(callback)
 {
-    open(std::filesystem::current_path());
+    if (app->settings.lastOpenPath.empty()) {
+        open(std::filesystem::current_path());
+    } else {
+        open(app->settings.lastOpenPath);
+    }
+}
+
+Browser::~Browser()
+{
+    app->settings.lastOpenPath = path.string();
 }
 
 void Browser::open(file::Path path)
@@ -46,6 +55,14 @@ void Browser::draw(Rect rect)
 
 void Browser::keyDown(const SDL_KeyboardEvent &e)
 {
+    if (e.keysym.sym >= SDLK_1 && e.keysym.sym <= SDLK_9
+            && (e.keysym.mod & KMOD_CTRL)) {
+        int bookmarkNum = e.keysym.sym - SDLK_1;
+        if (bookmarkNum < app->settings.bookmarks.size())
+            open(app->settings.bookmarks[bookmarkNum]);
+        return;
+    }
+
     switch (e.keysym.sym) {
     case SDLK_DOWN:
         selected++;
@@ -71,12 +88,6 @@ void Browser::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_ESCAPE:
         callback(file::Path()); // may destroy browser
         return;
-    case SDLK_1:
-        if (e.keysym.mod & KMOD_CTRL) {
-            // bookmark for testing TODO remove
-            open("D:\\Google Drive\\mods");
-        }
-        break;
     }
 }
 

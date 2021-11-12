@@ -89,7 +89,7 @@ void listDirectory(Path path, FileType type,
                 << sampleNames[i];
             files.push_back(path / nameStream.str());
         }
-    } else {
+    } else if (std::filesystem::is_directory(path)) {
         for (const auto &dir : std::filesystem::directory_iterator(path)) {
             auto &childPath = dir.path();
             FileType childType = typeForPath(childPath);
