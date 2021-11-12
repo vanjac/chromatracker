@@ -50,16 +50,13 @@ void EventKeyboard::drawPiano(Rect rect)
         velocityTouch = app->captureTouch(velocityR);
     auto touch = velocityTouch.lock();
     if (touch) {
-        bool right = touch->button == SDL_BUTTON_RIGHT;
         for (auto &event : touch->events) {
             if (event.type == SDL_MOUSEBUTTONDOWN) {
                 play::JamEvent jam {selected, (int)event.button.which + 1};
-                if (right)
-                    jam.event.velocity = Event::NO_VELOCITY;
                 bool playing = app->jamEvent(jam, event.button.timestamp);
-                app->writeEvent(playing, jam.event, Event::VELOCITY,
-                                !right && !playing); // continuous?
-            } else if (event.type == SDL_MOUSEMOTION && !right) {
+                // continuous if not playing
+                app->writeEvent(playing, jam.event, Event::VELOCITY, !playing);
+            } else if (event.type == SDL_MOUSEMOTION) {
                 if (selected.velocity == Event::NO_VELOCITY)
                     selected.velocity = 1;
                 selected.velocity -=
@@ -76,8 +73,7 @@ void EventKeyboard::drawPiano(Rect rect)
                 if (app->jamEvent({fadeEvent, (int)event.button.which + 1},
                                   event.button.timestamp)) // if playing
                     app->writeEvent(true, fadeEvent, Event::ALL);
-                if (!right)
-                    app->endContinuous();
+                app->endContinuous();
             }
         }
         touch->events.clear();
@@ -110,6 +106,7 @@ void EventKeyboard::drawSampleList(Rect rect)
 void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
 {
     bool ctrl = e.keysym.mod & KMOD_CTRL;
+    bool alt = e.keysym.mod & KMOD_ALT;
     Song &song = app->song;
 
     if (!e.repeat && !ctrl) {
@@ -198,7 +195,7 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
                 selected.pitch -= 12;
         }
         break;
-    /* more jam */
+    /* Special jam */
     case SDLK_BACKQUOTE:
         if (!e.repeat) {
             Event event = selected;
@@ -228,6 +225,13 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
             app->writeEvent(app->jamEvent(e, event), event, Event::PITCH);
         }
         break;
+    case SDLK_QUOTE:
+        if (!e.repeat) {
+            Event event = selected;
+            event.velocity = Event::NO_VELOCITY;
+            app->writeEvent(app->jamEvent(e, event), event, Event::VELOCITY);
+        }
+        break;
     case SDLK_KP_ENTER:
         if (!e.repeat) {
             // selected already shouldn't have special
@@ -251,6 +255,7 @@ void EventKeyboard::keyUp(const SDL_KeyboardEvent &e)
             case SDLK_1:
             case SDLK_KP_PERIOD:
             case SDLK_BACKSLASH:
+            case SDLK_QUOTE:
             case SDLK_KP_ENTER:
                 break; // good
             default:
