@@ -6,6 +6,8 @@
 
 namespace chromatracker::ui::panels {
 
+const glm::vec4 C_MUTED_ACCENT {0.5, 0.5, 0.5, 1};
+
 void TrackEdit::draw(App *app, Rect rect, shared_ptr<Track> track)
 {
     drawRect(rect, C_DARK_GRAY);
@@ -18,7 +20,7 @@ void TrackEdit::draw(App *app, Rect rect, shared_ptr<Track> track)
         pan = track->pan;
         mute = track->mute;
     }
-    glm::vec4 color = mute ? glm::vec4(0.5, 0.5, 0.5, 1) : C_ACCENT;
+    glm::vec4 color = mute ? C_MUTED_ACCENT : C_ACCENT;
 
     Rect volumeR {rect(TL), rect(CR)};
     if (volumeTouch.expired())

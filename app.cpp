@@ -21,6 +21,7 @@ const float CELL_HEIGHT = 32;
 const float TRACK_SPACING = 70;
 const float TRACK_WIDTH = 64;
 
+const glm::vec4 C_EVENT_HEAD    {1, 1, 1, 0.85};
 const glm::vec4 C_GRID_CELL     {1, 1, 1, 0.4};
 const glm::vec4 C_GRID_BEAT     {1, 1, 1, 0.7};
 const glm::vec4 C_GRID_BAR      {0.7, 0.7, 1, 0.7};
@@ -371,7 +372,8 @@ void App::drawEvents(Rect rect, Cursor playCur)
                     }
                     drawRect(eventR, {color, 1});
                     drawRect(Rect::hLine(eventR(TL), eventR.right(),
-                        event.velocity != Event::NO_VELOCITY ? 3 : 1), C_WHITE);
+                        event.velocity != Event::NO_VELOCITY ? 3 : 1),
+                        C_EVENT_HEAD);
 
                     // TODO avoid allocation
                     // TODO handle utf-8 correctly
