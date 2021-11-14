@@ -47,13 +47,26 @@ public:
     ui::Settings settings;
 
 private:
+    // cached properties of song objects used while rendering
+    struct SampleRender
+    {
+        string nameAbbr;
+        glm::vec3 color;
+    };
+    struct SectionRender
+    {
+        float y; // starting from y = 0 at the top of the song
+        ticks length;
+        int meter;
+    };
+
     void resizeWindow(int w, int h);
 
     void drawInfo(ui::Rect rect);
     void drawTracks(ui::Rect rect);
     void drawEvents(ui::Rect rect, Cursor playCur);
     void drawEvent(ui::Rect rect, const Event &event,
-        shared_ptr<Sample> &curSample, float *curVelocity, bool mute);
+        SampleRender **curSampleProps, float *curVelocity, bool mute);
 
     void keyDown(const SDL_KeyboardEvent &e);
     void keyDownEvents(const SDL_KeyboardEvent &e);
@@ -88,6 +101,10 @@ private:
     vector<ui::panels::SectionEdit> sectionEdits;
 
     ui::widgets::Slider songVolumeSlider;
+
+    // reused for each frame
+    std::unordered_map<shared_ptr<const Sample>, SampleRender> sampleProps;
+    std::unordered_map<shared_ptr<const Section>, SectionRender> sectionProps;
 
     vector<unique_ptr<edit::SongOp>> undoStack;
     vector<unique_ptr<edit::SongOp>> redoStack;

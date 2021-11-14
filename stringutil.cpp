@@ -24,8 +24,8 @@ string toUpper(string s)
     auto it = s.begin();
     try {
         while (it < s.end()) {
-            uint32_t c = utf8::next(it, s.end());
-            utf8::append((char32_t)std::toupper(c, std::locale()), result);
+            char32_t c = utf8::next(it, s.end());
+            utf8::append(std::toupper(c, std::locale()), result);
         }
     } catch (utf8::exception e) {} // TODO
     return result;
@@ -37,8 +37,8 @@ string toLower(string s)
     auto it = s.begin();
     try {
         while (it < s.end()) {
-            uint32_t c = utf8::next(it, s.end());
-            utf8::append((char32_t)std::tolower(c, std::locale()), result);
+            char32_t c = utf8::next(it, s.end());
+            utf8::append(std::tolower(c, std::locale()), result);
         }
     } catch (utf8::exception e) {} // TODO
     return result;

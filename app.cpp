@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <glad/glad.h>
+#include <utf8.h>
 
 namespace chromatracker {
 
@@ -24,13 +25,6 @@ const glm::vec4 C_GRID_BAR      {0.7, 0.7, 1, 0.7};
 const glm::vec4 C_EDIT_CUR      {0.5, 1, 0.5, 1};
 const glm::vec4 C_EDIT_CELL     {1, 1, 1, 0.5};
 const glm::vec4 C_PLAY_CUR      {0.5, 0.5, 1, 1};
-
-struct SectionRender
-{
-    float y; // starting from y = 0 at the top of the song
-    ticks length;
-    int meter;
-};
 
 void cAudioCallback(void * userdata, uint8_t *stream, int len);
 
@@ -283,18 +277,42 @@ void App::drawEvents(Rect rect, Cursor playCur)
 
     float timeScale = CELL_HEIGHT / cellSize;
 
-    static std::unordered_map<shared_ptr<const Section>, SectionRender>
-        sectionProps;
+    sampleProps.clear();
     sectionProps.clear();
     {
+        std::shared_lock songLock(song.mu);
+
+        for (auto &sample : song.samples) {
+            std::shared_lock sampleLock(sample->mu);
+            string &name = sample->name;
+            string nameAbbr;
+            if (!name.empty()) {
+                auto nameIt = name.begin();
+                try {
+                    char32_t c = utf8::next(nameIt, name.end());
+                    utf8::append(c, nameAbbr);
+                    if (nameIt < name.end()) {
+                        c = utf8::next(nameIt, name.end());
+                        utf8::append(c, nameAbbr);
+                    } else {
+                        nameAbbr += " ";
+                    }
+                } catch (utf8::exception e) {
+                    nameAbbr = "??";
+                }
+            } else {
+                nameAbbr = "  ";
+            }
+            sampleProps[sample] = SampleRender{nameAbbr, sample->color};
+        }
+
         float y = 0;
         int meter = Section::NO_METER;
-        std::shared_lock songLock(song.mu);
         for (auto &section : song.sections) {
+            std::shared_lock sectionLock(section->mu);
             if (section->meter != Section::NO_METER)
                 meter = section->meter;
-            std::shared_lock sectionLock(section->mu);
-            sectionProps[section] = SectionRender {y, section->length, meter};
+            sectionProps[section] = SectionRender{y, section->length, meter};
             y += section->length * timeScale + 48;
         }
     }
@@ -333,7 +351,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
                         mute = track->mute;
                     }
                     auto &events = section->trackEvents[t];
-                    shared_ptr<Sample> curSample;
+                    SampleRender *curSampleProps = nullptr;
                     float curVelocity = 1.0f;
                     for (int e = 0; e < events.size(); e++) {
                         const Event &event = events[e];
@@ -345,7 +363,8 @@ void App::drawEvents(Rect rect, Cursor playCur)
                         Rect eventR = Rect::from(TL,
                             sectionR(TL, {TRACK_SPACING*t, startY}),
                             {TRACK_WIDTH, endY});
-                        drawEvent(eventR, event, curSample, &curVelocity, mute);
+                        drawEvent(eventR, event, &curSampleProps, &curVelocity,
+                                  mute);
                     }
                 }
             }
@@ -386,46 +405,38 @@ void App::drawEvents(Rect rect, Cursor playCur)
 }
 
 void App::drawEvent(Rect rect, const Event &event,
-    shared_ptr<Sample> &curSample, float *curVelocity, bool mute)
+    SampleRender **curSampleProps, float *curVelocity, bool mute)
 {
-    auto sampleP = event.sample.lock();
+    string nameAbbr = "  ";
+    if (auto sampleP = event.sample.lock()) {
+        *curSampleProps = &sampleProps[sampleP];
+        nameAbbr = (*curSampleProps)->nameAbbr;
+    }
     if (event.special == Event::Special::FadeOut) {
-        curSample = nullptr; // TODO gradient
-    } else if (sampleP) {
-        curSample = sampleP;
+        *curSampleProps = nullptr; // TODO gradient
     }
     if (event.velocity != Event::NO_VELOCITY) {
         *curVelocity = event.velocity;
     }
 
     glm::vec3 color {0, 0, 0};
-    if (curSample) {
-        color = mute ? glm::vec3{0.3, 0.3, 0.3} : (curSample->color * 0.5f);
+    if (*curSampleProps) {
+        auto &props = *curSampleProps;
+        color = mute ? glm::vec3{0.3, 0.3, 0.3} : (props->color * 0.5f);
         color *= *curVelocity; // TODO gamma correct
     }
+
     drawRect(rect, {color, 1});
     float headThickness = event.velocity != Event::NO_VELOCITY ? 3 : 1;
     drawRect(Rect::hLine(rect(TL), rect.right(), headThickness), C_EVENT_HEAD);
 
-    // TODO avoid allocation
-    // TODO handle utf-8 correctly
     glm::vec2 textPos = rect(TL, {2, 0});
-    if (sampleP && sampleP->name.size() >= 2) {
-        textPos = drawText(sampleP->name.substr(0, 2), textPos, C_WHITE)(TR);
-    } else if (sampleP && sampleP->name.size() == 1) {
-        textPos = drawText(sampleP->name, textPos, C_WHITE)(TR);
-        textPos = drawText(" ", textPos, C_WHITE)(TR);
-    } else {
-        textPos = drawText("  ", textPos, C_WHITE)(TR);
-    }
+    textPos = drawText(nameAbbr, textPos, C_WHITE)(TR);
     string specialStr = " ";
-    switch (event.special) {
-    case Event::Special::FadeOut:
+    if (event.special == Event::Special::FadeOut) {
         specialStr = "=";
-        break;
-    case Event::Special::Slide:
+    } else if (event.special == Event::Special::Slide) {
         specialStr = "/";
-        break;
     }
     textPos = drawText(specialStr, textPos, C_WHITE)(TR);
     if (event.pitch != Event::NO_PITCH) {
