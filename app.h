@@ -7,6 +7,7 @@
 #include "play/songplay.h"
 #include "ui/panels/browser.h"
 #include "ui/panels/eventkeyboard.h"
+#include "ui/panels/sampleedit.h"
 #include "ui/panels/sectionedit.h"
 #include "ui/panels/trackedit.h"
 #include "ui/settings.h"
@@ -34,8 +35,10 @@ public:
 
     // general panel api
     void scissorRect(ui::Rect rect) const;
-    std::shared_ptr<ui::Touch> captureTouch(const ui::Rect &r);
+    shared_ptr<ui::Touch> captureTouch(const ui::Rect &r);
     void endContinuous();
+
+    shared_ptr<Sample> selectedSample();
 
     // return if playing
     bool jamEvent(play::JamEvent jam, uint32_t timestamp);
@@ -58,6 +61,11 @@ private:
         float y; // starting from y = 0 at the top of the song
         ticks length;
         int meter;
+    };
+
+    enum class Tab
+    {
+        Events, Sample
     };
 
     void resizeWindow(int w, int h);
@@ -95,7 +103,9 @@ private:
     // main loop flags
     bool movedEditCur {false}; // TODO replace with accumulator to move play cur
 
+    Tab tab {Tab::Events};
     ui::panels::EventKeyboard eventKeyboard;
+    ui::panels::SampleEdit sampleEdit;
     unique_ptr<ui::panels::Browser> browser;
     vector<ui::panels::TrackEdit> trackEdits;
     vector<ui::panels::SectionEdit> sectionEdits;

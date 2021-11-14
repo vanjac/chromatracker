@@ -192,4 +192,28 @@ private:
     vector<EventRef> sampleEvents;
 };
 
+class SetSampleVolume : public SetObjectValue<Sample, float>
+{
+public:
+    SetSampleVolume(shared_ptr<Sample> sample, float volume);
+private:
+    float & objectValue() override;
+};
+
+class SetSampleTune : public SetObjectValue<Sample, float>
+{
+public:
+    SetSampleTune(shared_ptr<Sample> sample, float tune);
+private:
+    float & objectValue() override;
+};
+
+class SetSampleFadeOut : public SetObjectValue<Sample, float>
+{
+public:
+    SetSampleFadeOut(shared_ptr<Sample> sample, float fadeOut);
+private:
+    float & objectValue() override;
+};
+
 } // namespace

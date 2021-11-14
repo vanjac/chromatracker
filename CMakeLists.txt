@@ -31,6 +31,7 @@ add_executable(chromatracker
     ui/layout.cpp
     ui/panels/browser.cpp
     ui/panels/eventkeyboard.cpp
+    ui/panels/sampleedit.cpp
     ui/panels/sectionedit.cpp
     ui/panels/trackedit.cpp
     ui/text.cpp

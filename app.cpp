@@ -31,6 +31,7 @@ void cAudioCallback(void * userdata, uint8_t *stream, int len);
 App::App(SDL_Window *window)
     : window(window)
     , eventKeyboard(this)
+    , sampleEdit(this)
 {
     // TODO
     settings.bookmarks.push_back("D:\\Google Drive\\mods");
@@ -183,13 +184,14 @@ void App::main(const vector<string> args)
 
         float lineHeight = FONT_DEFAULT.lineHeight;
         drawInfo({winR(TL), winR(TR, {-160, lineHeight})});
+        Rect mainR {winR(TL, {0, lineHeight}), winR(BR, {-160, -100})};
         if (browser) {
-            browser->draw({winR(TL, {0, lineHeight}), winR(BR, {-160, -100})});
-        } else {
-            drawTracks({winR(TL, {0, lineHeight}),
-                        winR(TR, {-160, lineHeight * 2})});
-            drawEvents({winR(TL, {0, lineHeight * 2}),
-                        winR(BR, {-160, -100})}, playCur);
+            browser->draw(mainR);
+        } else if (tab == Tab::Events) {
+            drawTracks({mainR(TL), mainR(TR, {0, lineHeight})});
+            drawEvents({mainR(TL, {0, lineHeight}), mainR(BR)}, playCur);
+        } else if (tab == Tab::Sample) {
+            sampleEdit.draw(mainR);
         }
         eventKeyboard.drawSampleList({winR(TR, {-160, 0}), winR(BR)});
         eventKeyboard.drawPiano({winR(BL, {0, -100}), winR(BR, {-160, 0})});
@@ -469,6 +471,13 @@ void App::keyDown(const SDL_KeyboardEvent &e)
             }
         }
         break;
+    /* Tabs */
+    case SDLK_F2:
+        tab = Tab::Events;
+        break;
+    case SDLK_F3:
+        tab = Tab::Sample;
+        break;
     /* Mode */
     case SDLK_SCROLLLOCK:
         if (e.repeat) break;
@@ -509,7 +518,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_KP_MINUS:
         if (ctrl) {
-            if (auto sampleP = eventKeyboard.selected.sample.lock()) {
+            if (auto sampleP = selectedSample()) {
                 int index;
                 {
                     std::shared_lock songLock(song.mu);
@@ -904,6 +913,11 @@ std::shared_ptr<ui::Touch> App::captureTouch(const Rect &r) {
         }
     }
     return nullptr;
+}
+
+shared_ptr<Sample> App::selectedSample()
+{
+    return eventKeyboard.selected.sample.lock();
 }
 
 void App::snapToGrid()

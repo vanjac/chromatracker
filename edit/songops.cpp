@@ -473,4 +473,22 @@ void DeleteSample::undoIt(Song *song)
     }
 }
 
+SetSampleVolume::SetSampleVolume(shared_ptr<Sample> sample, float volume)
+    : SetObjectValue(sample, volume)
+{}
+
+float & SetSampleVolume::objectValue() { return obj->volume; }
+
+SetSampleTune::SetSampleTune(shared_ptr<Sample> sample, float tune)
+    : SetObjectValue(sample, tune)
+{}
+
+float & SetSampleTune::objectValue() { return obj->tune; }
+
+SetSampleFadeOut::SetSampleFadeOut(shared_ptr<Sample> sample, float fadeOut)
+    : SetObjectValue(sample, fadeOut)
+{}
+
+float & SetSampleFadeOut::objectValue() { return obj->fadeOut; }
+
 } // namespace
