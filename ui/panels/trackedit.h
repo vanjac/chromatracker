@@ -3,6 +3,7 @@
 
 #include <song.h>
 #include <ui/ui.h>
+#include <ui/widgets/slider.h>
 
 namespace chromatracker { class App; }
 
@@ -14,7 +15,7 @@ public:
     void draw(App *app, Rect rect, shared_ptr<Track> track);
 
 private:
-    std::weak_ptr<ui::Touch> volumeTouch, panTouch;
+    widgets::Slider volumeSlider, panSlider;
 };
 
 } // namespace

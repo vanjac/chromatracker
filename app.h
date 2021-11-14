@@ -10,6 +10,7 @@
 #include "ui/panels/trackedit.h"
 #include "ui/settings.h"
 #include "ui/ui.h"
+#include "ui/widgets/slider.h"
 #include <atomic>
 #include <unordered_map>
 #include <SDL2/SDL.h>
@@ -82,6 +83,8 @@ private:
     unique_ptr<ui::panels::Browser> browser;
     vector<ui::panels::TrackEdit> trackEdits;
 
+    ui::widgets::Slider songVolumeSlider;
+
     vector<unique_ptr<edit::SongOp>> undoStack;
     vector<unique_ptr<edit::SongOp>> redoStack;
     // should either be back of undo stack or null
@@ -89,8 +92,6 @@ private:
 
     std::unordered_map<int, shared_ptr<ui::Touch>> uncapturedTouches;
     std::unordered_map<int, shared_ptr<ui::Touch>> capturedTouches;
-
-    std::weak_ptr<ui::Touch> songVolumeTouch;
 
     float tickBuffer[MAX_TICK_FRAMES * NUM_CHANNELS];
     int tickBufferLen {0}; // in SAMPLES (not frames!)

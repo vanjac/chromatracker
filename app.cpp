@@ -249,26 +249,9 @@ void App::drawInfo(Rect rect)
         vol = amplitudeToVelocity(song.volume);
     }
 
-    if (songVolumeTouch.expired())
-        songVolumeTouch = captureTouch(volumeR);
-    auto touch = songVolumeTouch.lock();
-    if (touch) {
-        for (auto &event : touch->events) {
-            if (event.type == SDL_MOUSEMOTION) {
-                vol += (float)event.motion.xrel / volumeR.dim().x;
-                vol = glm::clamp(vol, 0.0f, 1.0f);
-                doOperation(edit::ops::SetSongVolume(velocityToAmplitude(vol)),
-                            true);
-            } else if (event.type == SDL_MOUSEBUTTONUP) {
-                endContinuous();
-            }
-        }
-        touch->events.clear();
+    if (songVolumeSlider.draw(this, volumeR, &vol)) {
+        doOperation(edit::ops::SetSongVolume(velocityToAmplitude(vol)), true);
     }
-
-    drawRect(volumeR, C_DARK_GRAY * (touch ? SELECT_COLOR : NORMAL_COLOR));
-    drawRect({volumeR(TL), volumeR({vol, 1})},
-             C_ACCENT * (touch ? SELECT_COLOR : NORMAL_COLOR));
     drawText("Volume", textPos, C_WHITE);
 }
 

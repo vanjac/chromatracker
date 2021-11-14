@@ -33,6 +33,7 @@ add_executable(chromatracker
     ui/panels/eventkeyboard.cpp
     ui/panels/trackedit.cpp
     ui/text.cpp
+    ui/widgets/slider.cpp
     units.cpp)
 
 target_include_directories(chromatracker PRIVATE

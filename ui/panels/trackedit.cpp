@@ -16,48 +16,18 @@ void TrackEdit::draw(App *app, Rect rect, shared_ptr<Track> track)
         pan = track->pan;
         mute = track->mute;
     }
-    glm::vec4 color = mute ? C_MUTED_ACCENT : C_ACCENT;
+    glm::vec4 accent = mute ? C_MUTED_ACCENT : C_ACCENT;
 
     Rect volumeR {rect(TL), rect(CR)};
-    if (volumeTouch.expired())
-        volumeTouch = app->captureTouch(volumeR);
-    auto touch = volumeTouch.lock();
-    if (touch) {
-        for (auto &event : touch->events) {
-            if (event.type == SDL_MOUSEMOTION) {
-                vol += (float)event.motion.xrel / volumeR.dim().x;
-                vol = glm::clamp(vol, 0.0f, 1.0f);
-                app->doOperation(edit::ops::SetTrackVolume(
-                    track, velocityToAmplitude(vol)), true);
-            } else if (event.type == SDL_MOUSEBUTTONUP) {
-                app->endContinuous();
-            }
-        }
-        touch->events.clear();
+    if (volumeSlider.draw(app, volumeR, &vol, 0, 1, accent)) {
+        app->doOperation(edit::ops::SetTrackVolume(
+                         track, velocityToAmplitude(vol)), true);
     }
-    drawRect({volumeR(TL), volumeR({vol, 1})},
-             color * (touch ? SELECT_COLOR : NORMAL_COLOR));
 
     Rect panR {rect(CL), rect(BR)};
-    if (panTouch.expired())
-        panTouch = app->captureTouch(panR);
-    touch = panTouch.lock();
-    if (touch) {
-        for (auto &event : touch->events) {
-            if (event.type == SDL_MOUSEMOTION) {
-                pan += 2.0f * (float)event.motion.xrel / panR.dim().x;
-                pan = glm::clamp(pan, -1.0f, 1.0f);
-                app->doOperation(edit::ops::SetTrackPan(track, pan), true);
-            } else if (event.type == SDL_MOUSEBUTTONUP) {
-                app->endContinuous();
-            }
-        }
-        touch->events.clear();
+    if (panSlider.draw(app, panR, &pan, -1, 1, accent)) {
+        app->doOperation(edit::ops::SetTrackPan(track, pan), true);
     }
-    drawRect({panR(TC), panR({pan / 2 + 0.5, 1})},
-             color * (touch ? SELECT_COLOR : NORMAL_COLOR));
-
-    drawRect(Rect::vLine(rect(CC), rect.bottom(), 1), C_WHITE);
 }
 
 } // namespace
