@@ -76,7 +76,7 @@ public:
     }
 private:
     // TODO mutable is a bad hack :(
-    mutable std::weak_ptr<T> ptr;
+    mutable weak_ptr<T> ptr;
 };
 
 } // namespace

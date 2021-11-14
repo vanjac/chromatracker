@@ -6,6 +6,6 @@
 
 namespace chromatracker::ui {
 
-void drawRect(ui::Rect rect, glm::vec4 color);
+void drawRect(Rect rect, glm::vec4 color);
 
 } // namespace

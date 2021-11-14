@@ -1,8 +1,5 @@
 #include "app.h"
 #include "file/chromawriter.h"
-#include "ui/draw.h"
-#include "ui/text.h"
-#include "ui/theme.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>

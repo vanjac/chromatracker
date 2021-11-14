@@ -1,7 +1,5 @@
 #include "browser.h"
 #include <app.h>
-#include <ui/text.h>
-#include <ui/theme.h>
 #include <SDL2/SDL_filesystem.h>
 
 namespace chromatracker::ui::panels {

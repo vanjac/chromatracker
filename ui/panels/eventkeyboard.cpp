@@ -1,8 +1,5 @@
 #include "eventkeyboard.h"
 #include <app.h>
-#include <ui/draw.h>
-#include <ui/text.h>
-#include <ui/theme.h>
 
 namespace chromatracker::ui::panels {
 

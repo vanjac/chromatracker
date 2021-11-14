@@ -2,8 +2,7 @@
 #include <common.h>
 
 #include <event.h>
-#include <ui/layout.h>
-#include <ui/touch.h>
+#include <ui/ui.h>
 #include <SDL2/SDL_events.h>
 
 namespace chromatracker { class App; }
@@ -34,7 +33,7 @@ private:
 
     int octave {MIDDLE_OCTAVE};
 
-    std::weak_ptr<ui::Touch> velocityTouch;
+    weak_ptr<Touch> velocityTouch;
 };
 
 } // namespace

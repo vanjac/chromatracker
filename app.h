@@ -5,12 +5,11 @@
 #include "edit/songops.h"
 #include "file/types.h"
 #include "play/songplay.h"
-#include "ui/layout.h"
 #include "ui/panels/browser.h"
 #include "ui/panels/eventkeyboard.h"
 #include "ui/panels/trackedit.h"
 #include "ui/settings.h"
-#include "ui/touch.h"
+#include "ui/ui.h"
 #include <atomic>
 #include <unordered_map>
 #include <SDL2/SDL.h>

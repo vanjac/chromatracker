@@ -2,8 +2,7 @@
 #include <common.h>
 
 #include <song.h>
-#include <ui/layout.h>
-#include <ui/touch.h>
+#include <ui/ui.h>
 
 namespace chromatracker { class App; }
 

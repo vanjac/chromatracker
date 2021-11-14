@@ -1,9 +1,5 @@
 #include "trackedit.h"
 #include <app.h>
-#include <ui/draw.h>
-#include <ui/text.h>
-#include <ui/theme.h>
-
 namespace chromatracker::ui::panels {
 
 const glm::vec4 C_MUTED_ACCENT {0.5, 0.5, 0.5, 1};

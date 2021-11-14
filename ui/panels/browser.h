@@ -2,7 +2,7 @@
 #include <common.h>
 
 #include <file/types.h>
-#include <ui/layout.h>
+#include <ui/ui.h>
 #include <filesystem>
 #include <functional>
 #include <SDL2/SDL_events.h>
