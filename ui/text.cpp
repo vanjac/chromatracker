@@ -53,7 +53,6 @@ const FontChar & getChar(Font *font, unsigned c)
 
     fontChar.bitmapDim = glm::ivec2(slot->bitmap.width, slot->bitmap.rows);
 
-    // TODO I think using charHeight is incorrect; measure to baseline?
     fontChar.drawOffset = glm::ivec2(slot->bitmap_left, -slot->bitmap_top);
     fontChar.advanceX = slot->advance.x / 64.0f;
 
@@ -105,7 +104,7 @@ Rect drawText(string text, glm::vec2 position, glm::vec4 color, Font *font)
         try {
             c = utf8::next(strIt, text.end());
         } catch (utf8::exception e) {
-            break;
+            break; // TODO
         }
         const FontChar &fontChar = getChar(font, c);
 

@@ -1,5 +1,6 @@
 #include "app.h"
 #include "ui/text.h"
+#include "stringutil.h"
 #include <cstdlib>
 #include <exception>
 #include <glad/glad.h>
@@ -86,6 +87,7 @@ int main(int argc, char *argv[])
         GL_DONT_CARE, 0, nullptr, GL_FALSE);
 #endif
 
+    chromatracker::initLocale();
     try {
         chromatracker::ui::initText();
     } catch (std::exception e) {

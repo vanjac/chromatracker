@@ -1,10 +1,8 @@
 #include "itloader.h"
 #include "itdecompress.hpp"
-#include <algorithm>
+#include <stringutil.h>
 #include <cstring>
-#include <iomanip>
 #include <limits>
-#include <sstream>
 #include <stdexcept>
 #include <glm/gtx/color_space.hpp>
 
@@ -137,11 +135,8 @@ void ITLoader::loadSong(Song *song)
     // add names and colors to samples
     for (int i = 0; i < song->samples.size(); i++) {
         auto sample = song->samples[i];
-        if (sample->name.empty()) {
-            std::ostringstream nameStream;
-            nameStream << std::setw(2) << std::setfill('0') << (i + 1);
-            sample->name = nameStream.str();
-        }
+        if (sample->name.empty())
+            sample->name = leftPad(std::to_string(i + 1), 2);
         sample->color = glm::rgbColor(
             glm::vec3((float)i / song->samples.size() * 360.0f, 1, 1));
     }

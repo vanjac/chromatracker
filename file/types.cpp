@@ -1,20 +1,14 @@
 #include "types.h"
 #include "chromaloader.h"
 #include "itloader.h"
-#include <algorithm>
-#include <cctype>
+#include <stringutil.h>
 #include <exception>
-#include <iomanip>
-#include <sstream>
 
 namespace chromatracker::file {
 
 string normalizedExtension(Path path)
 {
-    string ext = path.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-        [](unsigned char c){ return std::tolower(c); }); // :(
-    return ext;
+    return toLower(path.extension().string());
 }
 
 FileType typeForPath(Path path)
@@ -84,10 +78,9 @@ void listDirectory(Path path, FileType type,
             return;
         }
         for (int i = 0; i < sampleNames.size(); i++) {
-            std::ostringstream nameStream;
-            nameStream << std::setw(2) << std::setfill('0') << (i + 1) << " "
-                << sampleNames[i];
-            files.push_back(path / nameStream.str());
+            string fileName = leftPad(std::to_string(i + 1), 2)
+                + " " + sampleNames[i];
+            files.push_back(path / fileName);
         }
     } else if (std::filesystem::is_directory(path)) {
         for (const auto &dir : std::filesystem::directory_iterator(path)) {

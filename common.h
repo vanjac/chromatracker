@@ -31,3 +31,7 @@ struct nevercopy : public T {
     nevercopy(const nevercopy<T> &rhs) {}
     nevercopy<T> & operator=(const nevercopy<T> &rhs) { return *this; }
 };
+
+// for utf8.h, since MSVC doesn't always set __cplusplus correctly
+// see https://github.com/nemtrif/utfcpp#introductionary-sample
+#define UTF_CPP_CPLUSPLUS 201703L
