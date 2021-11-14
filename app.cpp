@@ -1,7 +1,6 @@
 #include "app.h"
 #include "file/chromawriter.h"
 #include <algorithm>
-#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <limits>

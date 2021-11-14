@@ -1,5 +1,4 @@
 #include "sampleplay.h"
-#include <cmath>
 
 namespace chromatracker::play {
 
@@ -60,8 +59,8 @@ void SamplePlay::processTick(float *tickBuffer, frames tickFrames,
     // TODO: anti-click
 
     float pitchOffset = _pitch - MIDDLE_C + sampleP->tune;
-    float noteRate = exp2f(pitchOffset / OCTAVE);
-    framesFine playbackRate = (framesFine)roundf(
+    float noteRate = glm::exp2(pitchOffset / OCTAVE);
+    framesFine playbackRate = (framesFine)glm::round(
         noteRate * (float)sampleP->frameRate / outFrameRate * 65536.0f);
     if (backwards)
         playbackRate = -playbackRate;

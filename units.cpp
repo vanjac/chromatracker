@@ -1,6 +1,6 @@
 #include "units.h"
 
-#include <cmath>
+#include <glm/glm.hpp>
 
 namespace chromatracker {
 
@@ -27,7 +27,7 @@ float velocityToAmplitude(float velocity)
 
 float amplitudeToVelocity(float amplitude)
 {
-    return sqrtf(amplitude);
+    return glm::sqrt(amplitude);
 }
 
 float panningToLeftAmplitude(float pan)
@@ -37,7 +37,7 @@ float panningToLeftAmplitude(float pan)
 
     // constant power panning, -3dB center:
     // float angle = (pan + 1) * (PI / 4);
-    // return cosf(angle);
+    // return glm::cos(angle);
 
     // linear panning, -6dB center:
     return (1 - pan) / 2;
@@ -46,7 +46,7 @@ float panningToLeftAmplitude(float pan)
 float panningToRightAmplitude(float pan)
 {
     // float angle = (pan + 1) * (PI / 4);
-    // return sinf(angle);
+    // return glm::sin(angle);
     return (pan + 1) / 2;
 }
 
