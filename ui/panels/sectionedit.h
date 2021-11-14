@@ -3,6 +3,7 @@
 
 #include <song.h>
 #include <ui/ui.h>
+#include <ui/widgets/button.h>
 #include <ui/widgets/spinner.h>
 
 namespace chromatracker { class App; }
@@ -16,6 +17,7 @@ public:
 
 private:
     widgets::Spinner tempoSpinner, meterSpinner;
+    widgets::Button tempoButton, meterButton;
 };
 
 } // namespace
