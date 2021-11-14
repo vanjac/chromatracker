@@ -336,6 +336,18 @@ void DeleteSection::undoIt(Song *song)
     prevLinks.clear();
 }
 
+SetSectionTempo::SetSectionTempo(shared_ptr<Section> section, int tempo)
+    : SetObjectValue(section, tempo)
+{}
+
+int & SetSectionTempo::objectValue() { return obj->tempo; }
+
+SetSectionMeter::SetSectionMeter(shared_ptr<Section> section, int meter)
+    : SetObjectValue(section, meter)
+{}
+
+int & SetSectionMeter::objectValue() { return obj->meter; }
+
 SliceSection::SliceSection(shared_ptr<Section> section, ticks pos)
     : section(section)
     , pos(pos)

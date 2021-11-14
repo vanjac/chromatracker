@@ -26,6 +26,13 @@ const glm::vec4 C_EDIT_CUR      {0.5, 1, 0.5, 1};
 const glm::vec4 C_EDIT_CELL     {1, 1, 1, 0.5};
 const glm::vec4 C_PLAY_CUR      {0.5, 0.5, 1, 1};
 
+struct SectionRender
+{
+    float y; // starting from y = 0 at the top of the song
+    ticks length;
+    int meter;
+};
+
 void cAudioCallback(void * userdata, uint8_t *stream, int len);
 
 App::App(SDL_Window *window)
@@ -277,48 +284,47 @@ void App::drawEvents(Rect rect, Cursor playCur)
 
     float timeScale = CELL_HEIGHT / cellSize;
 
-    static std::unordered_map<shared_ptr<const Section>, float> sectionYMins;
-    sectionYMins.clear();
+    static std::unordered_map<shared_ptr<const Section>, SectionRender>
+        sectionProps;
+    sectionProps.clear();
     {
         float y = 0;
+        int meter = Section::NO_METER;
         std::shared_lock songLock(song.mu);
         for (auto &section : song.sections) {
-            sectionYMins[section] = y;
+            if (section->meter != Section::NO_METER)
+                meter = section->meter;
             std::shared_lock sectionLock(section->mu);
+            sectionProps[section] = SectionRender {y, section->length, meter};
             y += section->length * timeScale + 48;
         }
     }
 
     float scrollY = rect.dim().y / 2; // offset from top of rect
     if (auto sectionP = editCur.cursor.section.lock()) {
-        scrollY -= sectionYMins[sectionP] + editCur.cursor.time * timeScale;
+        scrollY -= sectionProps[sectionP].y + editCur.cursor.time * timeScale;
     }
 
     {
         std::shared_lock songLock(song.mu);
-        int curMeter = Section::NO_METER;
-        for (auto &section : song.sections) {
-            std::shared_lock sectionLock(section->mu);
-            if (section->meter != Section::NO_METER)
-                curMeter = section->meter;
+        if (sectionEdits.size() != song.sections.size())
+            sectionEdits.resize(song.sections.size());
+
+        for (int i = 0; i < song.sections.size(); i++) {
+            auto &section = song.sections[i];
+            auto &props = sectionProps[section];
+
             Rect sectionR = Rect::from(TL,
-                rect(TL, {0, sectionYMins[section] + scrollY}),
-                {rect.dim().x, section->length * timeScale});
+                rect(TL, {0, props.y + scrollY}),
+                {rect.dim().x, props.length * timeScale});
             if (sectionR.max.y < rect.min.y || sectionR.min.y >= rect.max.y)
                 continue;
+            Rect sectionHeaderR = Rect::from(BL, sectionR(TL),
+                {sectionR.dim().x, FONT_DEFAULT.lineHeight});
+            // without section lock:
+            sectionEdits[i].draw(this, sectionHeaderR, section);
 
-            glm::vec2 textPos = sectionR(TL, {0, -FONT_DEFAULT.lineHeight});
-            textPos = drawText(section->title, textPos, C_WHITE)(TR);
-            if (section->tempo != Section::NO_TEMPO) {
-                textPos = drawText("  Tempo=", textPos, C_WHITE)(TR);
-                textPos = drawText(std::to_string(section->tempo), textPos,
-                                   C_WHITE)(TR);
-            }
-            if (section->meter != Section::NO_METER) {
-                textPos = drawText("  Meter=", textPos, C_WHITE)(TR);
-                textPos = drawText(std::to_string(section->meter), textPos,
-                                   C_WHITE)(TR);
-            }
+            std::shared_lock sectionLock(section->mu);
             for (int t = 0; t < section->trackEvents.size(); t++) {
                 bool mute;
                 {
@@ -332,7 +338,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
                 for (int e = 0; e < events.size(); e++) {
                     const Event &event = events[e];
                     auto sampleP = event.sample.lock();
-                    ticks nextEventTime = section->length;
+                    ticks nextEventTime = props.length;
                     if (e != events.size() - 1)
                         nextEventTime = events[e + 1].time;
 
@@ -388,10 +394,11 @@ void App::drawEvents(Rect rect, Cursor playCur)
                 } // each event
             } // each track
 
-            ticks barLength = TICKS_PER_BEAT * curMeter;
-            for (ticks grid = 0; grid < section->length; grid += cellSize) {
+            // TODO don't need section lock past this point
+            ticks barLength = TICKS_PER_BEAT * props.meter;
+            for (ticks grid = 0; grid < props.length; grid += cellSize) {
                 glm::vec4 color;
-                if (curMeter != Section::NO_METER
+                if (props.meter != Section::NO_METER
                         && cellSize < barLength && grid % barLength == 0) {
                     color = C_GRID_BAR;
                 } else if (cellSize < TICKS_PER_BEAT
@@ -416,7 +423,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
     }
 
     if (auto sectionP = playCur.section.lock()) {
-        float playSectionY = sectionYMins[sectionP] + scrollY;
+        float playSectionY = sectionProps[sectionP].y + scrollY;
         float playCursorY = playCur.time * timeScale + playSectionY;
         drawRect(Rect::hLine(rect(TL, {0, playCursorY}), rect.right(), 1),
                  C_PLAY_CUR);

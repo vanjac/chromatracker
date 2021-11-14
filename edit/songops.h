@@ -141,6 +141,22 @@ private:
     vector<shared_ptr<Section>> prevLinks;
 };
 
+class SetSectionTempo : public SetObjectValue<Section, int>
+{
+public:
+    SetSectionTempo(shared_ptr<Section> section, int tempo);
+private:
+    int & objectValue() override;
+};
+
+class SetSectionMeter : public SetObjectValue<Section, int>
+{
+public:
+    SetSectionMeter(shared_ptr<Section> section, int meter);
+private:
+    int & objectValue() override;
+};
+
 class SliceSection : public SongOp
 {
 public:

@@ -1,5 +1,6 @@
 #include "trackedit.h"
 #include <app.h>
+
 namespace chromatracker::ui::panels {
 
 const glm::vec4 C_MUTED_ACCENT {0.5, 0.5, 0.5, 1};
@@ -11,7 +12,7 @@ void TrackEdit::draw(App *app, Rect rect, shared_ptr<Track> track)
     float vol, pan;
     bool mute;
     {
-        std::shared_lock trackLock(track->mu);
+        std::shared_lock lock(track->mu);
         vol = amplitudeToVelocity(track->volume);
         pan = track->pan;
         mute = track->mute;

@@ -7,6 +7,7 @@
 #include "play/songplay.h"
 #include "ui/panels/browser.h"
 #include "ui/panels/eventkeyboard.h"
+#include "ui/panels/sectionedit.h"
 #include "ui/panels/trackedit.h"
 #include "ui/settings.h"
 #include "ui/ui.h"
@@ -82,6 +83,7 @@ private:
     ui::panels::EventKeyboard eventKeyboard;
     unique_ptr<ui::panels::Browser> browser;
     vector<ui::panels::TrackEdit> trackEdits;
+    vector<ui::panels::SectionEdit> sectionEdits;
 
     ui::widgets::Slider songVolumeSlider;
 
