@@ -52,6 +52,8 @@ private:
     void drawInfo(ui::Rect rect);
     void drawTracks(ui::Rect rect);
     void drawEvents(ui::Rect rect, Cursor playCur);
+    void drawEvent(ui::Rect rect, const Event &event,
+        shared_ptr<Sample> &curSample, float *curVelocity, bool mute);
 
     void keyDown(const SDL_KeyboardEvent &e);
     void keyDownEvents(const SDL_KeyboardEvent &e);

@@ -323,77 +323,33 @@ void App::drawEvents(Rect rect, Cursor playCur)
             // without section lock:
             sectionEdits[i].draw(this, sectionHeaderR, section);
 
-            std::shared_lock sectionLock(section->mu);
-            for (int t = 0; t < section->trackEvents.size(); t++) {
-                bool mute;
-                {
-                    auto track = song.tracks[t];
-                    std::shared_lock trackLock(track->mu);
-                    mute = track->mute;
+            {
+                std::shared_lock sectionLock(section->mu);
+                for (int t = 0; t < section->trackEvents.size(); t++) {
+                    bool mute;
+                    {
+                        auto track = song.tracks[t];
+                        std::shared_lock trackLock(track->mu);
+                        mute = track->mute;
+                    }
+                    auto &events = section->trackEvents[t];
+                    shared_ptr<Sample> curSample;
+                    float curVelocity = 1.0f;
+                    for (int e = 0; e < events.size(); e++) {
+                        const Event &event = events[e];
+                        ticks nextEventTime = props.length;
+                        if (e != events.size() - 1)
+                            nextEventTime = events[e + 1].time;
+                        float startY = event.time * timeScale;
+                        float endY = (nextEventTime-event.time) * timeScale;
+                        Rect eventR = Rect::from(TL,
+                            sectionR(TL, {TRACK_SPACING*t, startY}),
+                            {TRACK_WIDTH, endY});
+                        drawEvent(eventR, event, curSample, &curVelocity, mute);
+                    }
                 }
-                auto &events = section->trackEvents[t];
-                shared_ptr<Sample> curSample;
-                float curVelocity = 1.0f;
-                for (int e = 0; e < events.size(); e++) {
-                    const Event &event = events[e];
-                    auto sampleP = event.sample.lock();
-                    ticks nextEventTime = props.length;
-                    if (e != events.size() - 1)
-                        nextEventTime = events[e + 1].time;
+            }
 
-                    if (event.special == Event::Special::FadeOut) {
-                        curSample = nullptr; // TODO gradient
-                    } else if (sampleP) {
-                        curSample = sampleP;
-                    }
-                    if (event.velocity != Event::NO_VELOCITY) {
-                        curVelocity = event.velocity;
-                    }
-
-                    Rect eventR = Rect::from(TL,
-                        sectionR(TL, {TRACK_SPACING*t, event.time * timeScale}),
-                        {TRACK_WIDTH, (nextEventTime-event.time) * timeScale});
-                    glm::vec3 color {0, 0, 0};
-                    if (curSample) {
-                        color = mute ? glm::vec3{0.3, 0.3, 0.3}
-                            : (curSample->color * 0.5f);
-                        color *= curVelocity; // TODO gamma correct
-                    }
-                    drawRect(eventR, {color, 1});
-                    drawRect(Rect::hLine(eventR(TL), eventR.right(),
-                        event.velocity != Event::NO_VELOCITY ? 3 : 1),
-                        C_EVENT_HEAD);
-
-                    // TODO avoid allocation
-                    // TODO handle utf-8 correctly
-                    glm::vec2 textPos = eventR(TL, {2, 0});
-                    if (sampleP && sampleP->name.size() >= 2) {
-                        textPos = drawText(sampleP->name.substr(0, 2), textPos,
-                                           C_WHITE)(TR);
-                    } else if (sampleP && sampleP->name.size() == 1) {
-                        textPos = drawText(sampleP->name, textPos, C_WHITE)(TR);
-                        textPos = drawText(" ", textPos, C_WHITE)(TR);
-                    } else {
-                        textPos = drawText("  ", textPos, C_WHITE)(TR);
-                    }
-                    string specialStr = " ";
-                    switch (event.special) {
-                    case Event::Special::FadeOut:
-                        specialStr = "=";
-                        break;
-                    case Event::Special::Slide:
-                        specialStr = "/";
-                        break;
-                    }
-                    textPos = drawText(specialStr, textPos, C_WHITE)(TR);
-                    if (event.pitch != Event::NO_PITCH) {
-                        textPos = drawText(pitchToString(event.pitch), textPos,
-                                           C_WHITE)(TR);
-                    }
-                } // each event
-            } // each track
-
-            // TODO don't need section lock past this point
             ticks barLength = TICKS_PER_BEAT * props.meter;
             for (ticks grid = 0; grid < props.length; grid += cellSize) {
                 glm::vec4 color;
@@ -426,6 +382,54 @@ void App::drawEvents(Rect rect, Cursor playCur)
         float playCursorY = playCur.time * timeScale + playSectionY;
         drawRect(Rect::hLine(rect(TL, {0, playCursorY}), rect.right(), 1),
                  C_PLAY_CUR);
+    }
+}
+
+void App::drawEvent(Rect rect, const Event &event,
+    shared_ptr<Sample> &curSample, float *curVelocity, bool mute)
+{
+    auto sampleP = event.sample.lock();
+    if (event.special == Event::Special::FadeOut) {
+        curSample = nullptr; // TODO gradient
+    } else if (sampleP) {
+        curSample = sampleP;
+    }
+    if (event.velocity != Event::NO_VELOCITY) {
+        *curVelocity = event.velocity;
+    }
+
+    glm::vec3 color {0, 0, 0};
+    if (curSample) {
+        color = mute ? glm::vec3{0.3, 0.3, 0.3} : (curSample->color * 0.5f);
+        color *= *curVelocity; // TODO gamma correct
+    }
+    drawRect(rect, {color, 1});
+    float headThickness = event.velocity != Event::NO_VELOCITY ? 3 : 1;
+    drawRect(Rect::hLine(rect(TL), rect.right(), headThickness), C_EVENT_HEAD);
+
+    // TODO avoid allocation
+    // TODO handle utf-8 correctly
+    glm::vec2 textPos = rect(TL, {2, 0});
+    if (sampleP && sampleP->name.size() >= 2) {
+        textPos = drawText(sampleP->name.substr(0, 2), textPos, C_WHITE)(TR);
+    } else if (sampleP && sampleP->name.size() == 1) {
+        textPos = drawText(sampleP->name, textPos, C_WHITE)(TR);
+        textPos = drawText(" ", textPos, C_WHITE)(TR);
+    } else {
+        textPos = drawText("  ", textPos, C_WHITE)(TR);
+    }
+    string specialStr = " ";
+    switch (event.special) {
+    case Event::Special::FadeOut:
+        specialStr = "=";
+        break;
+    case Event::Special::Slide:
+        specialStr = "/";
+        break;
+    }
+    textPos = drawText(specialStr, textPos, C_WHITE)(TR);
+    if (event.pitch != Event::NO_PITCH) {
+        textPos = drawText(pitchToString(event.pitch), textPos, C_WHITE)(TR);
     }
 }
 
