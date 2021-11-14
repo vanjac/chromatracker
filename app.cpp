@@ -276,6 +276,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
     scissorRect(rect);
 
     float timeScale = CELL_HEIGHT / cellSize;
+    float scrollY;
 
     sampleProps.clear();
     sectionProps.clear();
@@ -315,15 +316,12 @@ void App::drawEvents(Rect rect, Cursor playCur)
             sectionProps[section] = SectionRender{y, section->length, meter};
             y += section->length * timeScale + 48;
         }
-    }
 
-    float scrollY = rect.dim().y / 2; // offset from top of rect
-    if (auto sectionP = editCur.cursor.section.lock()) {
-        scrollY -= sectionProps[sectionP].y + editCur.cursor.time * timeScale;
-    }
+        scrollY = rect.dim().y / 2; // offset from top of rect
+        if (auto sectionP = editCur.cursor.section.lock()) {
+            scrollY -= sectionProps[sectionP].y + editCur.cursor.time * timeScale;
+        }
 
-    {
-        std::shared_lock songLock(song.mu);
         if (sectionEdits.size() != song.sections.size())
             sectionEdits.resize(song.sections.size());
 
