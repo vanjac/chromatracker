@@ -514,28 +514,32 @@ void ITLoader::loadPattern(uint32_t offset, shared_ptr<Section> section)
         uint8_t cmdNibble2 = cell.commandValue & 0xf;
         Event event;
         event.time = row * (int)ticksPerRow * IT_TICK_TIME;
-        InstrumentExtra *instExtra = nullptr;
-        // order is important, velocity gets overridden multiple times
-        if (cell.instrument > 0 && cell.instrument <= song->samples.size()) {
+        // set sample/special
+        if (cell.note >= 120 && cell.note != 254) {
+            event.special = Event::Special::FadeOut;
+        } else if ((cell.volume >= 193 && cell.volume <= 202)
+                   || cell.command == 7) {
+            // portamento, don't set sample
+        } else if (cell.instrument > 0
+                && cell.instrument <= song->samples.size()) {
             event.sample = song->samples[cell.instrument - 1];
-            instExtra = &instrumentExtras[cell.instrument - 1];
+            InstrumentExtra *instExtra = &instrumentExtras[cell.instrument - 1];
             event.velocity = amplitudeToVelocity(
                 instExtra->defaultVolume / 64.0f);
+            if (instExtra->autoFade)
+                event.special = Event::Special::FadeOut;
         }
-        if (cell.volume >= 0 && cell.volume <= 64) {
-            event.velocity = amplitudeToVelocity(cell.volume / 64.0f);
-        }
-        if (cell.note == 254) {
-            event.velocity = 0;
-        } else if (cell.note > 119) {
-            event.special = Event::Special::FadeOut;
-            event.sample.reset();
-        } else if (cell.note != -1) {
+        // set pitch
+        if (cell.note >= 0 && cell.note < 120) {
             event.pitch = cell.note;
         }
-        if ((cell.volume >= 193 && cell.volume <= 202) || cell.command == 7) {
-            event.sample.reset(); // portamento
+        // set velocity, overriding instrument default
+        if (cell.note == 254) {
+            event.velocity = 0;
+        } else if (cell.volume >= 0 && cell.volume <= 64) {
+            event.velocity = amplitudeToVelocity(cell.volume / 64.0f);
         }
+        // handle other commands
         if (cell.command == 19 && cmdNibble1 == 0xD) { // SDx
             if (cmdNibble1 == 0xD) {
                 event.time += (frames)cmdNibble2 * IT_TICK_TIME;
@@ -543,9 +547,6 @@ void ITLoader::loadPattern(uint32_t offset, shared_ptr<Section> section)
         } else if (cell.instrument > 0 && cell.command == 15) { // Oxx
             event.sample = getOffsetSample(cell.instrument - 1,
                                            cell.commandValue);
-        }
-        if (instExtra && instExtra->autoFade) {
-            event.special = Event::Special::FadeOut;
         }
 
         if (!event.empty()) {
