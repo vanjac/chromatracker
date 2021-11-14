@@ -2,7 +2,7 @@
 #include <common.h>
 
 #include "layout.h"
-#include <glutils.h>
+#include <glutil.h>
 #include <unordered_map>
 #include <ft2build.h> // TODO could we avoid including in header?
 #include FT_FREETYPE_H
