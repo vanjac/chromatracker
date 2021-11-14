@@ -517,12 +517,11 @@ void ITLoader::loadPattern(uint32_t offset, shared_ptr<Section> section)
         // set sample/special
         if (cell.note >= 120 && cell.note != 254) {
             event.special = Event::Special::FadeOut;
-        } else if ((cell.volume >= 193 && cell.volume <= 202)
-                   || cell.command == 7) {
-            // portamento, don't set sample
         } else if (cell.instrument > 0
                 && cell.instrument <= song->samples.size()) {
-            event.sample = song->samples[cell.instrument - 1];
+            if (!((cell.volume >= 193 && cell.volume <= 202)
+                   || cell.command == 7)) // no portamento
+                event.sample = song->samples[cell.instrument - 1];
             InstrumentExtra *instExtra = &instrumentExtras[cell.instrument - 1];
             event.velocity = amplitudeToVelocity(
                 instExtra->defaultVolume / 64.0f);
