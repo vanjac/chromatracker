@@ -140,6 +140,7 @@ void ITLoader::loadSong(Song *song)
         sample->color = glm::rgbColor(
             glm::vec3((float)i / song->samples.size() * 360.0f, 1, 1));
     }
+    offsetSamples.resize(song->samples.size());
 
     song->sections.reserve(numOrders);
     for (int i = 0; i < numOrders; i++) {
@@ -539,6 +540,9 @@ void ITLoader::loadPattern(uint32_t offset, shared_ptr<Section> section)
             if (cmdNibble1 == 0xD) {
                 event.time += (frames)cmdNibble2 * IT_TICK_TIME;
             }
+        } else if (cell.instrument > 0 && cell.command == 15) { // Oxx
+            event.sample = getOffsetSample(cell.instrument - 1,
+                                           cell.commandValue);
         }
         if (instExtra && instExtra->autoFade) {
             event.special = Event::Special::FadeOut;
@@ -565,6 +569,35 @@ void ITLoader::loadPattern(uint32_t offset, shared_ptr<Section> section)
         }
         // TODO arpeggio
     }
+}
+
+shared_ptr<Sample> ITLoader::getOffsetSample(int i, int value)
+{
+    if (offsetSamples[i].count(value))
+        return offsetSamples[i][value];
+    frames offset = value * 256;
+    auto source = song->samples[i];
+    if (source->channels.size() == 0 || source->channels[0].size() < offset)
+        return source;
+
+    auto sample = song->samples.emplace_back(new Sample);
+    offsetSamples[i][value] = sample;
+    *sample = *source;
+
+    sample->name += " O" + leftPad(toUpper(hex(value)), 2);
+    for (auto &channel : sample->channels) {
+        channel.erase(channel.begin(), channel.begin() + offset);
+    }
+    if (sample->loopStart >= offset)
+        sample->loopStart -= offset;
+    else
+        sample->loopStart = 0;
+    if (sample->loopEnd >= offset)
+        sample->loopEnd -= offset;
+    else
+        sample->loopEnd = 0;
+
+    return sample;
 }
 
 } // namespace

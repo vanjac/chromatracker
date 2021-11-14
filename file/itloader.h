@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include <song.h>
+#include <unordered_map>
 #include <SDL2/SDL_rwops.h>
 
 namespace chromatracker::file {
@@ -34,6 +35,8 @@ private:
                         shared_ptr<Sample> sample, InstrumentExtra *extra);
     void checkInstrumentHeader(uint32_t offset);
     void loadPattern(uint32_t offset, shared_ptr<Section> section);
+    
+    shared_ptr<Sample> getOffsetSample(int i, int value);
 
     SDL_RWops *stream;
 
@@ -48,6 +51,7 @@ private:
     vector<shared_ptr<Sample>> itSamples;
     vector<InstrumentExtra> itSampleExtras;
     vector<InstrumentExtra> instrumentExtras;
+    vector<std::unordered_map<frames, shared_ptr<Sample>>> offsetSamples;
 
     uint8_t ticksPerRow;
     int maxUsedChannel = 0;
