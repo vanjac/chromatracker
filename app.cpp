@@ -316,14 +316,19 @@ void App::drawEvents(Rect rect, Cursor playCur)
             sectionProps[section] = SectionRender{y, section->length, meter};
             y += section->length * timeScale + 48;
         }
-
         scrollY = rect.dim().y / 2; // offset from top of rect
         if (auto sectionP = editCur.cursor.section.lock()) {
             scrollY -= sectionProps[sectionP].y + editCur.cursor.time * timeScale;
         }
-
         if (sectionEdits.size() != song.sections.size())
             sectionEdits.resize(song.sections.size());
+
+        if (trackMutes.size() != song.tracks.size())
+            trackMutes.resize(song.tracks.size());
+        for (int i = 0; i < song.tracks.size(); i++) {
+            std::shared_lock trackLock(song.tracks[i]->mu);
+            trackMutes[i] = song.tracks[i]->mute;
+        }
 
         for (int i = 0; i < song.sections.size(); i++) {
             auto &section = song.sections[i];
@@ -342,12 +347,6 @@ void App::drawEvents(Rect rect, Cursor playCur)
             {
                 std::shared_lock sectionLock(section->mu);
                 for (int t = 0; t < section->trackEvents.size(); t++) {
-                    bool mute;
-                    {
-                        auto track = song.tracks[t];
-                        std::shared_lock trackLock(track->mu);
-                        mute = track->mute;
-                    }
                     auto &events = section->trackEvents[t];
                     SampleRender *curSampleProps = nullptr;
                     float curVelocity = 1.0f;
@@ -362,7 +361,7 @@ void App::drawEvents(Rect rect, Cursor playCur)
                             sectionR(TL, {TRACK_SPACING*t, startY}),
                             {TRACK_WIDTH, endY});
                         drawEvent(eventR, event, &curSampleProps, &curVelocity,
-                                  mute);
+                                  trackMutes[t]);
                     }
                 }
             }

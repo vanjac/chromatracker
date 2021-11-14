@@ -105,6 +105,7 @@ private:
     // reused for each frame
     std::unordered_map<shared_ptr<const Sample>, SampleRender> sampleProps;
     std::unordered_map<shared_ptr<const Section>, SectionRender> sectionProps;
+    std::vector<bool> trackMutes;
 
     vector<unique_ptr<edit::SongOp>> undoStack;
     vector<unique_ptr<edit::SongOp>> redoStack;
