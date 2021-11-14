@@ -42,37 +42,28 @@ private:
     vector<vector<Event>> clearedEvents;
 };
 
-class SetTrackVolume : public SongOp
+class SetTrackVolume : public SetObjectValue<Track, float>
 {
 public:
     SetTrackVolume(shared_ptr<Track> track, float volume);
-    bool doIt(Song *song) override;
-    void undoIt(Song *song) override;
-protected:
-    shared_ptr<Track> track;
-    float volume;
+private:
+    float & objectValue() override;
 };
 
-class SetTrackPan : public SongOp
+class SetTrackPan : public SetObjectValue<Track, float>
 {
 public:
     SetTrackPan(shared_ptr<Track> track, float pan);
-    bool doIt(Song *song) override;
-    void undoIt(Song *song) override;
-protected:
-    shared_ptr<Track> track;
-    float pan;
+private:
+    float & objectValue() override;
 };
 
-class SetTrackMute : public SongOp
+class SetTrackMute : public SetObjectValue<Track, bool>
 {
 public:
     SetTrackMute(shared_ptr<Track> track, bool mute);
-    bool doIt(Song *song) override;
-    void undoIt(Song *song) override;
-protected:
-    shared_ptr<Track> track;
-    bool mute;
+private:
+    bool & objectValue() override;
 };
 
 class SetTrackSolo : public SongOp

@@ -21,6 +21,35 @@ using SongOp = Operation<Song *>;
 
 // utils for operations:
 
+template <typename ObjT, typename ValT>
+class SetObjectValue : public SongOp
+{
+private:
+    virtual ValT & objectValue() = 0;
+
+public:
+    SetObjectValue(shared_ptr<ObjT> obj, ValT value)
+        : obj(obj)
+        , value(value)
+    {}
+
+    bool doIt(Song *song) override
+    {
+        std::unique_lock lock(obj->mu);
+        std::swap(value, objectValue());
+        return value != objectValue();
+    }
+
+    void undoIt(Song *song) override
+    {
+        doIt(song);
+    }
+
+protected:
+    shared_ptr<ObjT> obj;
+    ValT value;
+};
+
 struct EventRef
 {
     shared_ptr<Section> section;

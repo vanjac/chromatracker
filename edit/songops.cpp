@@ -115,55 +115,22 @@ void DeleteTrack::undoIt(Song *song)
 }
 
 SetTrackVolume::SetTrackVolume(shared_ptr<Track> track, float volume)
-    : track(track)
-    , volume(volume)
+    : SetObjectValue(track, volume)
 {}
 
-bool SetTrackVolume::doIt(Song *song)
-{
-    std::unique_lock trackLock(track->mu);
-    std::swap(volume, track->volume);
-    return volume != track->volume;
-}
-
-void SetTrackVolume::undoIt(Song *song)
-{
-    doIt(song);
-}
+float & SetTrackVolume::objectValue() { return obj->volume; }
 
 SetTrackPan::SetTrackPan(shared_ptr<Track> track, float pan)
-    : track(track)
-    , pan(pan)
+    : SetObjectValue(track, pan)
 {}
 
-bool SetTrackPan::doIt(Song *song)
-{
-    std::unique_lock trackLock(track->mu);
-    std::swap(pan, track->pan);
-    return pan != track->pan;
-}
-
-void SetTrackPan::undoIt(Song *song)
-{
-    doIt(song);
-}
+float & SetTrackPan::objectValue() { return obj->pan; }
 
 SetTrackMute::SetTrackMute(shared_ptr<Track> track, bool mute)
-    : track(track)
-    , mute(mute)
+    : SetObjectValue(track, mute)
 {}
 
-bool SetTrackMute::doIt(Song *song)
-{
-    std::unique_lock trackLock(track->mu);
-    std::swap(mute, track->mute);
-    return mute != track->mute;
-}
-
-void SetTrackMute::undoIt(Song *song)
-{
-    doIt(song);
-}
+bool & SetTrackMute::objectValue() { return obj->mute; }
 
 SetTrackSolo::SetTrackSolo(shared_ptr<Track> track, bool solo)
     : track(track)
