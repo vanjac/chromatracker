@@ -2,7 +2,7 @@
 
 A cross-platform [music tracker](https://en.wikipedia.org/wiki/Music_tracker) app. This is a work in progress and has gone through multiple iterations.
 
-A description of the module format features is [here](https://github.com/vanjac/chromatracker/wiki/Song-Specification-4).
+A description of the module format/features is on the [wiki](https://github.com/vanjac/chromatracker/wiki).
 
 ## Design influences
 
