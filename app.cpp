@@ -136,7 +136,7 @@ void App::main(const vector<string> args)
         glEnable(GL_SCISSOR_TEST);
 
         float lineHeight = FONT_DEFAULT.lineHeight;
-        drawInfo({winR(TL), winR(TR, {-160, lineHeight})});
+        songEdit.draw(this, {winR(TL), winR(TR, {-160, lineHeight})}, &song);
         Rect mainR {winR(TL, {0, lineHeight}), winR(BR, {-160, -100})};
         if (browser) {
             browser->draw(mainR);
@@ -185,22 +185,6 @@ void App::scissorRect(Rect rect) const
 {
     glScissor(rect.min.x - winR.min.x, winR.max.y - rect.max.y,
               rect.dim().x, rect.dim().y);
-}
-
-void App::drawInfo(Rect rect)
-{
-    scissorRect(rect);
-
-    float vol;
-    {
-        std::shared_lock songLock(song.mu);
-        vol = amplitudeToVelocity(song.volume);
-    }
-
-    if (songVolumeSlider.draw(this, rect, &vol)) {
-        doOperation(edit::ops::SetSongVolume(velocityToAmplitude(vol)), true);
-    }
-    drawText("Volume", rect(TL), C_WHITE);
 }
 
 void App::keyDown(const SDL_KeyboardEvent &e)

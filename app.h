@@ -7,9 +7,9 @@
 #include "ui/panels/eventkeyboard.h"
 #include "ui/panels/eventsedit.h"
 #include "ui/panels/sampleedit.h"
+#include "ui/panels/songedit.h"
 #include "ui/settings.h"
 #include "ui/ui.h"
-#include "ui/widgets/slider.h"
 #include <atomic>
 #include <unordered_map>
 #include <SDL2/SDL.h>
@@ -53,8 +53,6 @@ private:
 
     void resizeWindow(int w, int h);
 
-    void drawInfo(ui::Rect rect);
-
     void keyDown(const SDL_KeyboardEvent &e);
 
     std::shared_ptr<ui::Touch> findTouch(int id);
@@ -66,10 +64,9 @@ private:
     SDL_AudioDeviceID audioDevice;
 
     Tab tab {Tab::Events};
+    ui::panels::SongEdit songEdit;
     ui::panels::SampleEdit sampleEdit;
     unique_ptr<ui::panels::Browser> browser;
-
-    ui::widgets::Slider songVolumeSlider;
 
     vector<unique_ptr<edit::SongOp>> undoStack;
     vector<unique_ptr<edit::SongOp>> redoStack;

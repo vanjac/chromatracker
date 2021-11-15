@@ -34,6 +34,7 @@ add_executable(chromatracker
     ui/panels/eventsedit.cpp
     ui/panels/sampleedit.cpp
     ui/panels/sectionedit.cpp
+    ui/panels/songedit.cpp
     ui/panels/trackedit.cpp
     ui/text.cpp
     ui/widgets/button.cpp
