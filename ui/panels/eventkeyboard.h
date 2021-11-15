@@ -28,6 +28,9 @@ public:
 private:
     int pitchKeymap(SDL_Scancode key);
     int sampleKeymap(SDL_Scancode key);
+    // for convenience, redirect to EventsEdit
+    void writeEvent(bool playing, const Event &event, Event::Mask mask,
+                    bool continuous=false);
 
     App * const app;
 

@@ -1,5 +1,6 @@
 #include "sampleedit.h"
 #include <app.h>
+#include <edit/songops.h>
 
 namespace chromatracker::ui::panels {
 
@@ -14,7 +15,7 @@ void SampleEdit::draw(Rect rect)
 {
     app->scissorRect(rect);
 
-    auto sample = app->selectedSample();
+    auto sample = app->eventKeyboard.selected.sample.lock();
     if (!sample)
         return;
 

@@ -1,3 +1,4 @@
+#pragma once
 // common UI includes
 #include "draw.h"
 #include "layout.h"

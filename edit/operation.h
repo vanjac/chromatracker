@@ -2,6 +2,7 @@
 #include <common.h>
 
 #include <song.h>
+#include <mutex>
 
 namespace chromatracker::edit {
 

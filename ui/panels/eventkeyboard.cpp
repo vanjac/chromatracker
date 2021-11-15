@@ -1,5 +1,6 @@
 #include "eventkeyboard.h"
 #include <app.h>
+#include <algorithm>
 
 namespace chromatracker::ui::panels {
 
@@ -52,7 +53,7 @@ void EventKeyboard::drawPiano(Rect rect)
                 play::JamEvent jam {selected, (int)event.button.which + 1};
                 bool playing = app->jamEvent(jam, event.button.timestamp);
                 // continuous if not playing
-                app->writeEvent(playing, jam.event, Event::VELOCITY, !playing);
+                writeEvent(playing, jam.event, Event::VELOCITY, !playing);
             } else if (event.type == SDL_MOUSEMOTION) {
                 if (selected.velocity == Event::NO_VELOCITY)
                     selected.velocity = 1;
@@ -62,14 +63,14 @@ void EventKeyboard::drawPiano(Rect rect)
                 play::JamEvent jam {selected.masked(Event::VELOCITY),
                                     (int)event.button.which + 1};
                 bool playing = app->jamEvent(jam, event.button.timestamp);
-                app->writeEvent(playing, playing ? jam.event : selected,
-                                Event::VELOCITY, !playing);
+                writeEvent(playing, playing ? jam.event : selected,
+                           Event::VELOCITY, !playing);
             } else if (event.type == SDL_MOUSEBUTTONUP) {
                 Event fadeEvent;
                 fadeEvent.special = Event::Special::FadeOut;
                 if (app->jamEvent({fadeEvent, (int)event.button.which + 1},
                                   event.button.timestamp)) // if playing
-                    app->writeEvent(true, fadeEvent, Event::ALL);
+                    writeEvent(true, fadeEvent, Event::ALL);
                 app->endContinuous();
             }
         }
@@ -127,7 +128,7 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
             }
         }
         if (mask) {
-            app->writeEvent(app->jamEvent(e, selected), selected, mask);
+            writeEvent(app->jamEvent(e, selected), selected, mask);
             return;
         }
     }
@@ -197,14 +198,14 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
         if (!e.repeat) {
             Event event = selected;
             event.special = Event::Special::FadeOut; // don't store
-            app->writeEvent(app->jamEvent(e, event), event, Event::SPECIAL);
+            writeEvent(app->jamEvent(e, event), event, Event::SPECIAL);
         }
         break;
     case SDLK_1:
         if (!e.repeat) {
             Event event = selected;
             event.special = Event::Special::Slide;
-            app->writeEvent(app->jamEvent(e, event), event, Event::SPECIAL);
+            writeEvent(app->jamEvent(e, event), event, Event::SPECIAL);
         }
         break;
     /* jam clear */
@@ -212,28 +213,27 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
         if (!e.repeat) {
             Event event = selected;
             event.sample.reset();
-            app->writeEvent(app->jamEvent(e, event), event, Event::SAMPLE);
+            writeEvent(app->jamEvent(e, event), event, Event::SAMPLE);
         }
         break;
     case SDLK_BACKSLASH:
         if (!e.repeat) {
             Event event = selected;
             event.pitch = Event::NO_PITCH;
-            app->writeEvent(app->jamEvent(e, event), event, Event::PITCH);
+            writeEvent(app->jamEvent(e, event), event, Event::PITCH);
         }
         break;
     case SDLK_QUOTE:
         if (!e.repeat) {
             Event event = selected;
             event.velocity = Event::NO_VELOCITY;
-            app->writeEvent(app->jamEvent(e, event), event, Event::VELOCITY);
+            writeEvent(app->jamEvent(e, event), event, Event::VELOCITY);
         }
         break;
     case SDLK_KP_ENTER:
         if (!e.repeat) {
             // selected already shouldn't have special
-            app->writeEvent(app->jamEvent(e, selected),
-                            selected, Event::SPECIAL);
+            writeEvent(app->jamEvent(e, selected), selected, Event::SPECIAL);
         }
         break;
     }
@@ -263,7 +263,7 @@ void EventKeyboard::keyUp(const SDL_KeyboardEvent &e)
     Event fadeEvent;
     fadeEvent.special = Event::Special::FadeOut;
     if (app->jamEvent(e, fadeEvent)) { // if playing
-        app->writeEvent(true, fadeEvent, Event::ALL);
+        writeEvent(true, fadeEvent, Event::ALL);
     }
 }
 
@@ -271,13 +271,11 @@ void EventKeyboard::reset()
 {
     selected.pitch = MIDDLE_C;
     selected.velocity = 1.0f;
-    {
-        std::shared_lock lock(app->song.mu);
-        if (!app->song.samples.empty()) {
-            selected.sample = app->song.samples.front();
-        } else {
-            selected.sample.reset();
-        }
+    std::shared_lock lock(app->song.mu);
+    if (!app->song.samples.empty()) {
+        selected.sample = app->song.samples.front();
+    } else {
+        selected.sample.reset();
     }
 }
 
@@ -300,6 +298,12 @@ int EventKeyboard::sampleIndex()
     } else {
         return it - samples.begin();
     }
+}
+
+void EventKeyboard::writeEvent(bool playing, const Event &event,
+                               Event::Mask mask, bool continuous)
+{
+    app->eventsEdit.writeEvent(playing, event, mask, continuous);
 }
 
 int EventKeyboard::pitchKeymap(SDL_Scancode key)

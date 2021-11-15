@@ -1,36 +1,19 @@
 #include "app.h"
+#include "edit/songops.h"
 #include "file/chromawriter.h"
-#include <algorithm>
-#include <cstdlib>
-#include <cstring>
-#include <limits>
-#include <mutex>
 #include <stdexcept>
-#include <unordered_map>
 #include <glad/glad.h>
-#include <utf8.h>
 
 namespace chromatracker {
 
 using namespace ui;
-
-const float CELL_HEIGHT = 32;
-const float TRACK_SPACING = 70;
-const float TRACK_WIDTH = 64;
-
-const glm::vec4 C_EVENT_HEAD    {1, 1, 1, 0.85};
-const glm::vec4 C_GRID_CELL     {1, 1, 1, 0.4};
-const glm::vec4 C_GRID_BEAT     {1, 1, 1, 0.7};
-const glm::vec4 C_GRID_BAR      {0.7, 0.7, 1, 0.7};
-const glm::vec4 C_EDIT_CUR      {0.5, 1, 0.5, 1};
-const glm::vec4 C_EDIT_CELL     {1, 1, 1, 0.5};
-const glm::vec4 C_PLAY_CUR      {0.5, 0.5, 1, 1};
 
 void cAudioCallback(void * userdata, uint8_t *stream, int len);
 
 App::App(SDL_Window *window)
     : window(window)
     , eventKeyboard(this)
+    , eventsEdit(this)
     , sampleEdit(this)
 {
     // TODO
@@ -73,7 +56,7 @@ void App::main(const vector<string> args)
         section->meter = 4;
     }
 
-    editCur.cursor = Cursor(&song, song.sections.front());
+    eventsEdit.resetCursor(true);
     player.setCursor(Cursor(&song));
 
     int winW, winH;
@@ -90,8 +73,6 @@ void App::main(const vector<string> args)
 
     bool running = true;
     while (running) {
-        movedEditCur = false;
-
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -108,19 +89,15 @@ void App::main(const vector<string> args)
                 break;
             case SDL_KEYUP:
                 if (!browser) {
+                    if (tab == Tab::Events) {
+                        eventsEdit.keyUp(event.key);
+                    }
                     eventKeyboard.keyUp(event.key);
-                    keyUpEvents(event.key);
                 }
                 break;
             case SDL_MOUSEWHEEL:
-                if (event.wheel.y < 0) {
-                    for (int i = 0; i < -event.wheel.y; i++) {
-                        nextCell();
-                    }
-                } else if (event.wheel.y > 0) {
-                    for (int i = 0; i < event.wheel.y; i++) {
-                        prevCell();
-                    }
+                if (!browser && tab == Tab::Events) {
+                    eventsEdit.mouseWheel(event.wheel);
                 }
                 break;
             case SDL_MOUSEBUTTONDOWN:
@@ -154,30 +131,6 @@ void App::main(const vector<string> args)
             }
         }
 
-        if (!editCur.cursor.section.lock()) {
-            // could happen after eg. undoing adding a section
-            std::shared_lock lock(song.mu);
-            if (!song.sections.empty()) {
-                editCur.cursor.section = song.sections.front();
-                editCur.cursor.time = 0;
-                // don't set movedEditCur
-            }
-        }
-
-        Cursor playCur;
-        {
-            std::unique_lock lock(player.mu);
-            playCur = player.cursor();
-            if (followPlayback && playCur.section.lock()) {
-                if (movedEditCur) {
-                    playCur = editCur.cursor;
-                    player.setCursor(playCur);
-                } else {
-                    editCur.cursor = playCur;
-                }
-            }
-        }
-
         glDisable(GL_SCISSOR_TEST);
         glClear(GL_COLOR_BUFFER_BIT);
         glEnable(GL_SCISSOR_TEST);
@@ -188,8 +141,7 @@ void App::main(const vector<string> args)
         if (browser) {
             browser->draw(mainR);
         } else if (tab == Tab::Events) {
-            drawTracks({mainR(TL), mainR(TR, {0, lineHeight})});
-            drawEvents({mainR(TL, {0, lineHeight}), mainR(BR)}, playCur);
+            eventsEdit.draw(mainR);
         } else if (tab == Tab::Sample) {
             sampleEdit.draw(mainR);
         }
@@ -239,208 +191,16 @@ void App::drawInfo(Rect rect)
 {
     scissorRect(rect);
 
-    glm::vec2 textPos = rect(TL);
-    textPos = drawText("Follow: ", textPos, C_WHITE)(TR);
-    textPos = drawText(std::to_string(followPlayback), textPos, C_WHITE)(TR);
-    textPos = drawText("  ", textPos, C_WHITE)(TR);
-
-    Rect volumeR {{textPos.x, rect.top()}, rect(BR)};
     float vol;
     {
         std::shared_lock songLock(song.mu);
         vol = amplitudeToVelocity(song.volume);
     }
 
-    if (songVolumeSlider.draw(this, volumeR, &vol)) {
+    if (songVolumeSlider.draw(this, rect, &vol)) {
         doOperation(edit::ops::SetSongVolume(velocityToAmplitude(vol)), true);
     }
-    drawText("Volume", textPos, C_WHITE);
-}
-
-void App::drawTracks(Rect rect)
-{
-    scissorRect(rect);
-
-    std::shared_lock songLock(song.mu);
-    if (trackEdits.size() != song.tracks.size())
-        trackEdits.resize(song.tracks.size());
-
-    for (int i = 0; i < song.tracks.size(); i++) {
-        Rect trackR = Rect::from(TL, rect(TL, {TRACK_SPACING * i, 0}),
-                                 {TRACK_WIDTH, rect.dim().y});
-        trackEdits[i].draw(this, trackR, song.tracks[i]);
-        drawText(std::to_string(i + 1), trackR(TL, {20, 0}), C_WHITE);
-    }
-}
-
-void App::drawEvents(Rect rect, Cursor playCur)
-{
-    scissorRect(rect);
-
-    float timeScale = CELL_HEIGHT / cellSize;
-    float scrollY;
-
-    sampleProps.clear();
-    sectionProps.clear();
-    {
-        std::shared_lock songLock(song.mu);
-
-        for (auto &sample : song.samples) {
-            std::shared_lock sampleLock(sample->mu);
-            string &name = sample->name;
-            string nameAbbr;
-            if (!name.empty()) {
-                auto nameIt = name.begin();
-                try {
-                    char32_t c = utf8::next(nameIt, name.end());
-                    utf8::append(c, nameAbbr);
-                    if (nameIt < name.end()) {
-                        c = utf8::next(nameIt, name.end());
-                        utf8::append(c, nameAbbr);
-                    } else {
-                        nameAbbr += " ";
-                    }
-                } catch (utf8::exception e) {
-                    nameAbbr = "??";
-                }
-            } else {
-                nameAbbr = "  ";
-            }
-            sampleProps[sample] = SampleRender{nameAbbr, sample->color};
-        }
-
-        float y = 0;
-        int meter = Section::NO_METER;
-        for (auto &section : song.sections) {
-            std::shared_lock sectionLock(section->mu);
-            if (section->meter != Section::NO_METER)
-                meter = section->meter;
-            sectionProps[section] = SectionRender{y, section->length, meter};
-            y += section->length * timeScale + 48;
-        }
-        scrollY = rect.dim().y / 2; // offset from top of rect
-        if (auto sectionP = editCur.cursor.section.lock()) {
-            scrollY -= sectionProps[sectionP].y + editCur.cursor.time * timeScale;
-        }
-        if (sectionEdits.size() != song.sections.size())
-            sectionEdits.resize(song.sections.size());
-
-        if (trackMutes.size() != song.tracks.size())
-            trackMutes.resize(song.tracks.size());
-        for (int i = 0; i < song.tracks.size(); i++) {
-            std::shared_lock trackLock(song.tracks[i]->mu);
-            trackMutes[i] = song.tracks[i]->mute;
-        }
-
-        for (int i = 0; i < song.sections.size(); i++) {
-            auto &section = song.sections[i];
-            auto &props = sectionProps[section];
-
-            Rect sectionR = Rect::from(TL,
-                rect(TL, {0, props.y + scrollY}),
-                {rect.dim().x, props.length * timeScale});
-            if (sectionR.max.y < rect.min.y || sectionR.min.y >= rect.max.y)
-                continue;
-            Rect sectionHeaderR = Rect::from(BL, sectionR(TL),
-                {sectionR.dim().x, FONT_DEFAULT.lineHeight});
-            // without section lock:
-            sectionEdits[i].draw(this, sectionHeaderR, section);
-
-            {
-                std::shared_lock sectionLock(section->mu);
-                for (int t = 0; t < section->trackEvents.size(); t++) {
-                    auto &events = section->trackEvents[t];
-                    SampleRender *curSampleProps = nullptr;
-                    float curVelocity = 1.0f;
-                    for (int e = 0; e < events.size(); e++) {
-                        const Event &event = events[e];
-                        ticks nextEventTime = props.length;
-                        if (e != events.size() - 1)
-                            nextEventTime = events[e + 1].time;
-                        float startY = event.time * timeScale;
-                        float endY = (nextEventTime-event.time) * timeScale;
-                        Rect eventR = Rect::from(TL,
-                            sectionR(TL, {TRACK_SPACING*t, startY}),
-                            {TRACK_WIDTH, endY});
-                        drawEvent(eventR, event, &curSampleProps, &curVelocity,
-                                  trackMutes[t]);
-                    }
-                }
-            }
-
-            ticks barLength = TICKS_PER_BEAT * props.meter;
-            for (ticks grid = 0; grid < props.length; grid += cellSize) {
-                glm::vec4 color;
-                if (props.meter != Section::NO_METER
-                        && cellSize < barLength && grid % barLength == 0) {
-                    color = C_GRID_BAR;
-                } else if (cellSize < TICKS_PER_BEAT
-                        && grid % TICKS_PER_BEAT == 0) {
-                    color = C_GRID_BEAT;
-                } else {
-                    color = C_GRID_CELL;
-                }
-                drawRect(Rect::hLine(sectionR(TL, {0, grid * timeScale}),
-                                     sectionR.right(), 1), color);
-            }
-            drawRect(Rect::hLine(sectionR(BL), sectionR.right(), 1),
-                     C_GRID_BAR);
-        } // each section
-    } // songLock
-
-    if (editCur.cursor.section.lock()) {
-        drawRect(Rect::hLine(rect(CL), rect.right(), 1), C_EDIT_CUR);
-
-        drawRect(Rect::from(TL, rect(CL, {editCur.track * TRACK_SPACING, 0}),
-                            {TRACK_WIDTH, CELL_HEIGHT}), C_EDIT_CELL);
-    }
-
-    if (auto sectionP = playCur.section.lock()) {
-        float playSectionY = sectionProps[sectionP].y + scrollY;
-        float playCursorY = playCur.time * timeScale + playSectionY;
-        drawRect(Rect::hLine(rect(TL, {0, playCursorY}), rect.right(), 1),
-                 C_PLAY_CUR);
-    }
-}
-
-void App::drawEvent(Rect rect, const Event &event,
-    SampleRender **curSampleProps, float *curVelocity, bool mute)
-{
-    string nameAbbr = "  ";
-    if (auto sampleP = event.sample.lock()) {
-        *curSampleProps = &sampleProps[sampleP];
-        nameAbbr = (*curSampleProps)->nameAbbr;
-    }
-    if (event.special == Event::Special::FadeOut) {
-        *curSampleProps = nullptr; // TODO gradient
-    }
-    if (event.velocity != Event::NO_VELOCITY) {
-        *curVelocity = event.velocity;
-    }
-
-    glm::vec3 color {0, 0, 0};
-    if (*curSampleProps) {
-        auto &props = *curSampleProps;
-        color = mute ? glm::vec3{0.3, 0.3, 0.3} : (props->color * 0.5f);
-        color *= *curVelocity; // TODO gamma correct
-    }
-
-    drawRect(rect, {color, 1});
-    float headThickness = event.velocity != Event::NO_VELOCITY ? 3 : 1;
-    drawRect(Rect::hLine(rect(TL), rect.right(), headThickness), C_EVENT_HEAD);
-
-    glm::vec2 textPos = rect(TL, {2, 0});
-    textPos = drawText(nameAbbr, textPos, C_WHITE)(TR);
-    string specialStr = " ";
-    if (event.special == Event::Special::FadeOut) {
-        specialStr = "=";
-    } else if (event.special == Event::Special::Slide) {
-        specialStr = "/";
-    }
-    textPos = drawText(specialStr, textPos, C_WHITE)(TR);
-    if (event.pitch != Event::NO_PITCH) {
-        textPos = drawText(pitchToString(event.pitch), textPos, C_WHITE)(TR);
-    }
+    drawText("Volume", rect(TL), C_WHITE);
 }
 
 void App::keyDown(const SDL_KeyboardEvent &e)
@@ -478,13 +238,6 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_F3:
         tab = Tab::Sample;
         break;
-    /* Mode */
-    case SDLK_SCROLLLOCK:
-        if (e.repeat) break;
-        followPlayback = !followPlayback;
-        if (!followPlayback)
-            snapToGrid();
-        break;
     /* Sample select */
     case SDLK_KP_PLUS:
         if (ctrl) {
@@ -518,7 +271,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_KP_MINUS:
         if (ctrl) {
-            if (auto sampleP = selectedSample()) {
+            if (auto sampleP = eventKeyboard.selected.sample.lock()) {
                 int index;
                 {
                     std::shared_lock songLock(song.mu);
@@ -559,11 +312,8 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                         std::unique_lock lock(song.mu);
                         song.clear();
                         loader->loadSong(&song);
-                        if (!song.sections.empty()) {
-                            editCur.cursor.section = song.sections.front();
-                            editCur.cursor.time = 0;
-                        }
                     }
+                    eventsEdit.resetCursor(true);
                     eventKeyboard.reset();
 
                     // call at the end to prevent access violation!
@@ -586,305 +336,10 @@ void App::keyDown(const SDL_KeyboardEvent &e)
 
     if (browser) {
         browser->keyDown(e);
-    } else {
-        eventKeyboard.keyDown(e);
-        keyDownEvents(e);
+    } else if (tab == Tab::Events) {
+        eventsEdit.keyDown(e);
     }
-}
-
-void App::keyDownEvents(const SDL_KeyboardEvent &e)
-{
-    bool ctrl = e.keysym.mod & KMOD_CTRL;
-    bool shift = e.keysym.mod & KMOD_SHIFT;
-    bool alt = e.keysym.mod & KMOD_ALT;
-
-    switch (e.keysym.sym) {
-    /* Playback */
-    case SDLK_SPACE:
-        if (!e.repeat) {
-            std::unique_lock playerLock(player.mu);
-            std::shared_lock songLock(song.mu);
-            if (player.cursor().section.lock()) {
-                player.fadeAll();
-                snapToGrid();
-            } else if (!song.sections.empty()) {
-                player.setCursor(editCur.cursor);
-            }
-        }
-        break;
-    case SDLK_ESCAPE:
-        if (!e.repeat) {
-            std::unique_lock playerLock(player.mu);
-            player.stop();
-        }
-        break;
-    /* Navigation */
-    case SDLK_HOME:
-        if (ctrl) {
-            std::shared_lock songLock(song.mu);
-            if (!song.sections.empty()) {
-                editCur.cursor.section = song.sections.front();
-            }
-        }
-        editCur.cursor.time = 0;
-        movedEditCur = true;
-        break;
-    case SDLK_PAGEDOWN:
-        {
-            auto next = editCur.cursor.nextSection();
-            if (next) {
-                editCur.cursor.section = next;
-                editCur.cursor.time = 0;
-                movedEditCur = true;
-            }
-        }
-        break;
-    case SDLK_PAGEUP:
-        {
-            auto prev = editCur.cursor.prevSection();
-            if (prev) {
-                editCur.cursor.section = prev;
-                editCur.cursor.time = 0;
-                movedEditCur = true;
-            }
-        }
-        break;
-    case SDLK_RIGHT:
-        {
-            std::shared_lock songLock(song.mu);
-            if (ctrl) {
-                editCur.track = song.tracks.size() - 1;
-            } else {
-                editCur.track++;
-                if (editCur.track >= song.tracks.size())
-                    editCur.track = song.tracks.size() - 1;
-            }
-        }
-        break;
-    case SDLK_LEFT:
-        if (ctrl) {
-            editCur.track = 0;
-        } else {
-            editCur.track--;
-            if (editCur.track < 0)
-                editCur.track = 0;
-        }
-        break;
-    case SDLK_DOWN:
-        if (alt && !e.repeat) {
-            TrackCursor searchCur = editCur;
-            searchCur.cursor.time ++; // after current event
-            while (auto sectionP = searchCur.cursor.section.lock()) {
-                std::shared_lock sectionLock(sectionP->mu);
-                auto eventIt = searchCur.findEvent();
-                if (eventIt != searchCur.events().end()) {
-                    editCur.cursor.time = eventIt->time;
-                    editCur.cursor.section = sectionP;
-                    movedEditCur = true;
-                    eventKeyboard.select(*eventIt);
-                    jamEvent(e, eventKeyboard.selected); // no write
-                    break;
-                }
-                searchCur.cursor.section = searchCur.cursor.nextSection();
-                searchCur.cursor.time = 0;
-            }
-        } else if (!alt) {
-            nextCell();
-        }
-        break;
-    case SDLK_UP:
-        if (alt && !e.repeat) {
-            TrackCursor searchCur = editCur;
-            while (auto sectionP = searchCur.cursor.section.lock()) {
-                std::shared_lock sectionLock(sectionP->mu);
-                auto eventIt = searchCur.findEvent();
-                if (eventIt != searchCur.events().begin()) {
-                    eventIt--;
-                    editCur.cursor.time = eventIt->time;
-                    editCur.cursor.section = sectionP;
-                    movedEditCur = true;
-                    eventKeyboard.select(*eventIt);
-                    jamEvent(e, eventKeyboard.selected); // no write
-                    break;
-                }
-                searchCur.cursor.section = searchCur.cursor.prevSection();
-                searchCur.cursor.time = std::numeric_limits<ticks>().max();
-            }
-        } else if (!alt) {
-            prevCell();
-        }
-        break;
-    case SDLK_RETURN:
-        if (!e.repeat) {
-            if (auto sectionP = editCur.cursor.section.lock()) {
-                std::shared_lock sectionLock(sectionP->mu);
-                auto eventIt = editCur.findEvent();
-                if (eventIt != editCur.events().end()) {
-                    eventKeyboard.select(*eventIt);
-                    jamEvent(e, eventKeyboard.selected); // no write
-                }
-            }
-        }
-        break;
-    case SDLK_RIGHTBRACKET:
-        cellSize *= ctrl ? 3 : 2;
-        snapToGrid();
-        break;
-    case SDLK_LEFTBRACKET:
-        {
-            int factor = ctrl ? 3 : 2;
-            if (cellSize % factor == 0)
-                cellSize /= factor;
-        }
-        break;
-    /* Commands */
-    case SDLK_m:
-        if (!e.repeat) {
-            shared_ptr<Track> track;
-            bool solo = true;
-            {
-                std::shared_lock songLock(song.mu);
-                if (editCur.track >= 0 && editCur.track < song.tracks.size()) {
-                    track = song.tracks[editCur.track];
-                }
-
-                if (ctrl && shift) {
-                    for (auto &t : song.tracks) {
-                        if (t != track && !t->mute) {
-                            solo = false;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (ctrl && shift) {
-                doOperation(edit::ops::SetTrackSolo(track, !solo));
-            } else if (ctrl && track) {
-                bool muted;
-                {
-                    std::shared_lock trackLock(track->mu);
-                    muted = track->mute;
-                }
-                doOperation(edit::ops::SetTrackMute(track, !muted));
-            }
-        }
-        break;
-    case SDLK_EQUALS:
-        if (ctrl) {
-            editCur.track++;
-            {
-                std::shared_lock lock(song.mu);
-                if (editCur.track > song.tracks.size()) {
-                    editCur.track = song.tracks.size();
-                } else if (editCur.track < 0) {
-                    editCur.track = 0;
-                }
-            }
-            shared_ptr<Track> newTrack(new Track);
-            doOperation(edit::ops::AddTrack(editCur.track, newTrack));
-        }
-        break;
-    case SDLK_MINUS:
-        if (ctrl) {
-            std::shared_ptr<Track> deleteTrack;
-            {
-                std::shared_lock lock(song.mu);
-                if (editCur.track >= 0 && editCur.track < song.tracks.size())
-                    deleteTrack = song.tracks[editCur.track];
-                if (editCur.track == song.tracks.size() - 1
-                        && editCur.track != 0)
-                    editCur.track--;
-            }
-            if (deleteTrack) {
-                doOperation(edit::ops::DeleteTrack(deleteTrack));
-            }
-        }
-        break;
-    case SDLK_INSERT:
-        if (ctrl && !e.repeat) {
-            if (auto sectionP = editCur.cursor.section.lock()) {
-                shared_ptr<Section> newSection(new Section);
-                {
-                    std::shared_lock sectionLock(sectionP->mu);
-                    newSection->length = sectionP->length;
-                }
-                int index;
-                {
-                    std::shared_lock songLock(song.mu);
-                    newSection->trackEvents.resize(song.tracks.size());
-                    auto it = editCur.cursor.findSection();
-                    index = it - song.sections.begin() + 1;
-                }
-                doOperation(edit::ops::AddSection(index, newSection));
-                editCur.cursor.section = newSection;
-                editCur.cursor.time = 0;
-                movedEditCur = true;
-            }
-        }
-        break;
-    case SDLK_DELETE:
-        if (ctrl && shift) {
-            // zap sections -- NOT undoable! (clears undo stack)
-            {
-                std::unique_lock playerLock(player.mu);
-                player.stop();
-            }
-            std::unique_lock songLock(song.mu);
-            for (auto section : song.sections) {
-                section->deleted = true;
-            }
-            song.sections.clear();
-            auto section = song.sections.emplace_back(new Section);
-            section->length = TICKS_PER_BEAT * 16;
-            section->trackEvents.resize(song.tracks.size());
-            section->tempo = 125;
-            section->meter = 4;
-
-            editCur.cursor = Cursor(&song, section);
-
-            undoStack.clear();
-            redoStack.clear();
-            continuousOp = nullptr;
-        } else if (ctrl) {
-            auto deleteSection = editCur.cursor.section.lock();
-            auto next = editCur.cursor.nextSection();
-            if (!next)
-                next = editCur.cursor.prevSection();
-            if (next) {
-                editCur.cursor.section = next;
-                editCur.cursor.time = 0;
-                movedEditCur = true;
-            }
-            doOperation(edit::ops::DeleteSection(deleteSection));
-        } else {
-            doOperation(edit::ops::ClearCell(editCur, alt ? 1 : cellSize));
-        }
-        break;
-    case SDLK_SLASH:
-        if (!e.repeat && ctrl && editCur.cursor.time != 0) {
-            if (auto sectionP = editCur.cursor.section.lock()) {
-                doOperation(edit::ops::SliceSection(
-                    sectionP, editCur.cursor.time));
-                {
-                    std::shared_lock lock(sectionP->mu);
-                    editCur.cursor.section = sectionP->next;
-                    editCur.cursor.time = 0;
-                }
-            }
-        }
-        break;
-    }
-}
-
-void App::keyUpEvents(const SDL_KeyboardEvent &e)
-{
-    SDL_Keycode sym = e.keysym.sym;
-    bool alt = e.keysym.mod & KMOD_ALT;
-    if (sym == SDLK_RETURN || (alt && (sym == SDLK_UP || sym == SDLK_DOWN))) {
-        Event fadeEvent;
-        fadeEvent.special = Event::Special::FadeOut;
-        jamEvent(e, fadeEvent); // these keys don't write
-    }
+    eventKeyboard.keyDown(e);
 }
 
 void App::endContinuous()
@@ -915,59 +370,6 @@ std::shared_ptr<ui::Touch> App::captureTouch(const Rect &r) {
     return nullptr;
 }
 
-shared_ptr<Sample> App::selectedSample()
-{
-    return eventKeyboard.selected.sample.lock();
-}
-
-void App::snapToGrid()
-{
-    editCur.cursor.time /= cellSize;
-    editCur.cursor.time *= cellSize;
-}
-
-void App::nextCell()
-{
-    snapToGrid();
-    editCur.cursor.time += cellSize;
-    ticks sectionLength;
-    if (auto sectionP = editCur.cursor.section.lock()) {
-        std::shared_lock sectionLock(sectionP->mu);
-        sectionLength = sectionP->length;
-    } else {
-        return;
-    }
-    if (editCur.cursor.time >= sectionLength) {
-        auto next = editCur.cursor.nextSection();
-        if (next) {
-            editCur.cursor.section = next;
-            editCur.cursor.time = 0;
-        } else {
-            editCur.cursor.time = sectionLength - 1;
-            snapToGrid();
-        }
-    }
-    movedEditCur = true;
-}
-
-void App::prevCell()
-{
-    if (editCur.cursor.time % cellSize != 0) {
-        snapToGrid();
-    } else if (editCur.cursor.time < cellSize) {
-        auto prev = editCur.cursor.prevSection();
-        if (prev) {
-            editCur.cursor.section = prev;
-            std::shared_lock sectionLock(prev->mu);
-            editCur.cursor.time = prev->length - 1;
-            snapToGrid();
-        }
-    } else {
-        editCur.cursor.time -= cellSize;
-    }
-    movedEditCur = true;
-}
-
 bool App::jamEvent(play::JamEvent jam, uint32_t timestamp)
 {
     std::unique_lock playerLock(player.mu);
@@ -979,20 +381,6 @@ bool App::jamEvent(play::JamEvent jam, uint32_t timestamp)
 bool App::jamEvent(const SDL_KeyboardEvent &e, const Event &event)
 {
     return jamEvent({event, -e.keysym.scancode}, e.timestamp);
-}
-
-void App::writeEvent(bool playing, const Event &event, Event::Mask mask,
-                     bool continuous)
-{
-    SDL_Keymod mod = SDL_GetModState();
-    if (mod & KMOD_ALT) {
-        doOperation(edit::ops::MergeEvent(editCur, event, mask), continuous);
-    } else if (mod & (KMOD_CAPS | KMOD_SHIFT)) {
-        doOperation(edit::ops::WriteCell(
-            editCur, playing ? 1 : cellSize, event), continuous);
-        // TODO if playing, clear events while held
-    }
-    // TODO combine into single undo operation while playing
 }
 
 ticks App::calcTickDelay(uint32_t timestamp)

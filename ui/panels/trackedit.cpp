@@ -1,5 +1,6 @@
 #include "trackedit.h"
 #include <app.h>
+#include <edit/songops.h>
 
 namespace chromatracker::ui::panels {
 

@@ -2,14 +2,11 @@
 #include <common.h>
 
 #include "edit/operation.h"
-#include "edit/songops.h"
-#include "file/types.h"
 #include "play/songplay.h"
 #include "ui/panels/browser.h"
 #include "ui/panels/eventkeyboard.h"
+#include "ui/panels/eventsedit.h"
 #include "ui/panels/sampleedit.h"
-#include "ui/panels/sectionedit.h"
-#include "ui/panels/trackedit.h"
 #include "ui/settings.h"
 #include "ui/ui.h"
 #include "ui/widgets/slider.h"
@@ -38,31 +35,17 @@ public:
     shared_ptr<ui::Touch> captureTouch(const ui::Rect &r);
     void endContinuous();
 
-    shared_ptr<Sample> selectedSample();
-
     // return if playing
     bool jamEvent(play::JamEvent jam, uint32_t timestamp);
     bool jamEvent(const SDL_KeyboardEvent &e, const Event &jam);
-    void writeEvent(bool playing, const Event &event, Event::Mask mask,
-                    bool continuous=false);
 
     Song song;
+    play::SongPlay player;
+    ui::panels::EventKeyboard eventKeyboard;
+    ui::panels::EventsEdit eventsEdit;
     ui::Settings settings;
 
 private:
-    // cached properties of song objects used while rendering
-    struct SampleRender
-    {
-        string nameAbbr;
-        glm::vec3 color;
-    };
-    struct SectionRender
-    {
-        float y; // starting from y = 0 at the top of the song
-        ticks length;
-        int meter;
-    };
-
     enum class Tab
     {
         Events, Sample
@@ -71,20 +54,10 @@ private:
     void resizeWindow(int w, int h);
 
     void drawInfo(ui::Rect rect);
-    void drawTracks(ui::Rect rect);
-    void drawEvents(ui::Rect rect, Cursor playCur);
-    void drawEvent(ui::Rect rect, const Event &event,
-        SampleRender **curSampleProps, float *curVelocity, bool mute);
 
     void keyDown(const SDL_KeyboardEvent &e);
-    void keyDownEvents(const SDL_KeyboardEvent &e);
-    void keyUpEvents(const SDL_KeyboardEvent &e);
 
     std::shared_ptr<ui::Touch> findTouch(int id);
-
-    void snapToGrid();
-    void nextCell();
-    void prevCell();
 
     ticks calcTickDelay(uint32_t timestamp); // player must be locked
 
@@ -92,30 +65,11 @@ private:
     ui::Rect winR {{0, 0}, {0, 0}};
     SDL_AudioDeviceID audioDevice;
 
-    play::SongPlay player;
-
-    TrackCursor editCur;
-    ticks cellSize {TICKS_PER_BEAT / 4};
-
-    // mode
-    bool followPlayback {true};
-
-    // main loop flags
-    bool movedEditCur {false}; // TODO replace with accumulator to move play cur
-
     Tab tab {Tab::Events};
-    ui::panels::EventKeyboard eventKeyboard;
     ui::panels::SampleEdit sampleEdit;
     unique_ptr<ui::panels::Browser> browser;
-    vector<ui::panels::TrackEdit> trackEdits;
-    vector<ui::panels::SectionEdit> sectionEdits;
 
     ui::widgets::Slider songVolumeSlider;
-
-    // reused for each frame
-    std::unordered_map<shared_ptr<const Sample>, SampleRender> sampleProps;
-    std::unordered_map<shared_ptr<const Section>, SectionRender> sectionProps;
-    std::vector<bool> trackMutes;
 
     vector<unique_ptr<edit::SongOp>> undoStack;
     vector<unique_ptr<edit::SongOp>> redoStack;
