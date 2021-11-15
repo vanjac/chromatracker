@@ -6,6 +6,8 @@ namespace chromatracker::ui::panels {
 
 void SongEdit::draw(App *app, Rect rect, Song *song)
 {
+    app->scissorRect(rect);
+
     float vol;
     {
         std::shared_lock songLock(song->mu);
