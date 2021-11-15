@@ -29,7 +29,7 @@ bool Spinner::draw(App *app, Rect rect, int *value,
                     adjusted = true;
                 }
             } else if (event.type == SDL_MOUSEBUTTONUP) {
-                app->endContinuous();
+                app->undoer.endContinuous();
             }
         }
         touchP->events.clear();

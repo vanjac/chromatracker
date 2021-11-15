@@ -17,7 +17,7 @@ bool Slider::draw(App *app, Rect rect, float *value, float min, float max,
                 *value = glm::clamp(*value, min, max);
                 adjusted = true;
             } else if (event.type == SDL_MOUSEBUTTONUP) {
-                app->endContinuous();
+                app->undoer.endContinuous();
             }
         }
         touchP->events.clear();

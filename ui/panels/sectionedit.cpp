@@ -29,16 +29,16 @@ void SectionEdit::draw(App *app, Rect rect, shared_ptr<Section> section)
     Rect clearR = Rect::from(TL, tempoR(TR), {CLEAR_WIDTH, rect.dim().y});
     if (tempo != Section::NO_TEMPO) {
         if (tempoSpinner.draw(app, tempoR, &tempo, 20, 999, 1.0/2)) {
-            app->doOperation(edit::ops::SetSectionTempo(section, tempo), true);
+            app->undoer.doOp(edit::ops::SetSectionTempo(section, tempo), true);
         }
         if (tempoButton.draw(app, clearR, C_DARK_GRAY)) {
-            app->doOperation(edit::ops::SetSectionTempo(
+            app->undoer.doOp(edit::ops::SetSectionTempo(
                 section, Section::NO_TEMPO), true);
         }
         drawText("X", clearR(TL), C_WHITE)(TR);
     } else {
         if (tempoButton.draw(app, tempoR, C_DARK_GRAY)) {
-            app->doOperation(edit::ops::SetSectionTempo(section, 125), true);
+            app->undoer.doOp(edit::ops::SetSectionTempo(section, 125), true);
         }
         drawText("(set)", tempoR(TL), C_WHITE)(TR);
     }
@@ -48,16 +48,16 @@ void SectionEdit::draw(App *app, Rect rect, shared_ptr<Section> section)
     clearR = Rect::from(TL, meterR(TR), {CLEAR_WIDTH, rect.dim().y});
     if (meter != Section::NO_METER) {
         if (meterSpinner.draw(app, meterR, &meter, 1, 32, 1.0/15)) {
-            app->doOperation(edit::ops::SetSectionMeter(section, meter), true);
+            app->undoer.doOp(edit::ops::SetSectionMeter(section, meter), true);
         }
         if (meterButton.draw(app, clearR, C_DARK_GRAY)) {
-            app->doOperation(edit::ops::SetSectionMeter(
+            app->undoer.doOp(edit::ops::SetSectionMeter(
                 section, Section::NO_METER), true);
         }
         drawText("X", clearR(TL), C_WHITE)(TR);
     } else {
         if (meterButton.draw(app, meterR, C_DARK_GRAY)) {
-            app->doOperation(edit::ops::SetSectionMeter(section, 4), true);
+            app->undoer.doOp(edit::ops::SetSectionMeter(section, 4), true);
         }
         drawText("(set)", meterR(TL), C_WHITE)(TR);
     }

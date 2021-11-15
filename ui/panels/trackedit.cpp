@@ -22,13 +22,13 @@ void TrackEdit::draw(App *app, Rect rect, shared_ptr<Track> track)
 
     Rect volumeR {rect(TL), rect(CR)};
     if (volumeSlider.draw(app, volumeR, &vol, 0, 1, accent)) {
-        app->doOperation(edit::ops::SetTrackVolume(
+        app->undoer.doOp(edit::ops::SetTrackVolume(
                          track, velocityToAmplitude(vol)), true);
     }
 
     Rect panR {rect(CL), rect(BR)};
     if (panSlider.draw(app, panR, &pan, -1, 1, accent)) {
-        app->doOperation(edit::ops::SetTrackPan(track, pan), true);
+        app->undoer.doOp(edit::ops::SetTrackPan(track, pan), true);
     }
 }
 

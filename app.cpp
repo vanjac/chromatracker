@@ -56,6 +56,7 @@ void App::main(const vector<string> args)
         section->meter = 4;
     }
 
+    undoer.reset(&song);
     eventsEdit.resetCursor(true);
     player.setCursor(Cursor(&song));
 
@@ -193,26 +194,12 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     switch (e.keysym.sym) {
     case SDLK_z:
         if (ctrl) {
-            if (!undoStack.empty()) {
-                undoStack.back()->undoIt(&song);
-                redoStack.push_back(std::move(undoStack.back()));
-                undoStack.pop_back();
-                continuousOp = nullptr;
-            } else {
-                cout << "Nothing to undo\n";
-            }
+            undoer.undo();
         }
         break;
     case SDLK_y:
         if (ctrl) {
-            if (!redoStack.empty()) {
-                redoStack.back()->doIt(&song);
-                undoStack.push_back(std::move(redoStack.back()));
-                redoStack.pop_back();
-                continuousOp = nullptr;
-            } else {
-                cout << "Nothing to redo\n";
-            }
+            undoer.redo();
         }
         break;
     /* Tabs */
@@ -245,7 +232,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     }
                     shared_ptr<Sample> newSample(new Sample);
                     loader->loadSample(newSample);
-                    doOperation(edit::ops::AddSample(numSamples, newSample));
+                    undoer.doOp(edit::ops::AddSample(numSamples, newSample));
                     eventKeyboard.selected.sample = newSample;
 
                     // call at the end to prevent access violation!
@@ -263,7 +250,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     if (index == song.samples.size() - 1)
                         index--;
                 }
-                doOperation(edit::ops::DeleteSample(sampleP));
+                undoer.doOp(edit::ops::DeleteSample(sampleP));
                 {
                     std::shared_lock songLock(song.mu);
                     if (!song.samples.empty())
@@ -297,6 +284,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                         song.clear();
                         loader->loadSong(&song);
                     }
+                    undoer.reset(&song);
                     eventsEdit.resetCursor(true);
                     eventKeyboard.reset();
 
@@ -324,11 +312,6 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         eventsEdit.keyDown(e);
     }
     eventKeyboard.keyDown(e);
-}
-
-void App::endContinuous()
-{
-    continuousOp = nullptr;
 }
 
 std::shared_ptr<ui::Touch> App::findTouch(int id)

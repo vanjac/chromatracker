@@ -410,14 +410,14 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                 }
             }
             if (ctrl && shift) {
-                app->doOperation(edit::ops::SetTrackSolo(track, !solo));
+                app->undoer.doOp(edit::ops::SetTrackSolo(track, !solo));
             } else if (ctrl && track) {
                 bool muted;
                 {
                     std::shared_lock trackLock(track->mu);
                     muted = track->mute;
                 }
-                app->doOperation(edit::ops::SetTrackMute(track, !muted));
+                app->undoer.doOp(edit::ops::SetTrackMute(track, !muted));
             }
         }
         break;
@@ -433,7 +433,7 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                 }
             }
             shared_ptr<Track> newTrack(new Track);
-            app->doOperation(edit::ops::AddTrack(editCur.track, newTrack));
+            app->undoer.doOp(edit::ops::AddTrack(editCur.track, newTrack));
         }
         break;
     case SDLK_MINUS:
@@ -448,7 +448,7 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                     editCur.track--;
             }
             if (deleteTrack) {
-                app->doOperation(edit::ops::DeleteTrack(deleteTrack));
+                app->undoer.doOp(edit::ops::DeleteTrack(deleteTrack));
             }
         }
         break;
@@ -467,7 +467,7 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                     auto it = editCur.cursor.findSection();
                     index = it - song.sections.begin() + 1;
                 }
-                app->doOperation(edit::ops::AddSection(index, newSection));
+                app->undoer.doOp(edit::ops::AddSection(index, newSection));
                 editCur.cursor.section = newSection;
                 editCur.cursor.time = 0;
                 movedEditCur = true;
@@ -485,15 +485,15 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                 editCur.cursor.time = 0;
                 movedEditCur = true;
             }
-            app->doOperation(edit::ops::DeleteSection(deleteSection));
+            app->undoer.doOp(edit::ops::DeleteSection(deleteSection));
         } else {
-            app->doOperation(edit::ops::ClearCell(editCur, alt ? 1 : cellSize));
+            app->undoer.doOp(edit::ops::ClearCell(editCur, alt ? 1 : cellSize));
         }
         break;
     case SDLK_SLASH:
         if (!e.repeat && ctrl && editCur.cursor.time != 0) {
             if (auto sectionP = editCur.cursor.section.lock()) {
-                app->doOperation(edit::ops::SliceSection(
+                app->undoer.doOp(edit::ops::SliceSection(
                     sectionP, editCur.cursor.time));
                 {
                     std::shared_lock lock(sectionP->mu);
@@ -548,10 +548,10 @@ void EventsEdit::writeEvent(bool playing, const Event &event, Event::Mask mask,
 {
     SDL_Keymod mod = SDL_GetModState();
     if (mod & KMOD_ALT) {
-        app->doOperation(edit::ops::MergeEvent(
+        app->undoer.doOp(edit::ops::MergeEvent(
             editCur, event, mask), continuous);
     } else if (mod & (KMOD_CAPS | KMOD_SHIFT)) {
-        app->doOperation(edit::ops::WriteCell(
+        app->undoer.doOp(edit::ops::WriteCell(
             editCur, playing ? 1 : cellSize, event), continuous);
         // TODO if playing, clear events
     }

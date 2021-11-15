@@ -33,7 +33,7 @@ void SampleEdit::draw(Rect rect)
 
     Rect volumeR = Rect::from(TL, rect(TL), {rect.dim().x, lineHeight});
     if (volumeSlider.draw(app, volumeR, &vol)) {
-        app->doOperation(edit::ops::SetSampleVolume(
+        app->undoer.doOp(edit::ops::SetSampleVolume(
                          sample, velocityToAmplitude(vol)), true);
     }
     drawText("Volume", volumeR(TL), C_WHITE);
@@ -42,7 +42,7 @@ void SampleEdit::draw(Rect rect)
     Rect transposeR = Rect::from(TL, textR(TR), {SPINNER_WIDTH, lineHeight});
     if (transposeSpinner.draw(app, transposeR, &transpose,
                               -MAX_PITCH, MAX_PITCH, 1.0/10)) {
-        app->doOperation(edit::ops::SetSampleTune(
+        app->undoer.doOp(edit::ops::SetSampleTune(
                          sample, transpose + fineTune), true);
     }
 
@@ -50,7 +50,7 @@ void SampleEdit::draw(Rect rect)
                     {rect.right(), transposeR.bottom()}};
     // slider wraps around at the edges. "it's a feature"
     if (fineTuneSlider.draw(app, fineTuneR, &fineTune, -0.51, 0.51)) {
-        app->doOperation(edit::ops::SetSampleTune(
+        app->undoer.doOp(edit::ops::SetSampleTune(
                          sample, transpose + fineTune), true);
     }
     drawText("Finetune", fineTuneR(TL), C_WHITE);
@@ -58,7 +58,7 @@ void SampleEdit::draw(Rect rect)
     // TODO exponential curve
     Rect fadeOutR = Rect::from(TL, textR(BL), {rect.dim().x, lineHeight});
     if (fadeOutSlider.draw(app, fadeOutR, &fadeOut)) {
-        app->doOperation(edit::ops::SetSampleFadeOut(
+        app->undoer.doOp(edit::ops::SetSampleFadeOut(
             sample, glm::exp2(FADE_EXP_SCALE * (fadeOut - 1))), true);
     }
     drawText("Fade out", fadeOutR(TL), C_WHITE);

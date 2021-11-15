@@ -71,7 +71,7 @@ void EventKeyboard::drawPiano(Rect rect)
                 if (app->jamEvent({fadeEvent, (int)event.button.which + 1},
                                   event.button.timestamp)) // if playing
                     writeEvent(true, fadeEvent, Event::ALL);
-                app->endContinuous();
+                app->undoer.endContinuous();
             }
         }
         touch->events.clear();

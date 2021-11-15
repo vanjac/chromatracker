@@ -1,7 +1,7 @@
 #pragma once
 #include <common.h>
 
-#include "edit/operation.h"
+#include "edit/undoer.hpp"
 #include "play/songplay.h"
 #include "ui/panels/browser.h"
 #include "ui/panels/eventkeyboard.h"
@@ -33,12 +33,12 @@ public:
     // general panel api
     void scissorRect(ui::Rect rect) const;
     shared_ptr<ui::Touch> captureTouch(const ui::Rect &r);
-    void endContinuous();
 
     // return if playing
     bool jamEvent(play::JamEvent jam, uint32_t timestamp);
     bool jamEvent(const SDL_KeyboardEvent &e, const Event &jam);
 
+    edit::Undoer<Song *> undoer;
     Song song;
     play::SongPlay player;
     ui::panels::EventKeyboard eventKeyboard;
@@ -68,11 +68,6 @@ private:
     ui::panels::SampleEdit sampleEdit;
     unique_ptr<ui::panels::Browser> browser;
 
-    vector<unique_ptr<edit::SongOp>> undoStack;
-    vector<unique_ptr<edit::SongOp>> redoStack;
-    // should either be back of undo stack or null
-    edit::SongOp *continuousOp {nullptr};
-
     std::unordered_map<int, shared_ptr<ui::Touch>> uncapturedTouches;
     std::unordered_map<int, shared_ptr<ui::Touch>> capturedTouches;
 
@@ -80,40 +75,6 @@ private:
     int tickBufferLen {0}; // in SAMPLES (not frames!)
     int tickBufferPos {0};
     std::atomic<uint32_t> audioCallbackTime {0};
-
-public:
-    // op is by value not by reference for move semantics since operations are
-    // typically constructed in place
-    // (I think??? is there a better way to do this? TODO)
-    template<typename T>
-    bool doOperation(T op)
-    {
-        continuousOp = nullptr;
-        // remember that there will be less to copy/move before doIt is called
-        // than after
-        auto uniqueOp = std::make_unique<T>(std::move(op));
-        if (uniqueOp->doIt(&song)) {
-            undoStack.push_back(std::move(uniqueOp));
-            redoStack.clear();
-            return true;
-        }
-        return false;
-    }
-
-    template<typename T>
-    void doOperation(T op, bool continuous)
-    {
-        if (!continuous) {
-            doOperation(std::move(op));
-        } else if (auto prevOp = dynamic_cast<T*>(continuousOp)) {
-            prevOp->undoIt(&song);
-            *prevOp = op;
-            prevOp->doIt(&song);
-        } else {
-            if (doOperation(std::move(op)))
-                continuousOp = undoStack.back().get();
-        }
-    }
 };
 
 } // namespace
