@@ -1,5 +1,6 @@
 #include "chromaloader.h"
 #include <version.h>
+#include <cstring>
 #include <stdexcept>
 
 namespace chromatracker::file::chroma {
@@ -25,7 +26,7 @@ void Loader::loadHeader()
 {
     char signature[4];
     SDL_RWread(stream, signature, 1, 4);
-    if (memcmp(signature, MAGIC, 4)) {
+    if (std::memcmp(signature, MAGIC, 4)) {
         throw std::runtime_error("Unrecognized format");
     }
 

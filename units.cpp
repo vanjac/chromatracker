@@ -1,5 +1,5 @@
 #include "units.h"
-
+#include <cstring>
 #include <glm/glm.hpp>
 
 namespace chromatracker {
@@ -9,7 +9,7 @@ static const char * NOTE_NAMES = "C-C#D-D#E-F-F#G-G#A-A#B-";
 string pitchToString(int pitch) {
     char buf[4];
     int note = pitch % OCTAVE;
-    memcpy(buf, &NOTE_NAMES[note * 2], 2);
+    std::memcpy(buf, &NOTE_NAMES[note * 2], 2);
     buf[2] = (pitch / OCTAVE) + '0';
     buf[3] = 0;
     return buf;

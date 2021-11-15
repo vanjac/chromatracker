@@ -33,7 +33,7 @@ void ITLoader::checkHeader()
     SDL_RWseek(stream, 0, RW_SEEK_SET);
     char signature[5]{0};
     SDL_RWread(stream, signature, 1, 4);
-    if (memcmp(signature, "IMPM", 4)) {
+    if (std::memcmp(signature, "IMPM", 4)) {
         throw std::runtime_error("Unrecognized format");
     }
 
@@ -259,7 +259,7 @@ void ITLoader::checkSampleHeader(uint32_t offset)
     SDL_RWseek(stream, offset, RW_SEEK_SET);
     char signature[5]{0};
     SDL_RWread(stream, signature, 1, 4);
-    if (memcmp(signature, "IMPS", 4)) {
+    if (std::memcmp(signature, "IMPS", 4)) {
         throw std::runtime_error("Invalid sample header");
     }
 }
@@ -358,7 +358,7 @@ void ITLoader::checkInstrumentHeader(uint32_t offset)
     SDL_RWseek(stream, offset, RW_SEEK_SET);
     char signature[5]{0};
     SDL_RWread(stream, signature, 1, 4);
-    if (memcmp(signature, "IMPI", 4)) {
+    if (std::memcmp(signature, "IMPI", 4)) {
         throw std::runtime_error("Invalid instrument header");
     }
 }
