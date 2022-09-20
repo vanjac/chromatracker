@@ -301,9 +301,9 @@ int EventKeyboard::sampleIndex()
 }
 
 void EventKeyboard::writeEvent(bool playing, const Event &event,
-                               Event::Mask mask, bool continuous)
+                               Event::Mask mask, edit::OpAction action)
 {
-    app->eventsEdit.writeEvent(playing, event, mask, continuous);
+    app->eventsEdit.writeEvent(playing, event, mask, action);
 }
 
 int EventKeyboard::pitchKeymap(SDL_Scancode key)

@@ -4,6 +4,7 @@
 #include "sectionedit.h"
 #include "trackedit.h"
 #include <cursor.h>
+#include <edit/undoer.hpp>
 #include <song.h>
 #include <ui/ui.h>
 #include <unordered_map>
@@ -25,7 +26,7 @@ public:
 
     void resetCursor(bool newSong);
     void writeEvent(bool playing, const Event &event, Event::Mask mask,
-                    bool continuous);
+                    edit::OpAction action);
 
 private:
     // cached properties of song objects used while rendering

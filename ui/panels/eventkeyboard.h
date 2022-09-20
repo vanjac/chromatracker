@@ -1,6 +1,7 @@
 #pragma once
 #include <common.h>
 
+#include <edit/undoer.hpp>
 #include <event.h>
 #include <ui/ui.h>
 #include <SDL2/SDL_events.h>
@@ -30,7 +31,7 @@ private:
     int sampleKeymap(SDL_Scancode key);
     // for convenience, redirect to EventsEdit
     void writeEvent(bool playing, const Event &event, Event::Mask mask,
-                    bool continuous=false);
+                    edit::OpAction action = edit::OpAction::Instant);
 
     App * const app;
 

@@ -544,15 +544,15 @@ void EventsEdit::resetCursor(bool newSong)
 }
 
 void EventsEdit::writeEvent(bool playing, const Event &event, Event::Mask mask,
-                            bool continuous)
+                            edit::OpAction action)
 {
     SDL_Keymod mod = SDL_GetModState();
     if (mod & KMOD_ALT) {
         app->undoer.doOp(edit::ops::MergeEvent(
-            editCur, event, mask), continuous);
+            editCur, event, mask), action);
     } else if (mod & (KMOD_CAPS | KMOD_SHIFT)) {
         app->undoer.doOp(edit::ops::WriteCell(
-            editCur, playing ? 1 : cellSize, event), continuous);
+            editCur, playing ? 1 : cellSize, event), action);
         // TODO if playing, clear events
     }
     // TODO combine into single undo operation while playing

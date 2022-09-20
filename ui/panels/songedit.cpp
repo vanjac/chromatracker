@@ -14,9 +14,9 @@ void SongEdit::draw(App *app, Rect rect, Song *song)
         vol = amplitudeToVelocity(song->volume);
     }
 
-    if (volumeSlider.draw(app, rect, &vol)) {
+    if (auto action = volumeSlider.draw(app, rect, &vol); (bool)action) {
         app->undoer.doOp(edit::ops::SetSongVolume(
-            velocityToAmplitude(vol)), true);
+            velocityToAmplitude(vol)), action);
     }
     drawText("Volume", rect(TL), C_WHITE);
 }

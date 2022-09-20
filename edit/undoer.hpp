@@ -5,6 +5,11 @@
 
 namespace chromatracker::edit {
 
+enum class OpAction
+{
+    None = 0, Instant, Continuous, EndContinuous
+};
+
 template <typename TargetT>
 class Undoer
 {
@@ -43,23 +48,22 @@ public:
     }
 
     template<typename OpT>
-    void doOp(OpT op, bool continuous)
+    void doOp(OpT op, OpAction action)
     {
-        if (!continuous) {
+        if (action == OpAction::None) {
+            cout << "WARNING: unnecessary doOp call!\n";
+        } else if (action == OpAction::Instant) {
             doOp(std::move(op));
         } else if (auto prevOp = dynamic_cast<OpT*>(continuousOp)) {
             prevOp->undoIt(target);
             *prevOp = op;
             prevOp->doIt(target);
+            if (action == OpAction::EndContinuous)
+                continuousOp = nullptr;
         } else {
-            if (doOp(std::move(op)))
+            if (doOp(std::move(op)) && action == OpAction::Continuous)
                 continuousOp = undoStack.back().get();
         }
-    }
-
-    void endContinuous()
-    {
-        continuousOp = nullptr;
     }
 
     void undo()

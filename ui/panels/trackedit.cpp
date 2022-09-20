@@ -21,14 +21,15 @@ void TrackEdit::draw(App *app, Rect rect, shared_ptr<Track> track)
     glm::vec4 accent = mute ? C_MUTED_ACCENT : C_ACCENT;
 
     Rect volumeR {rect(TL), rect(CR)};
-    if (volumeSlider.draw(app, volumeR, &vol, 0, 1, accent)) {
+    if (auto act = volumeSlider.draw(app, volumeR, &vol, 0, 1, accent);
+            (bool)act) {
         app->undoer.doOp(edit::ops::SetTrackVolume(
-                         track, velocityToAmplitude(vol)), true);
+                         track, velocityToAmplitude(vol)), act);
     }
 
     Rect panR {rect(CL), rect(BR)};
-    if (panSlider.draw(app, panR, &pan, -1, 1, accent)) {
-        app->undoer.doOp(edit::ops::SetTrackPan(track, pan), true);
+    if (auto act = panSlider.draw(app, panR, &pan, -1, 1, accent); (bool)act) {
+        app->undoer.doOp(edit::ops::SetTrackPan(track, pan), act);
     }
 }
 

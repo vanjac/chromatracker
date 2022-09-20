@@ -1,0 +1,13 @@
+Draw struct:
+    From App:
+        Rect winR
+        scissorRect()
+    From draw.h:
+        ...
+    From text.h:
+        ...
+
+???:
+    From App:
+        captureTouch
+        Settings (move to root namespace?)

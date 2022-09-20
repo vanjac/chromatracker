@@ -3,21 +3,21 @@
 
 namespace chromatracker::ui::widgets {
 
-bool Slider::draw(App *app, Rect rect, float *value, float min, float max,
-                  glm::vec4 color)
+edit::OpAction Slider::draw(App *app, Rect rect, float *value,
+                            float min, float max, glm::vec4 color)
 {
     if (touch.expired())
         touch = app->captureTouch(rect);
-    bool adjusted = false;
+    edit::OpAction action = edit::OpAction::None;
     auto touchP = touch.lock();
     if (touchP) {
         for (auto &event : touchP->events) {
             if (event.type == SDL_MOUSEMOTION) {
                 *value += (max - min) * event.motion.xrel / rect.dim().x;
                 *value = glm::clamp(*value, min, max);
-                adjusted = true;
+                action = edit::OpAction::Continuous;
             } else if (event.type == SDL_MOUSEBUTTONUP) {
-                app->undoer.endContinuous();
+                action = edit::OpAction::EndContinuous;
             }
         }
         touchP->events.clear();
@@ -32,7 +32,7 @@ bool Slider::draw(App *app, Rect rect, float *value, float min, float max,
         drawRect(Rect::vLine(rect({zeroPos, 0}), rect.bottom(), 1), C_WHITE);
     }
 
-    return adjusted;
+    return action;
 }
 
 } // namespace
