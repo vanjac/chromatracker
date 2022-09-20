@@ -7,6 +7,7 @@
 #include <ui/widgets/spinner.h>
 
 namespace chromatracker { class App; }
+namespace chromatracker::edit { class Editor; }
 
 namespace chromatracker::ui::panels {
 
@@ -19,6 +20,7 @@ public:
 
 private:
     App * const app;
+    edit::Editor * const editor;
 
     widgets::Slider volumeSlider, fineTuneSlider, fadeOutSlider;
     widgets::Spinner transposeSpinner;

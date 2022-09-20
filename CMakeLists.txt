@@ -14,6 +14,7 @@ add_executable(chromatracker
     main.cpp
     app.cpp
     cursor.cpp
+    edit/editor.cpp
     edit/songops.cpp
     event.cpp
     file/chromaloader.cpp

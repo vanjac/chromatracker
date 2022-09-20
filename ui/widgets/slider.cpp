@@ -1,10 +1,11 @@
 #include "slider.h"
 #include <app.h>
+#include <edit/editor.h>
 
 namespace chromatracker::ui::widgets {
 
-bool Slider::draw(App *app, Rect rect, float *value, float min, float max,
-                  glm::vec4 color)
+bool Slider::draw(App *app, edit::Editor *editor, Rect rect, float *value,
+                  float min, float max, glm::vec4 color)
 {
     if (touch.expired())
         touch = app->captureTouch(rect);
@@ -17,7 +18,7 @@ bool Slider::draw(App *app, Rect rect, float *value, float min, float max,
                 *value = glm::clamp(*value, min, max);
                 adjusted = true;
             } else if (event.type == SDL_MOUSEBUTTONUP) {
-                app->undoer.endContinuous();
+                editor->undoer.endContinuous();
             }
         }
         touchP->events.clear();

@@ -1,5 +1,6 @@
 #include "eventsedit.h"
 #include <app.h>
+#include <edit/editor.h>
 #include <edit/songops.h>
 #include <limits>
 #include <utf8.h>
@@ -20,6 +21,7 @@ const glm::vec4 C_PLAY_CUR      {0.5, 0.5, 1, 1};
 
 EventsEdit::EventsEdit(App *app)
     : app(app)
+    , editor(&app->editor)
 {}
 
 void EventsEdit::draw(Rect rect)
@@ -32,15 +34,15 @@ void EventsEdit::drawTracks(Rect rect)
 {
     app->scissorRect(rect);
 
-    std::shared_lock songLock(app->song.mu);
-    auto &tracks = app->song.tracks;
+    std::shared_lock songLock(editor->song.mu);
+    auto &tracks = editor->song.tracks;
     if (trackEdits.size() != tracks.size())
         trackEdits.resize(tracks.size());
 
     for (int i = 0; i < tracks.size(); i++) {
         Rect trackR = Rect::from(TL, rect(TL, {TRACK_SPACING * i, 0}),
                                  {TRACK_WIDTH, rect.dim().y});
-        trackEdits[i].draw(app, trackR, tracks[i]);
+        trackEdits[i].draw(app, editor, trackR, tracks[i]);
         drawText(std::to_string(i + 1), trackR(TL, {20, 0}), C_WHITE);
     }
 }
@@ -49,32 +51,32 @@ void EventsEdit::drawEvents(Rect rect)
 {
     app->scissorRect(rect);
 
-    if (!editCur.cursor.section.lock()) {
-        resetCursor(false);
+    if (!editor->editCur.cursor.section.lock()) {
+        editor->resetCursor();
     }
 
     Cursor playCur;
     {
         std::unique_lock playerLock(app->player.mu);
         playCur = app->player.cursor();
-        if (followPlayback && playCur.section.lock()) {
+        if (editor->followPlayback && playCur.section.lock()) {
             if (movedEditCur) {
                 movedEditCur = false;
-                playCur = editCur.cursor;
+                playCur = editor->editCur.cursor;
                 app->player.setCursor(playCur);
             } else {
-                editCur.cursor = playCur;
+                editor->editCur.cursor = playCur;
             }
         }
     }
 
-    float timeScale = CELL_HEIGHT / cellSize;
+    float timeScale = CELL_HEIGHT / editor->cellSize;
     float scrollY;
 
     sampleProps.clear();
     sectionProps.clear();
     {
-        Song &song = app->song;
+        Song &song = editor->song;
         std::shared_lock songLock(song.mu);
 
         for (auto &sample : song.samples) {
@@ -111,8 +113,9 @@ void EventsEdit::drawEvents(Rect rect)
             y += section->length * timeScale + 48;
         }
         scrollY = rect.dim().y / 2; // offset from top of rect
-        if (auto sectionP = editCur.cursor.section.lock()) {
-            scrollY -= sectionProps[sectionP].y + editCur.cursor.time * timeScale;
+        if (auto sectionP = editor->editCur.cursor.section.lock()) {
+            scrollY -= sectionProps[sectionP].y
+                + editor->editCur.cursor.time * timeScale;
         }
         if (sectionEdits.size() != song.sections.size())
             sectionEdits.resize(song.sections.size());
@@ -136,7 +139,7 @@ void EventsEdit::drawEvents(Rect rect)
             Rect sectionHeaderR = Rect::from(BL, sectionR(TL),
                 {sectionR.dim().x, FONT_DEFAULT.lineHeight});
             // without section lock:
-            sectionEdits[i].draw(app, sectionHeaderR, section);
+            sectionEdits[i].draw(app, editor, sectionHeaderR, section);
 
             {
                 std::shared_lock sectionLock(section->mu);
@@ -161,12 +164,14 @@ void EventsEdit::drawEvents(Rect rect)
             }
 
             ticks barLength = TICKS_PER_BEAT * props.meter;
-            for (ticks grid = 0; grid < props.length; grid += cellSize) {
+            for (ticks grid = 0; grid < props.length;
+                    grid += editor->cellSize) {
                 glm::vec4 color;
                 if (props.meter != Section::NO_METER
-                        && cellSize < barLength && grid % barLength == 0) {
+                        && editor->cellSize < barLength
+                        && grid % barLength == 0) {
                     color = C_GRID_BAR;
-                } else if (cellSize < TICKS_PER_BEAT
+                } else if (editor->cellSize < TICKS_PER_BEAT
                         && grid % TICKS_PER_BEAT == 0) {
                     color = C_GRID_BEAT;
                 } else {
@@ -180,11 +185,12 @@ void EventsEdit::drawEvents(Rect rect)
         } // each section
     } // songLock
 
-    if (editCur.cursor.section.lock()) {
+    if (editor->editCur.cursor.section.lock()) {
         drawRect(Rect::hLine(rect(CL), rect.right(), 1), C_EDIT_CUR);
 
-        drawRect(Rect::from(TL, rect(CL, {editCur.track * TRACK_SPACING, 0}),
-                            {TRACK_WIDTH, CELL_HEIGHT}), C_EDIT_CELL);
+        drawRect(Rect::from(TL,
+            rect(CL, {editor->editCur.track * TRACK_SPACING, 0}),
+            {TRACK_WIDTH, CELL_HEIGHT}), C_EDIT_CELL);
     }
 
     if (auto sectionP = playCur.section.lock()) {
@@ -241,8 +247,9 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
     bool shift = e.keysym.mod & KMOD_SHIFT;
     bool alt = e.keysym.mod & KMOD_ALT;
 
-    Song &song = app->song;
+    Song &song = editor->song;
     play::SongPlay &player = app->player;
+    TrackCursor &editCur = editor->editCur;
 
     switch (e.keysym.sym) {
     /* Playback */
@@ -252,7 +259,7 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
             std::shared_lock songLock(song.mu);
             if (player.cursor().section.lock()) {
                 player.fadeAll();
-                snapToGrid();
+                editor->snapToGrid();
             } else if (!song.sections.empty()) {
                 player.setCursor(editCur.cursor);
             }
@@ -267,9 +274,9 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
     /* Navigation */
     case SDLK_SCROLLLOCK:
         if (e.repeat) break;
-        followPlayback = !followPlayback;
-        if (!followPlayback)
-            snapToGrid();
+        editor->followPlayback = !editor->followPlayback;
+        if (!editor->followPlayback)
+            editor->snapToGrid();
         break;
     case SDLK_HOME:
         if (ctrl) {
@@ -333,15 +340,16 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                     editCur.cursor.time = eventIt->time;
                     editCur.cursor.section = sectionP;
                     movedEditCur = true;
-                    app->eventKeyboard.select(*eventIt);
-                    app->jamEvent(e, app->eventKeyboard.selected); // no write
+                    editor->select(*eventIt);
+                    app->jamEvent(e, editor->selected); // no write
                     break;
                 }
                 searchCur.cursor.section = searchCur.cursor.nextSection();
                 searchCur.cursor.time = 0;
             }
         } else if (!alt) {
-            nextCell();
+            editor->nextCell();
+            movedEditCur = true;
         }
         break;
     case SDLK_UP:
@@ -355,15 +363,16 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                     editCur.cursor.time = eventIt->time;
                     editCur.cursor.section = sectionP;
                     movedEditCur = true;
-                    app->eventKeyboard.select(*eventIt);
-                    app->jamEvent(e, app->eventKeyboard.selected); // no write
+                    editor->select(*eventIt);
+                    app->jamEvent(e, editor->selected); // no write
                     break;
                 }
                 searchCur.cursor.section = searchCur.cursor.prevSection();
                 searchCur.cursor.time = std::numeric_limits<ticks>().max();
             }
         } else if (!alt) {
-            prevCell();
+            editor->prevCell();
+            movedEditCur = true;
         }
         break;
     case SDLK_RETURN:
@@ -372,21 +381,21 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                 std::shared_lock sectionLock(sectionP->mu);
                 auto eventIt = editCur.findEvent();
                 if (eventIt != editCur.events().end()) {
-                    app->eventKeyboard.select(*eventIt);
-                    app->jamEvent(e, app->eventKeyboard.selected); // no write
+                    editor->select(*eventIt);
+                    app->jamEvent(e, editor->selected); // no write
                 }
             }
         }
         break;
     case SDLK_RIGHTBRACKET:
-        cellSize *= ctrl ? 3 : 2;
-        snapToGrid();
+        editor->cellSize *= ctrl ? 3 : 2;
+        editor->snapToGrid();
         break;
     case SDLK_LEFTBRACKET:
         {
             int factor = ctrl ? 3 : 2;
-            if (cellSize % factor == 0)
-                cellSize /= factor;
+            if (editor->cellSize % factor == 0)
+                editor->cellSize /= factor;
         }
         break;
     /* Commands */
@@ -410,14 +419,14 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                 }
             }
             if (ctrl && shift) {
-                app->undoer.doOp(edit::ops::SetTrackSolo(track, !solo));
+                editor->undoer.doOp(edit::ops::SetTrackSolo(track, !solo));
             } else if (ctrl && track) {
                 bool muted;
                 {
                     std::shared_lock trackLock(track->mu);
                     muted = track->mute;
                 }
-                app->undoer.doOp(edit::ops::SetTrackMute(track, !muted));
+                editor->undoer.doOp(edit::ops::SetTrackMute(track, !muted));
             }
         }
         break;
@@ -433,7 +442,7 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                 }
             }
             shared_ptr<Track> newTrack(new Track);
-            app->undoer.doOp(edit::ops::AddTrack(editCur.track, newTrack));
+            editor->undoer.doOp(edit::ops::AddTrack(editCur.track, newTrack));
         }
         break;
     case SDLK_MINUS:
@@ -448,7 +457,7 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                     editCur.track--;
             }
             if (deleteTrack) {
-                app->undoer.doOp(edit::ops::DeleteTrack(deleteTrack));
+                editor->undoer.doOp(edit::ops::DeleteTrack(deleteTrack));
             }
         }
         break;
@@ -467,7 +476,7 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                     auto it = editCur.cursor.findSection();
                     index = it - song.sections.begin() + 1;
                 }
-                app->undoer.doOp(edit::ops::AddSection(index, newSection));
+                editor->undoer.doOp(edit::ops::AddSection(index, newSection));
                 editCur.cursor.section = newSection;
                 editCur.cursor.time = 0;
                 movedEditCur = true;
@@ -485,15 +494,16 @@ void EventsEdit::keyDown(const SDL_KeyboardEvent &e)
                 editCur.cursor.time = 0;
                 movedEditCur = true;
             }
-            app->undoer.doOp(edit::ops::DeleteSection(deleteSection));
+            editor->undoer.doOp(edit::ops::DeleteSection(deleteSection));
         } else {
-            app->undoer.doOp(edit::ops::ClearCell(editCur, alt ? 1 : cellSize));
+            editor->undoer.doOp(edit::ops::ClearCell(
+                editCur, editor->overwrite ? editor->cellSize : 1));
         }
         break;
     case SDLK_SLASH:
         if (!e.repeat && ctrl && editCur.cursor.time != 0) {
             if (auto sectionP = editCur.cursor.section.lock()) {
-                app->undoer.doOp(edit::ops::SliceSection(
+                editor->undoer.doOp(edit::ops::SliceSection(
                     sectionP, editCur.cursor.time));
                 {
                     std::shared_lock lock(sectionP->mu);
@@ -521,91 +531,15 @@ void EventsEdit::mouseWheel(const SDL_MouseWheelEvent &e)
 {
     if (e.y < 0) {
         for (int i = 0; i < -e.y; i++) {
-            nextCell();
+            editor->nextCell();
+            movedEditCur = true;
         }
     } else if (e.y > 0) {
         for (int i = 0; i < e.y; i++) {
-            prevCell();
+            editor->prevCell();
+            movedEditCur = true;
         }
     }
 }
-
-void EventsEdit::resetCursor(bool newSong)
-{
-    if (newSong) {
-        editCur.cursor.song = &app->song;
-        editCur.track = 0;
-    }
-    std::shared_lock lock(app->song.mu);
-    if (!app->song.sections.empty()) {
-        editCur.cursor.section = app->song.sections.front();
-        editCur.cursor.time = 0;
-    }
-}
-
-void EventsEdit::writeEvent(bool playing, const Event &event, Event::Mask mask,
-                            bool continuous)
-{
-    SDL_Keymod mod = SDL_GetModState();
-    if (mod & KMOD_ALT) {
-        app->undoer.doOp(edit::ops::MergeEvent(
-            editCur, event, mask), continuous);
-    } else if (mod & (KMOD_CAPS | KMOD_SHIFT)) {
-        app->undoer.doOp(edit::ops::WriteCell(
-            editCur, playing ? 1 : cellSize, event), continuous);
-        // TODO if playing, clear events
-    }
-    // TODO combine into single undo operation while playing
-}
-
-void EventsEdit::snapToGrid()
-{
-    editCur.cursor.time /= cellSize;
-    editCur.cursor.time *= cellSize;
-}
-
-void EventsEdit::nextCell()
-{
-    snapToGrid();
-    editCur.cursor.time += cellSize;
-    ticks sectionLength;
-    if (auto sectionP = editCur.cursor.section.lock()) {
-        std::shared_lock sectionLock(sectionP->mu);
-        sectionLength = sectionP->length;
-    } else {
-        return;
-    }
-    if (editCur.cursor.time >= sectionLength) {
-        auto next = editCur.cursor.nextSection();
-        if (next) {
-            editCur.cursor.section = next;
-            editCur.cursor.time = 0;
-        } else {
-            editCur.cursor.time = sectionLength - 1;
-            snapToGrid();
-        }
-    }
-    movedEditCur = true;
-}
-
-void EventsEdit::prevCell()
-{
-    if (editCur.cursor.time % cellSize != 0) {
-        snapToGrid();
-    } else if (editCur.cursor.time < cellSize) {
-        auto prev = editCur.cursor.prevSection();
-        if (prev) {
-            editCur.cursor.section = prev;
-            std::shared_lock sectionLock(prev->mu);
-            editCur.cursor.time = prev->length - 1;
-            snapToGrid();
-        }
-    } else {
-        editCur.cursor.time -= cellSize;
-    }
-    movedEditCur = true;
-}
-
-
 
 } // namespace

@@ -1,5 +1,6 @@
 #include "eventkeyboard.h"
 #include <app.h>
+#include <edit/editor.h>
 #include <algorithm>
 
 namespace chromatracker::ui::panels {
@@ -10,11 +11,13 @@ const int BLACK_KEYS[] = {-1, 1, 3, -1, 6, 8, 10};
 
 EventKeyboard::EventKeyboard(App *app)
     : app(app)
+    , editor(&app->editor)
 {}
 
 void EventKeyboard::drawPiano(Rect rect)
 {
     app->scissorRect(rect);
+    Event &selected = editor->selected;
 
     int numWhiteKeys = rect.dim().x / PIANO_KEY_WIDTH + 1;
     for (int i = 0; i < numWhiteKeys; i++) {
@@ -52,8 +55,8 @@ void EventKeyboard::drawPiano(Rect rect)
             if (event.type == SDL_MOUSEBUTTONDOWN) {
                 play::JamEvent jam {selected, (int)event.button.which + 1};
                 bool playing = app->jamEvent(jam, event.button.timestamp);
-                // continuous if not playing
-                writeEvent(playing, jam.event, Event::VELOCITY, !playing);
+                editor->writeEvent(playing, jam.event, Event::VELOCITY,
+                                   !playing); // continuous if not playing
             } else if (event.type == SDL_MOUSEMOTION) {
                 if (selected.velocity == Event::NO_VELOCITY)
                     selected.velocity = 1;
@@ -63,15 +66,15 @@ void EventKeyboard::drawPiano(Rect rect)
                 play::JamEvent jam {selected.masked(Event::VELOCITY),
                                     (int)event.button.which + 1};
                 bool playing = app->jamEvent(jam, event.button.timestamp);
-                writeEvent(playing, playing ? jam.event : selected,
-                           Event::VELOCITY, !playing);
+                editor->writeEvent(playing, playing ? jam.event : selected,
+                                   Event::VELOCITY, !playing);
             } else if (event.type == SDL_MOUSEBUTTONUP) {
                 Event fadeEvent;
                 fadeEvent.special = Event::Special::FadeOut;
                 if (app->jamEvent({fadeEvent, (int)event.button.which + 1},
                                   event.button.timestamp)) // if playing
-                    writeEvent(true, fadeEvent, Event::ALL);
-                app->undoer.endContinuous();
+                    editor->writeEvent(true, fadeEvent, Event::ALL);
+                editor->undoer.endContinuous();
             }
         }
         touch->events.clear();
@@ -88,10 +91,10 @@ void EventKeyboard::drawPiano(Rect rect)
 void EventKeyboard::drawSampleList(Rect rect)
 {
     app->scissorRect(rect);
-    std::shared_lock songLock(app->song.mu);
-    auto selectedSampleP = selected.sample.lock();
+    std::shared_lock songLock(editor->song.mu);
+    auto selectedSampleP = editor->selected.sample.lock();
     glm::vec2 textPos = rect(TL);
-    for (const auto &sample : app->song.samples) {
+    for (const auto &sample : editor->song.samples) {
         Rect sampleR = Rect::from(TL, textPos,
                                   {rect.dim().x, FONT_DEFAULT.lineHeight});
         if (sample == selectedSampleP)
@@ -104,8 +107,8 @@ void EventKeyboard::drawSampleList(Rect rect)
 void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
 {
     bool ctrl = e.keysym.mod & KMOD_CTRL;
-    bool alt = e.keysym.mod & KMOD_ALT;
-    Song &song = app->song;
+    Song &song = editor->song;
+    Event &selected = editor->selected;
 
     if (!e.repeat && !ctrl) {
         int pitch = pitchKeymap(e.keysym.scancode);
@@ -117,7 +120,7 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
         } else if (sample >= 0) {
             mask = Event::SAMPLE;
             std::shared_lock songLock(song.mu);
-            int index = sampleIndex();
+            int index = editor->selectedSampleIndex();
             if (index == -1)
                 index = 0;
             index = sample + (index / 10) * 10;
@@ -128,7 +131,7 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
             }
         }
         if (mask) {
-            writeEvent(app->jamEvent(e, selected), selected, mask);
+            editor->writeEvent(app->jamEvent(e, selected), selected, mask);
             return;
         }
     }
@@ -138,7 +141,7 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_KP_PLUS:
         if (!ctrl) {
             std::shared_lock songLock(song.mu);
-            int index = sampleIndex();
+            int index = editor->selectedSampleIndex();
             if (index == -1) {
                 if (!song.samples.empty())
                     selected.sample = song.samples.front();
@@ -150,7 +153,7 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_KP_MINUS:
         if (!ctrl) {
             std::shared_lock songLock(song.mu);
-            int index = sampleIndex();
+            int index = editor->selectedSampleIndex();
             if (index > 0) {
                 selected.sample = song.samples[index - 1];
             }
@@ -159,7 +162,7 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_KP_MULTIPLY:
         {
             std::shared_lock songLock(song.mu);
-            int index = sampleIndex();
+            int index = editor->selectedSampleIndex();
             if (index != -1 && index < song.samples.size() - 10) {
                 selected.sample = song.samples[index + 10];
             } else if (!song.samples.empty()) {
@@ -170,7 +173,7 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
     case SDLK_KP_DIVIDE:
         {
             std::shared_lock songLock(song.mu);
-            int index = sampleIndex();
+            int index = editor->selectedSampleIndex();
             if (index >= 10) {
                 selected.sample = song.samples[index - 10];
             } else if (!song.samples.empty()) {
@@ -198,14 +201,14 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
         if (!e.repeat) {
             Event event = selected;
             event.special = Event::Special::FadeOut; // don't store
-            writeEvent(app->jamEvent(e, event), event, Event::SPECIAL);
+            editor->writeEvent(app->jamEvent(e, event), event, Event::SPECIAL);
         }
         break;
     case SDLK_1:
         if (!e.repeat) {
             Event event = selected;
             event.special = Event::Special::Slide;
-            writeEvent(app->jamEvent(e, event), event, Event::SPECIAL);
+            editor->writeEvent(app->jamEvent(e, event), event, Event::SPECIAL);
         }
         break;
     /* jam clear */
@@ -213,27 +216,28 @@ void EventKeyboard::keyDown(const SDL_KeyboardEvent &e)
         if (!e.repeat) {
             Event event = selected;
             event.sample.reset();
-            writeEvent(app->jamEvent(e, event), event, Event::SAMPLE);
+            editor->writeEvent(app->jamEvent(e, event), event, Event::SAMPLE);
         }
         break;
     case SDLK_BACKSLASH:
         if (!e.repeat) {
             Event event = selected;
             event.pitch = Event::NO_PITCH;
-            writeEvent(app->jamEvent(e, event), event, Event::PITCH);
+            editor->writeEvent(app->jamEvent(e, event), event, Event::PITCH);
         }
         break;
     case SDLK_QUOTE:
         if (!e.repeat) {
             Event event = selected;
             event.velocity = Event::NO_VELOCITY;
-            writeEvent(app->jamEvent(e, event), event, Event::VELOCITY);
+            editor->writeEvent(app->jamEvent(e, event), event, Event::VELOCITY);
         }
         break;
     case SDLK_KP_ENTER:
         if (!e.repeat) {
             // selected already shouldn't have special
-            writeEvent(app->jamEvent(e, selected), selected, Event::SPECIAL);
+            editor->writeEvent(app->jamEvent(e, selected),
+                               selected, Event::SPECIAL);
         }
         break;
     }
@@ -263,47 +267,8 @@ void EventKeyboard::keyUp(const SDL_KeyboardEvent &e)
     Event fadeEvent;
     fadeEvent.special = Event::Special::FadeOut;
     if (app->jamEvent(e, fadeEvent)) { // if playing
-        writeEvent(true, fadeEvent, Event::ALL);
+        editor->writeEvent(true, fadeEvent, Event::ALL);
     }
-}
-
-void EventKeyboard::reset()
-{
-    selected.pitch = MIDDLE_C;
-    selected.velocity = 1.0f;
-    std::shared_lock lock(app->song.mu);
-    if (!app->song.samples.empty()) {
-        selected.sample = app->song.samples.front();
-    } else {
-        selected.sample.reset();
-    }
-}
-
-void EventKeyboard::select(const Event &event)
-{
-    selected.merge(event);
-    selected.special = Event::Special::None; // don't store
-    selected.time = 0;
-    if (event.pitch != Event::NO_PITCH)
-        octave = selected.pitch / OCTAVE;
-}
-
-int EventKeyboard::sampleIndex()
-{
-    // indices are easier to work with than iterators in this case
-    auto &samples = app->song.samples;
-    auto it = std::find(samples.begin(), samples.end(), selected.sample.lock());
-    if (it == samples.end()) {
-        return -1;
-    } else {
-        return it - samples.begin();
-    }
-}
-
-void EventKeyboard::writeEvent(bool playing, const Event &event,
-                               Event::Mask mask, bool continuous)
-{
-    app->eventsEdit.writeEvent(playing, event, mask, continuous);
 }
 
 int EventKeyboard::pitchKeymap(SDL_Scancode key)

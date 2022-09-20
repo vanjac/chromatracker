@@ -6,6 +6,7 @@
 #include <SDL2/SDL_events.h>
 
 namespace chromatracker { class App; }
+namespace chromatracker::edit { class Editor; }
 
 namespace chromatracker::ui::panels {
 
@@ -19,20 +20,12 @@ public:
     void keyDown(const SDL_KeyboardEvent &e);
     void keyUp(const SDL_KeyboardEvent &e);
 
-    void reset();
-    void select(const Event &event);
-    int sampleIndex(); // song must be locked
-
-    Event selected {0, {}, MIDDLE_C, 1.0f, Event::Special::None};
-
 private:
     int pitchKeymap(SDL_Scancode key);
     int sampleKeymap(SDL_Scancode key);
-    // for convenience, redirect to EventsEdit
-    void writeEvent(bool playing, const Event &event, Event::Mask mask,
-                    bool continuous=false);
 
     App * const app;
+    edit::Editor * const editor;
 
     int octave {MIDDLE_OCTAVE};
 

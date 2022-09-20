@@ -10,6 +10,7 @@
 #include <SDL2/SDL_events.h>
 
 namespace chromatracker { class App; }
+namespace chromatracker::edit { class Editor; }
 
 namespace chromatracker::ui::panels {
 
@@ -22,10 +23,6 @@ public:
     void keyDown(const SDL_KeyboardEvent &e);
     void keyUp(const SDL_KeyboardEvent &e);
     void mouseWheel(const SDL_MouseWheelEvent &e);
-
-    void resetCursor(bool newSong);
-    void writeEvent(bool playing, const Event &event, Event::Mask mask,
-                    bool continuous);
 
 private:
     // cached properties of song objects used while rendering
@@ -46,20 +43,11 @@ private:
     void drawEvent(Rect rect, const Event &event,
         SampleRender **curSampleProps, float *curVelocity, bool mute);
 
-    void snapToGrid();
-    void nextCell();
-    void prevCell();
-
     App * const app;
+    edit::Editor * const editor;
 
     vector<panels::TrackEdit> trackEdits;
     vector<panels::SectionEdit> sectionEdits;
-
-    TrackCursor editCur;
-    ticks cellSize {TICKS_PER_BEAT / 4};
-
-    // mode
-    bool followPlayback {true};
 
     // main loop flags
     bool movedEditCur {false}; // TODO replace with accumulator to move play cur

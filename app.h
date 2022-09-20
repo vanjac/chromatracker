@@ -1,7 +1,7 @@
 #pragma once
 #include <common.h>
 
-#include "edit/undoer.hpp"
+#include "edit/editor.h"
 #include "play/songplay.h"
 #include "ui/panels/browser.h"
 #include "ui/panels/eventkeyboard.h"
@@ -38,11 +38,8 @@ public:
     bool jamEvent(play::JamEvent jam, uint32_t timestamp);
     bool jamEvent(const SDL_KeyboardEvent &e, const Event &jam);
 
-    edit::Undoer<Song *> undoer;
-    Song song;
+    edit::Editor editor;
     play::SongPlay player;
-    ui::panels::EventKeyboard eventKeyboard;
-    ui::panels::EventsEdit eventsEdit;
     ui::Settings settings;
 
 private:
@@ -66,6 +63,8 @@ private:
     Tab tab {Tab::Events};
     ui::panels::SongEdit songEdit;
     ui::panels::SampleEdit sampleEdit;
+    ui::panels::EventsEdit eventsEdit;
+    ui::panels::EventKeyboard eventKeyboard;
     unique_ptr<ui::panels::Browser> browser;
 
     std::unordered_map<int, shared_ptr<ui::Touch>> uncapturedTouches;

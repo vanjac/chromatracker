@@ -7,13 +7,15 @@
 #include <ui/widgets/spinner.h>
 
 namespace chromatracker { class App; }
+namespace chromatracker::edit { class Editor; }
 
 namespace chromatracker::ui::panels {
 
 class SectionEdit
 {
 public:
-    void draw(App *app, Rect rect, shared_ptr<Section> section);
+    void draw(App *app, edit::Editor *editor,
+              Rect rect, shared_ptr<Section> section);
 
 private:
     widgets::Spinner tempoSpinner, meterSpinner;

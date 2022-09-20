@@ -6,13 +6,15 @@
 #include <ui/widgets/slider.h>
 
 namespace chromatracker { class App; }
+namespace chromatracker::edit { class Editor; }
 
 namespace chromatracker::ui::panels {
 
 class TrackEdit
 {
 public:
-    void draw(App *app, Rect rect, shared_ptr<Track> track);
+    void draw(App *app, edit::Editor *editor,
+              Rect rect, shared_ptr<Track> track);
 
 private:
     widgets::Slider volumeSlider, panSlider;

@@ -44,21 +44,20 @@ App::~App()
 void App::main(const vector<string> args)
 {
     // setup song (don't need locks at this moment)
-    song.tracks.reserve(4);
+    editor.song.tracks.reserve(4);
     for (int i = 0; i < 4; i++) {
-        song.tracks.emplace_back(new Track);
+        editor.song.tracks.emplace_back(new Track);
     }
     {
-        auto section = song.sections.emplace_back(new Section);
+        auto section = editor.song.sections.emplace_back(new Section);
         section->length = TICKS_PER_BEAT * 16;
-        section->trackEvents.resize(song.tracks.size());
+        section->trackEvents.resize(editor.song.tracks.size());
         section->tempo = 125;
         section->meter = 4;
     }
 
-    undoer.reset(&song);
-    eventsEdit.resetCursor(true);
-    player.setCursor(Cursor(&song));
+    editor.reset();
+    player.setCursor(Cursor(&editor.song));
 
     int winW, winH;
     SDL_GetWindowSize(window, &winW, &winH);
@@ -132,12 +131,17 @@ void App::main(const vector<string> args)
             }
         }
 
+        SDL_Keymod mod = SDL_GetModState();
+        editor.record = (bool)(mod & KMOD_CAPS) ^ (bool)(mod & KMOD_SHIFT);
+        editor.overwrite = !(mod & KMOD_ALT);
+
         glDisable(GL_SCISSOR_TEST);
         glClear(GL_COLOR_BUFFER_BIT);
         glEnable(GL_SCISSOR_TEST);
 
         float lineHeight = FONT_DEFAULT.lineHeight;
-        songEdit.draw(this, {winR(TL), winR(TR, {-160, lineHeight})}, &song);
+        songEdit.draw(this, &editor, {winR(TL), winR(TR, {-160, lineHeight})},
+                      &editor.song);
         Rect mainR {winR(TL, {0, lineHeight}), winR(BR, {-160, -100})};
         if (browser) {
             browser->draw(mainR);
@@ -194,12 +198,12 @@ void App::keyDown(const SDL_KeyboardEvent &e)
     switch (e.keysym.sym) {
     case SDLK_z:
         if (ctrl) {
-            undoer.undo();
+            editor.undoer.undo();
         }
         break;
     case SDLK_y:
         if (ctrl) {
-            undoer.redo();
+            editor.undoer.redo();
         }
         break;
     /* Tabs */
@@ -227,13 +231,14 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                     }
                     int numSamples;
                     {
-                        std::shared_lock lock(song.mu);
-                        numSamples = song.samples.size();
+                        std::shared_lock lock(editor.song.mu);
+                        numSamples = editor.song.samples.size();
                     }
                     shared_ptr<Sample> newSample(new Sample);
                     loader->loadSample(newSample);
-                    undoer.doOp(edit::ops::AddSample(numSamples, newSample));
-                    eventKeyboard.selected.sample = newSample;
+                    editor.undoer.doOp(edit::ops::AddSample(
+                        numSamples, newSample));
+                    editor.selected.sample = newSample;
 
                     // call at the end to prevent access violation!
                     browser.reset();
@@ -242,19 +247,19 @@ void App::keyDown(const SDL_KeyboardEvent &e)
         break;
     case SDLK_KP_MINUS:
         if (ctrl) {
-            if (auto sampleP = eventKeyboard.selected.sample.lock()) {
+            if (auto sampleP = editor.selected.sample.lock()) {
                 int index;
                 {
-                    std::shared_lock songLock(song.mu);
-                    index = eventKeyboard.sampleIndex();
-                    if (index == song.samples.size() - 1)
+                    std::shared_lock songLock(editor.song.mu);
+                    index = editor.selectedSampleIndex();
+                    if (index == editor.song.samples.size() - 1)
                         index--;
                 }
-                undoer.doOp(edit::ops::DeleteSample(sampleP));
+                editor.undoer.doOp(edit::ops::DeleteSample(sampleP));
                 {
-                    std::shared_lock songLock(song.mu);
-                    if (!song.samples.empty())
-                        eventKeyboard.selected.sample = song.samples[index];
+                    std::shared_lock songLock(editor.song.mu);
+                    if (!editor.song.samples.empty())
+                        editor.selected.sample = editor.song.samples[index];
                 }
             }
         }
@@ -280,13 +285,11 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                         player.stop();
                     }
                     {
-                        std::unique_lock lock(song.mu);
-                        song.clear();
-                        loader->loadSong(&song);
+                        std::unique_lock lock(editor.song.mu);
+                        editor.song.clear();
+                        loader->loadSong(&editor.song);
                     }
-                    undoer.reset(&song);
-                    eventsEdit.resetCursor(true);
-                    eventKeyboard.reset();
+                    editor.reset();
 
                     // call at the end to prevent access violation!
                     browser.reset();
@@ -301,7 +304,7 @@ void App::keyDown(const SDL_KeyboardEvent &e)
                 break;
             }
             file::chroma::Writer writer(stream);
-            writer.writeSong(&song);
+            writer.writeSong(&editor.song);
         }
         break;
     }

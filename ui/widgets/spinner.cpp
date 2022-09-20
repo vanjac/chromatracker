@@ -1,10 +1,11 @@
 #include "spinner.h"
 
 #include <app.h>
+#include <edit/editor.h>
 
 namespace chromatracker::ui::widgets {
 
-bool Spinner::draw(App *app, Rect rect, int *value,
+bool Spinner::draw(App *app, edit::Editor *editor, Rect rect, int *value,
                    int min, int max, float scale)
 {
     if (touch.expired())
@@ -29,7 +30,7 @@ bool Spinner::draw(App *app, Rect rect, int *value,
                     adjusted = true;
                 }
             } else if (event.type == SDL_MOUSEBUTTONUP) {
-                app->undoer.endContinuous();
+                editor->undoer.endContinuous();
             }
         }
         touchP->events.clear();
