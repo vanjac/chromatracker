@@ -2,6 +2,8 @@
 
 A cross-platform [music tracker](https://en.wikipedia.org/wiki/Music_tracker) app. This is a work in progress and has gone through multiple iterations.
 
+[More information](https://github.com/UWAppDev/community/discussions/22)
+
 A description of the module format/features is on the [wiki](https://github.com/vanjac/chromatracker/wiki).
 
 ## Design influences
